@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Specialist Study</title>
+  <meta name="description" content="AI Specialist 코드 구현 시험 대비 학습 사이트">
+  <style>
+    :root{--navy:#10295b;--blue:#2563c8;--ink:#172033;--muted:#63708a;--line:#dbe3f1;--bg:#f4f7fc}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Malgun Gothic","Segoe UI",sans-serif}
+    header{padding:70px max(24px,calc((100% - 1040px)/2));background:linear-gradient(120deg,var(--navy),var(--blue));color:#fff}
+    header span{font-size:.8rem;font-weight:800;letter-spacing:.12em;opacity:.8}h1{margin:8px 0 10px;font-size:clamp(2rem,5vw,3.4rem)}header p{max-width:680px;margin:0;color:#dbeafe;line-height:1.7}
+    main{max-width:1040px;margin:0 auto;padding:36px 20px 64px}.guide{margin:0 0 24px;color:var(--muted);line-height:1.65}
+    .courses{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.course{display:flex;flex-direction:column;min-height:245px;padding:26px;border:1px solid var(--line);border-radius:16px;background:#fff;box-shadow:0 8px 22px rgba(16,41,91,.07)}
+    .number{font-weight:900;color:var(--blue);font-size:.82rem}.course h2{margin:8px 0;font-size:1.45rem}.course p{margin:0;color:var(--muted);line-height:1.6;font-size:.92rem}.course ul{padding-left:18px;color:#475467;font-size:.84rem;line-height:1.7}.course a{display:inline-block;align-self:flex-start;margin-top:auto;padding:10px 15px;border-radius:9px;background:var(--blue);color:#fff;font-weight:800;text-decoration:none}.course a:hover{background:#174ea6}.note{margin-top:28px;padding:15px 18px;border-left:4px solid var(--blue);border-radius:0 10px 10px 0;background:#eaf2ff;color:#344054;font-size:.9rem;line-height:1.6}@media(max-width:720px){header{padding:48px 24px}.courses{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <header>
+    <span>AI SPECIALIST STUDY</span>
+    <h1>코드 구현 시험 대비</h1>
+    <p>노트북별 핵심 개념을 보고, 전체 코드의 빈칸을 직접 채운 뒤 5지선다와 주관식으로 다시 확인하는 학습 사이트입니다.</p>
+  </header>
+  <main>
+    <p class="guide">학습 순서: 핵심 개념 → 전체 코드 문제 → 정답 확인 → 5지선다 → 주관식 → 오답 재시험</p>
+    <section class="courses" aria-label="과목 선택">
+      <article class="course">
+        <span class="number">01 · LLM</span>
+        <h2>LLM 코드 구현</h2>
+        <p>Dataset & Embeddings부터 Attention, GPT, 사전학습, 파인튜닝, LoRA, 지시문 학습, DPO까지 다룹니다.</p>
+        <ul><li>8개 노트북</li><li>문제·정답·좌우 비교</li><li>5지선다와 주관식 오답 관리</li></ul>
+        <a href="llm/">LLM 학습 시작</a>
+      </article>
+      <article class="course">
+        <span class="number">02 · VISION</span>
+        <h2>Vision 코드 구현</h2>
+        <p>ResNet18과 CIFAR-10 이미지 분류부터 시작합니다. 이후 ViT, DETR, UNet, DDPM, Stable Diffusion 순으로 확장합니다.</p>
+        <ul><li>Transform과 Tensor 흐름</li><li>ResNet 구조 변경</li><li>학습·평가 코드 빈칸</li></ul>
+        <a href="vision/">Vision 학습 시작</a>
+      </article>
+    </section>
+    <p class="note">각 과목의 학습 기록은 현재 사용하는 브라우저에 저장됩니다.</p>
+  </main>
+</body>
+</html>

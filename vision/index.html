@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Coding Recall · Vision 집중 학습</title>
+  <meta name="description" content="Vision 노트북별 핵심 정리, 코드 5지선다, 주관식 시험과 오답 재시험">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="full_code.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">A</span><span>AI Coding Recall<small>LLM 집중 학습</small></span></div>
+    <div class="headline-stats" id="headlineStats"></div>
+  </header>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="subject-title"><span>02</span><div><strong>Vision</strong><small>첫 번째 노트북 · 순차 확장</small></div></div>
+      <nav id="chapterNav" aria-label="LLM 노트북 선택"></nav>
+      <div class="side-actions">
+        <button id="retryWrong" class="danger-button" type="button">현재 노트북 오답 재시험</button>
+        <button id="randomTest" class="quiet-button" type="button">랜덤 주관식 10문제</button>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <div class="chapter-head">
+        <p id="chapterPath"></p>
+        <h1 id="chapterTitle"></h1>
+        <p id="notebookGoal" class="notebook-goal"></p>
+        <div class="chapter-progress"><span id="chapterProgressText"></span><div><i id="chapterProgressBar"></i></div></div>
+      </div>
+
+      <div class="mode-tabs" role="tablist" aria-label="학습 단계">
+        <button class="mode-tab active" data-panel="studyPanel" type="button">1. 핵심 정리</button>
+        <button class="mode-tab" data-panel="fullCodePanel" type="button">2. 전체 코드</button>
+        <button class="mode-tab" data-panel="mcqPanel" type="button">3. 코드 5지선다</button>
+        <button class="mode-tab" data-panel="subjectivePanel" type="button">4. 주관식 시험</button>
+        <button class="mode-tab" data-panel="resultsPanel" type="button">5. 결과·오답</button>
+      </div>
+
+      <section id="studyPanel" class="panel active" aria-labelledby="chapterTitle">
+        <div class="study-intro"><span>학습 목표</span><h2 id="capability"></h2><p id="summary"></p></div>
+        <div id="keyPoints" class="key-points"></div>
+        <div class="panel-footer"><button class="primary-button next-mode" data-panel="fullCodePanel" type="button">전체 코드 보기</button></div>
+      </section>
+
+      <section id="fullCodePanel" class="panel">
+        <div class="full-code-head"><div><span>원본 노트북 코드</span><h2>코드 셀 전체 흐름</h2><p>먼저 문제를 풀고 정답으로 전환하세요. 필요할 때만 좌우 비교로 차이를 확인할 수 있습니다.</p></div><button id="collapseCode" class="quiet-button" type="button">모두 접기</button></div>
+        <section class="theory-before-code" aria-labelledby="theoryTitle">
+          <div class="theory-title"><span>코드 읽기 전</span><h3 id="theoryTitle">빈칸을 유추하는 핵심 개념</h3><p>각 개념에서 코드 신호를 먼저 찾은 뒤 아래 문제 코드를 확인하세요.</p></div>
+          <div id="theoryGuide" class="theory-grid"></div>
+        </section>
+        <div class="code-view-controls" role="group" aria-label="전체 코드 보기 방식">
+          <button class="code-view-button active" data-code-view="problem" type="button">문제</button>
+          <button class="code-view-button" data-code-view="answer" type="button">정답</button>
+          <button class="code-view-button" data-code-view="compare" type="button">좌우 비교</button>
+        </div>
+        <div id="fullCodeCells" class="full-code-cells"></div>
+        <div class="panel-footer"><button class="primary-button next-mode" data-panel="mcqPanel" type="button">5지선다 시작</button></div>
+      </section>
+
+      <section id="mcqPanel" class="panel">
+        <div class="question-meta"><span id="mcqPosition"></span><strong id="mcqSource"></strong></div>
+        <h2 id="mcqTopic"></h2>
+        <pre class="code-box"><code id="mcqCode"></code></pre>
+        <p id="mcqPrompt" class="question-prompt"></p>
+        <div id="mcqChoices" class="choices"></div>
+        <div class="question-controls">
+          <fieldset class="confidence"><legend>확신도</legend><label><input name="mcqConfidence" type="radio" value="확실">확실</label><label><input name="mcqConfidence" type="radio" value="애매" checked>애매</label><label><input name="mcqConfidence" type="radio" value="추측">추측</label></fieldset>
+          <div><button id="submitMcq" class="primary-button" type="button">제출</button><button id="nextMcq" class="quiet-button" type="button">다음 문제</button></div>
+        </div>
+        <div id="mcqFeedback" class="feedback neutral" aria-live="polite">답을 고른 뒤 제출하세요. 정답과 모든 보기의 이유가 표시됩니다.</div>
+      </section>
+
+      <section id="subjectivePanel" class="panel">
+        <div class="question-meta"><span id="subPosition"></span><strong id="subSource"></strong></div>
+        <h2 id="subTopic"></h2>
+        <pre class="code-box problem-code"><code id="subContext"></code></pre>
+        <p id="subPrompt" class="question-prompt"></p>
+        <label class="answer-label" for="subAnswer">내 답안</label>
+        <textarea id="subAnswer" class="answer-input" spellcheck="false" placeholder="정답 코드를 직접 작성하세요."></textarea>
+        <div class="question-controls subjective-controls">
+          <fieldset class="confidence"><legend>확신도</legend><label><input name="subConfidence" type="radio" value="확실">확실</label><label><input name="subConfidence" type="radio" value="애매" checked>애매</label><label><input name="subConfidence" type="radio" value="추측">추측</label></fieldset>
+          <label class="error-select">틀린 이유<select id="errorCategory"><option>함수·인자</option><option>개념</option><option>Tensor 차원</option><option>계산식</option><option>실행 순서</option><option>문법·오타</option></select></label>
+          <div><button id="showHint" class="quiet-button" type="button">힌트</button><button id="submitSubjective" class="primary-button" type="button">제출</button><button id="nextSubjective" class="quiet-button" type="button">다음 문제</button></div>
+        </div>
+        <div id="subFeedback" class="feedback neutral" aria-live="polite">자료를 보지 않고 작성하세요. 힌트를 사용한 정답은 숙달 횟수에 포함되지 않습니다.</div>
+      </section>
+
+      <section id="resultsPanel" class="panel">
+        <div class="results-head"><div><span>학습 결과</span><h2>주관식 독립 회상 기준</h2></div><button id="resetProgress" class="text-button" type="button">기록 초기화</button></div>
+        <p class="results-note">5지선다 정답은 개념 확인 단계입니다. 힌트 없이 주관식을 두 번 맞히면 숙달로 표시됩니다.</p>
+        <div class="result-cards" id="resultCards"></div>
+        <div class="result-grid"><div><h3>노트북별 결과</h3><div class="table-wrap"><table><thead><tr><th>노트북</th><th>5지선다</th><th>숙달</th><th>학습</th><th>오답</th><th>미학습</th></tr></thead><tbody id="resultRows"></tbody></table></div></div><aside><h3>오답 원인</h3><div id="errorBreakdown"></div></aside></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="vision_course_data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
