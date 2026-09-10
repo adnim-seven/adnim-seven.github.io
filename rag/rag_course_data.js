@@ -131,6 +131,21 @@
   const refineP = ["### YOUR CODE HERE ###","class Refine_RAG:","    def retrieve(self, query: str) -> list:","        ret = retriever.????(query)","        results = query_engine.????(query)","        return ????, ????","    def generate_response(self, query: str, context_str: list) -> str:","        messages = [{\"role\": \"system\", \"content\": \"You are a helpful assistant.\"},","                    {\"role\": \"user\", \"content\": f\"Question: {query}\\nContext: {context_str}\"}]","        response = oai_client.chat.completions.????(","            model=\"gpt-3.5-turbo\", temperature=0, messages=messages,","        )","        return response.choices[0].message.????","    def query(self, query: str) -> str:","        ret, context_str = self.????(query)","        completion = self.????(query, context_str)","        return completion"];
   const refineA = fill(refineP,{3:"        ret = retriever.retrieve(query)",4:"        results = query_engine.query(query)",5:"        return ret, results",9:"        response = oai_client.chat.completions.create(",12:"        return response.choices[0].message.content",14:"        ret, context_str = self.retrieve(query)",15:"        completion = self.generate_response(query, context_str)"});
 
+  const loadDataP = ["### YOUR CODE HERE ###","import json","import bz2","dataset = []","with bz2.????(file_path, 'rt') as file:","    for line in file:","        try:","            data = json.????(line.strip())","            dataset.????(data)","        except json.???? as e:","            print(f\"Error decoding JSON: {e}\")"];
+  const loadDataA = fill(loadDataP,{4:"with bz2.open(file_path, 'rt') as file:",7:"            data = json.loads(line.strip())",8:"            dataset.append(data)",9:"        except json.JSONDecodeError as e:"});
+
+  const inspectP = ["### YOUR CODE HERE ###","unique_domains = {}","for item in dataset:","    if 'domain' in item:","        domain_value = item['domain']","        if domain_value not in unique_domains:","            unique_domains[domain_value] = ????","","for domain, example_item in unique_domains.????:","    question = example_item[????]","    answer = example_item[????]","    print(f\"Domain: {domain}\")","    print(f\"Example question: {question}\")","    print(f\"Example answer: {answer}\\n\")"];
+  const inspectA = fill(inspectP,{6:"            unique_domains[domain_value] = item",8:"for domain, example_item in unique_domains.items():",9:"    question = example_item['query']",10:"    answer = example_item['answer']"});
+
+  const statsP = ["### YOUR CODE HERE ###","from collections import Counter","domain_counts = Counter(item[????] for item in dataset if 'domain' in item)","question_type_counts = Counter([item[????] for item in dataset])","dynamism_counts = Counter([item[????] for item in dataset])","","plt.bar(domain_counts.????, domain_counts.????)","plt.xticks(rotation=45, ha='right')","plt.tight_layout()","plt.show()"];
+  const statsA = fill(statsP,{2:"domain_counts = Counter(item['domain'] for item in dataset if 'domain' in item)",3:"question_type_counts = Counter([item['question_type'] for item in dataset])",4:"question_type_counts = Counter([item['static_or_dynamic'] for item in dataset])",6:"plt.bar(domain_counts.keys(), domain_counts.values())"});
+
+  const schemaP = ["### YOUR CODE HERE ###","data_index = 2617","example_data = dataset[????]","print(example_data[????])","print(example_data[????])","pretty_json_print(example_data[????])","","for page in example_data['search_results']:","  print(f\"Length of title: {len(page['page_name'])}\")","  print(f\"Length of snippet: {len(page['page_snippet'])}\")","  print(f\"Length of result: {len(page['page_result'])}\")"];
+  const schemaA = fill(schemaP,{2:"example_data = dataset[2617]",3:"print(example_data['query'])",4:"print(example_data['answer'])",5:"pretty_json_print(example_data['search_results'])"});
+
+  const parseP = ["### YOUR CODE HERE ###","from bs4 import BeautifulSoup","from blingfire import text_to_sentences_and_offsets","all_chunks = []","for html_text in example_data['search_results']:","    soup = BeautifulSoup(html_text[????], features=????)","    text = soup.????(\" \", strip=True)","    if not text:","        all_chunks.append(\"\")","    else:","        _, offsets = ????(text)","        chunks = []","        for start, end in offsets:","            chunk = text[????][:4000]","            all_chunks.????(chunk)","print(all_chunks[:1])"];
+  const parseA = fill(parseP,{5:'    soup = BeautifulSoup(html_text["page_result"], features="lxml")',6:'    text = soup.get_text(" ", strip=True)',10:"        _, offsets = text_to_sentences_and_offsets(text)",13:"            chunk = text[start:end][:4000]",14:"            all_chunks.append(chunk)"});
+
   window.LLM_COURSE = {
     subject:"2. RAG", sample_mode:false,
     cells:{
@@ -144,7 +159,11 @@
       "rag2-q7":{source:"query_engine.query(query)"},"rag2-q8":{source:"self.retrieve(query)"},"rag2-q9":{source:"self.generate_response(query, context_str)"},
       "rag2-q10":{source:"SentenceSplitter(chunk_size=200, chunk_overlap=50)"},"rag2-q11":{source:"transformations=[text_splitter_short]"},"rag2-q12":{source:"similarity_top_k=1"},
       "rag2-q13":{source:"self.retriever.retrieve(query_str)"},"rag2-q14":{source:"n.node.get_content()"},"rag2-q15":{source:"self.llm.complete"},"rag2-q16":{source:"self.qa_prompt.format"},
-      "rag2-q17":{source:"return ret, results"},"rag2-q18":{source:"response.choices[0].message.content"}
+      "rag2-q17":{source:"return ret, results"},"rag2-q18":{source:"response.choices[0].message.content"},
+      "prep-q1":{source:"bz2.open(file_path, 'rt')"},"prep-q2":{source:"json.loads(line.strip())"},"prep-q3":{source:"dataset.append(data)"},"prep-q4":{source:"json.JSONDecodeError"},
+      "prep-q5":{source:"unique_domains[domain_value] = item"},"prep-q6":{source:"unique_domains.items()"},"prep-q7":{source:"example_item['query']"},"prep-q8":{source:"example_item['answer']"},
+      "prep-q9":{source:"item['domain']"},"prep-q10":{source:"item['question_type']"},"prep-q11":{source:"item['static_or_dynamic']"},"prep-q12":{source:"domain_counts.keys(), domain_counts.values()"},
+      "prep-q13":{source:"example_data['search_results']"},"prep-q14":{source:'html_text["page_result"]'},"prep-q15":{source:'features="lxml"'},"prep-q16":{source:'soup.get_text(" ", strip=True)'},"prep-q17":{source:"text_to_sentences_and_offsets(text)"},"prep-q18":{source:"text[start:end][:4000]"},"prep-q19":{source:"all_chunks.append(chunk)"}
     },
     chapters:[{
       id:"rag-01",number:"01",title:"LlamaIndex Query Engine",file:"1. Llama_index.ipynb",
@@ -212,6 +231,38 @@
         {id:"rag2-m3",source_question_id:"rag2-q12",topic:"검색 개수",prompt:"비교를 위해 검색 Node를 하나만 반환하려면?",answer_index:0,explanation:"as_retriever의 similarity_top_k를 1로 설정합니다.",choices:[{text:"similarity_top_k=1",why:"정답입니다."},{text:"chunk_size=1",why:"chunk token 크기를 바꿉니다."},{text:"num_documents=1",why:"이 API의 인자가 아닙니다."},{text:"top_p=1",why:"LLM sampling 설정입니다."},{text:"temperature=1",why:"생성 다양성 설정입니다."}]},
         {id:"rag2-m4",source_question_id:"rag2-q16",topic:"Prompt 구성",prompt:"context_str와 query_str를 PromptTemplate에 넣는 단계는?",answer_index:4,explanation:"template.format으로 변수를 채운 뒤 llm.complete에 전달합니다.",choices:[{text:"retriever.retrieve",why:"Node 검색 단계입니다."},{text:"reader.load_data",why:"문서 로딩입니다."},{text:"index.as_query_engine",why:"engine 생성입니다."},{text:"response.content",why:"이미 생성된 답을 꺼냅니다."},{text:"self.qa_prompt.format",why:"정답입니다."}]},
         {id:"rag2-m5",source_question_id:"rag2-q17",topic:"Refined RAG",prompt:"Refine_RAG.retrieve가 두 값을 반환하는 이유는?",answer_index:2,explanation:"원문 검색 passage와 query engine의 중간 결과를 모두 확인·활용하기 위해서입니다.",choices:[{text:"API key 두 개를 쓰기 위해",why:"인증과 무관합니다."},{text:"train/test를 나누기 위해",why:"학습 데이터 분할이 아닙니다."},{text:"raw passage와 중간 결과를 함께 쓰기 위해",why:"정답입니다."},{text:"두 모델을 학습하기 위해",why:"모델 학습 코드가 아닙니다."},{text:"문서를 삭제하기 위해",why:"CRUD 작업이 아닙니다."}]}
+      ]
+    }, {
+      id:"rag-03",number:"03",title:"CRAG Data Preprocessing",file:"1. Data_preprocessing.ipynb",
+      capability:"압축 JSONL 데이터를 안전하게 읽고 질문 속성 분포와 검색 결과 schema를 확인한 뒤 HTML page_result를 문장 chunk로 정제할 수 있다.",
+      summary:"bz2 압축 파일의 각 줄을 JSON 객체로 만들고 domain·question type·dynamism을 분석한 뒤 검색 결과 HTML에서 text를 추출해 문장 단위 검색 재료로 바꿉니다.",
+      notebook_goal:"CRAG 데이터 구조를 파악하고 RAG가 사용할 검색 결과를 깨끗한 문장 chunk로 전처리한다.",
+      key_points:[
+        {title:"압축 JSONL 로딩",purpose:"압축을 풀어 별도 저장하지 않고 text mode로 한 줄씩 JSON을 읽습니다.",code:"bz2.open(path,'rt')\njson.loads(line.strip())",flow:".jsonl.bz2 → line → dict → dataset",watch:"json.load가 아니라 각 line에 json.loads를 적용합니다."},
+        {title:"Schema 분류",purpose:"domain·question_type·static_or_dynamic별 대표 예제와 개수를 파악합니다.",code:"unique[key]=item\nCounter(item[field] for item in dataset)",flow:"list[dict] → category map/count",watch:"query가 질문, answer가 정답 field입니다."},
+        {title:"Search result 구조",purpose:"각 질문에 연결된 page_name·page_snippet·page_result의 역할과 길이를 확인합니다.",code:"example_data['search_results']",flow:"question record → list[search page]",watch:"실제 근거 본문은 page_result에 있습니다."},
+        {title:"HTML text 추출",purpose:"태그와 navigation noise를 제거해 순수 text를 만듭니다.",code:'BeautifulSoup(html, features="lxml").get_text(" ", strip=True)',flow:"HTML → parsed tree → plain text",watch:"page_snippet만 사용하면 근거가 부족할 수 있습니다."},
+        {title:"문장 Chunk",purpose:"긴 page text를 문장 경계 offset으로 나누고 길이를 제한합니다.",code:"text_to_sentences_and_offsets(text)\ntext[start:end][:4000]",flow:"plain text → offsets → chunks",watch:"offset은 원문 slice의 start와 end입니다."}
+      ],
+      theory_guide:[
+        {title:"1. JSONL",concept:"JSONL은 한 줄에 JSON 객체 하나를 저장하는 형식이라 큰 파일을 순차 처리할 수 있습니다.",flow:"one line → one record",code_signal:"for line in file 안에서 json.loads를 호출합니다.",exam_clue:"파싱 실패는 JSONDecodeError로 처리합니다."},
+        {title:"2. 데이터 Schema",concept:"Schema는 record가 가진 field 구조입니다. 이 데이터는 query·answer와 분류 field, search_results를 포함합니다.",flow:"record → metadata + target + evidence",code_signal:"item['field'] 접근을 반복합니다.",exam_clue:"질문/정답 key를 query/answer로 혼동하지 않습니다."},
+        {title:"3. HTML parsing",concept:"Parsing은 HTML 구조를 해석해 검색에 필요한 text만 추출하는 과정입니다.",flow:"page_result HTML → BeautifulSoup → get_text",code_signal:"features='lxml'과 strip=True를 함께 사용합니다.",exam_clue:"page_result를 parser에 넣고 soup에서 text를 얻습니다."},
+        {title:"4. Sentence offsets",concept:"문장 offset은 각 문장이 원문에서 시작·끝나는 위치입니다.",flow:"text → [(start,end)] → text[start:end]",code_signal:"BlingFire 함수의 두 번째 반환값이 offsets입니다.",exam_clue:"각 offset을 순회하며 chunk를 all_chunks에 추가합니다."}
+      ],
+      full_code_cells:[cell(16,loadDataP,loadDataA,[4,7,8,9]),cell(21,inspectP,inspectA,[6,8,9,10]),cell(25,statsP,statsA,[2,3,4,6]),cell(39,schemaP,schemaA,[2,3,4,5]),cell(44,parseP,parseA,[5,6,10,13,14])],
+      subjective:[
+        S("prep-q1","bz2.open(file_path, 'rt')","압축 파일","bz2 파일을 text read mode로 여는 표현을 쓰세요."),S("prep-q2","json.loads(line.strip())","JSON 파싱","한 줄을 JSON 객체로 변환하는 표현을 쓰세요."),S("prep-q3","dataset.append(data)","Dataset 구성","파싱한 record를 dataset에 추가하세요."),S("prep-q4","json.JSONDecodeError","예외 처리","잘못된 JSON line을 잡는 예외 클래스를 쓰세요."),
+        S("prep-q5","unique_domains[domain_value] = item","대표 예제","domain별 첫 record를 저장하는 대입문을 쓰세요."),S("prep-q6","unique_domains.items()","Dictionary 순회","domain과 example을 함께 순회할 호출을 쓰세요."),S("prep-q7","example_item['query']","질문 field","대표 record에서 질문을 가져오세요."),S("prep-q8","example_item['answer']","정답 field","대표 record에서 정답을 가져오세요."),
+        S("prep-q9","item['domain']","Domain 집계","Counter가 집계할 domain 표현을 쓰세요."),S("prep-q10","item['question_type']","Question type","질문 유형 field 접근을 쓰세요."),S("prep-q11","item['static_or_dynamic']","Dynamism","정적·동적 구분 field 접근을 쓰세요."),S("prep-q12","domain_counts.keys(), domain_counts.values()","막대그래프","bar chart의 x와 height 인자를 순서대로 쓰세요."),
+        S("prep-q13","example_data['search_results']","검색 결과","record에서 검색 결과 목록을 가져오세요."),S("prep-q14",'html_text["page_result"]',"본문 HTML","검색 결과에서 전체 본문 HTML을 선택하세요."),S("prep-q15",'features="lxml"',"HTML parser","BeautifulSoup의 parser 선택 인자를 쓰세요."),S("prep-q16",'soup.get_text(" ", strip=True)',"Text 추출","태그를 제거하고 공백으로 연결한 text를 얻으세요."),S("prep-q17","text_to_sentences_and_offsets(text)","문장 분할","text의 문장 경계 offset을 얻는 호출을 쓰세요."),S("prep-q18","text[start:end][:4000]","Chunk slice","문장 범위를 자르고 최대 4000자로 제한하세요."),S("prep-q19","all_chunks.append(chunk)","Chunk 저장","완성된 chunk를 결과 목록에 추가하세요.")
+      ],
+      mcq:[
+        {id:"prep-m1",source_question_id:"prep-q2",topic:"JSONL 읽기",prompt:"JSONL의 각 line을 dict로 바꾸는 올바른 호출은?",answer_index:1,explanation:"문자열 한 줄은 json.loads로 파싱합니다.",choices:[{text:"json.load(line)",why:"load는 file 객체용입니다."},{text:"json.loads(line.strip())",why:"정답입니다."},{text:"json.dumps(line)",why:"객체를 문자열로 직렬화합니다."},{text:"bz2.loads(line)",why:"bz2는 JSON parser가 아닙니다."},{text:"line.to_json()",why:"문자열 메서드가 아닙니다."}]},
+        {id:"prep-m2",source_question_id:"prep-q7",topic:"Schema",prompt:"CRAG record에서 질문 text가 저장된 key는?",answer_index:3,explanation:"노트북이 확인한 질문 key는 query입니다.",choices:[{text:"question",why:"일반적 이름이지만 이 schema에는 다릅니다."},{text:"prompt",why:"LLM prompt key가 아닙니다."},{text:"page_name",why:"검색 결과 제목입니다."},{text:"query",why:"정답입니다."},{text:"answer",why:"정답 text key입니다."}]},
+        {id:"prep-m3",source_question_id:"prep-q14",topic:"검색 근거",prompt:"RAG가 전체 검색 본문을 사용하려면 어느 field를 파싱해야 하나요?",answer_index:2,explanation:"page_result에 전체 페이지 HTML이 들어 있습니다.",choices:[{text:"page_name",why:"제목뿐입니다."},{text:"page_snippet",why:"짧은 요약이라 근거가 부족할 수 있습니다."},{text:"page_result",why:"정답입니다."},{text:"domain",why:"질문 분류입니다."},{text:"static_or_dynamic",why:"시간 특성 분류입니다."}]},
+        {id:"prep-m4",source_question_id:"prep-q16",topic:"HTML 정제",prompt:"BeautifulSoup 객체에서 태그를 제거한 text를 얻는 호출은?",answer_index:0,explanation:"get_text에 separator와 strip 옵션을 지정합니다.",choices:[{text:'soup.get_text(" ", strip=True)',why:"정답입니다."},{text:"soup.page_result()",why:"해당 메서드가 없습니다."},{text:"soup.loads()",why:"JSON parser와 혼동했습니다."},{text:"soup.text_to_html()",why:"방향이 반대이며 메서드도 없습니다."},{text:"BeautifulSoup.get_json()",why:"HTML을 JSON으로 읽는 단계가 아닙니다."}]},
+        {id:"prep-m5",source_question_id:"prep-q18",topic:"문장 Chunk",prompt:"offset (start,end)로 원문 문장을 추출하고 길이를 제한하는 표현은?",answer_index:4,explanation:"먼저 문장 범위를 slice하고 다시 최대 길이를 slice합니다.",choices:[{text:"text[:start][end:]",why:"범위가 뒤집힙니다."},{text:"text[start+end]",why:"한 문자 index가 됩니다."},{text:"text.split(start,end)",why:"split 인자가 아닙니다."},{text:"text[offsets][:4000]",why:"offset 목록으로 직접 문자열을 index할 수 없습니다."},{text:"text[start:end][:4000]",why:"정답입니다."}]}
       ]
     }]
   };
