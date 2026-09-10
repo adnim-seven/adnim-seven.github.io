@@ -744,6 +744,237 @@ def prune_wanda(model, sparsity, input_feat):
     .replace("threshold =\n", "threshold = torch.kthvalue(importance, num_zeros_per_row, dim=1)[0]\n")
     .replace("mask =\n", "mask = importance > threshold.reshape(row, 1)\n");
 
+  const l5c27p = `@torch.no_grad()
+def pseudo_quantize_model_weight_scaleup(
+    model, w_bit, q_group_size, input_feat, scale_factor
+):
+    for n, m in model.named_modules():
+        if isinstance(m, nn.Linear):
+            importance = sum(input_feat[n]).float()
+            # 1퍼센트 채널의 개수
+            num_samples = int(len(importance) * 0.01)
+
+            ############### YOUR CODE STARTS HERE ###############
+
+            # Step 1: importance를 기준으로 1%의 중요한 채널을 찾으세요  (hint: use torch.topk())
+            # hint : torch.topk() 함수를 사용하세요. torch.topk() 함수는 PyTorch에서 텐서의 값 중 상위 k개의 값과 그들의 인덱스를 반환하는 함수입니다. torch.topk()[0]는 값을, torch.topk()[1]은 인덱스를 반환합니다.
+            outlier_mask =
+
+            ############### YOUR CODE ENDS HERE #################
+            assert outlier_mask.dim() == 1
+
+            ############### YOUR CODE STARTS HERE ###############
+
+            # 스케일 팩터를 적용하는 것을 시뮬레이션하기 위해, 양자화 전에 스케일 팩터를 곱하고, 양자화 후에 스케일 팩터로 나눕니다.
+            # scale_factor를 이용해 중요한 가중치 채널의 값을 확대합니다.
+            m.weight.data[:, outlier_mask]
+
+            m.weight.data = pseudo_quantize_tensor(m.weight.data, n_bit=w_bit, q_group_size=q_group_size)
+
+            # Step 2: pseudo quantization이기 때문에 scale_factor를 이용해 중요한 가중치 채널의 값을 다시 축소하세요.
+            m.weight.data[:, outlier_mask]
+
+            ############### YOUR CODE ENDS HERE #################`;
+  const l5c27a = l5c27p
+    .replace("outlier_mask =\n", "outlier_mask = torch.topk(importance, int(len(importance) * 0.01))[1]\n")
+    .replace("m.weight.data[:, outlier_mask]\n", "m.weight.data[:, outlier_mask] *= scale_factor\n")
+    .replace("m.weight.data[:, outlier_mask]\n", "m.weight.data[:, outlier_mask] /= scale_factor\n");
+
+  const l5c34p = `@torch.no_grad()
+def auto_scale_block(module, name, w_bit,
+                     q_group_size,
+                     input_feat):
+
+    # find the best scale ratio
+    def _search_module_scale(block, linears2scale: list, x, kwargs={}):
+
+        x = x.to(next(block.parameters()).device)
+        with torch.no_grad():
+            org_out = block(x, **kwargs)
+            if isinstance(org_out, tuple):
+                org_out = org_out[0]
+
+        s_x = x.view(-1, x.shape[-1]).abs().mean(0)
+        s_x = torch.clamp(s_x, 1e-5)
+
+        # Step 1: best_error, best_ratio, 및 best_scales를 초기화
+        best_error = torch.inf
+        best_ratio = -1
+        best_scales = 0
+
+        n_grid = 20
+        history = []
+
+        org_sd = {k: v.cpu() for k, v in block.state_dict().items()}
+        for ratio in range(n_grid):
+            # ratio is the alpha in the formula
+            ratio = ratio * 1 / n_grid
+
+            ############### YOUR CODE STARTS HERE ###############
+
+            # Step 2: 공식에 따라 스케일 계산
+            scales =
+
+            ############### YOUR CODE ENDS HERE #################
+            assert scales.shape == s_x.shape
+
+            scales = scales / (scales.max() * scales.min()).sqrt().view(1, -1)
+
+            for fc in linears2scale:
+
+                scales = scales.to(fc.weight.device)
+
+                ############### YOUR CODE STARTS HERE ###############
+
+                # Step 3: scale_factor를 이용해 중요한 가중치 채널의 값을 확대합니다.
+                fc.weight.data
+
+                fc.weight.data = pseudo_quantize_tensor(fc.weight.data, w_bit, q_group_size)
+
+                # Step 4: scale_factor를 이용해 중요한 가중치 채널의 값을 다시 축소하세요.
+                fc.weight.data
+
+                ############### YOUR CODE ENDS HERE #################
+
+            out = block(x, **kwargs)
+            if isinstance(out, tuple):
+                out = out[0]
+
+            loss = (org_out - out).float().pow(2).mean().item()  # float prevents overflow
+            history.append(loss)
+            is_best = loss < best_error
+            if is_best:
+                best_error = loss
+                best_ratio = ratio
+                best_scales = scales
+            block.load_state_dict(org_sd)
+
+        if best_ratio == -1:
+            print(history)
+            raise Exception
+
+        best_scales = best_scales.view(-1)
+
+        assert torch.isnan(best_scales).sum() == 0, best_scales
+        return best_scales.detach()`;
+  const l5c34a = l5c34p
+    .replace("scales =\n", "scales = s_x ** ratio\n")
+    .replace("fc.weight.data\n", "fc.weight.data *= scales\n")
+    .replace("fc.weight.data\n", "fc.weight.data /= scales\n");
+
+  const l5c50p = `@torch.no_grad()
+def smooth_ln_fcs_by_scale(ln, fcs, scale):
+    """
+    LayerNorm(LN)과 그에 연결된 Fully Connected layer(FC)들 간의 파라미터 스케일을 맞추어 모델의 출력 분포를 안정화시키는 함수.
+
+    내부 단계:
+    1. LayerNorm의 weight, bias를 scale로 나눔 (출력 스케일 축소)
+    2. 이후 연결된 FC layer의 weight를 동일 scale로 곱해 상쇄 (입력 스케일 복원)
+
+    즉, forward 상에서 전체 스케일은 유지되면서 내부 파라미터 분포만 조정됨.
+    """
+    if not isinstance(fcs, list):
+        fcs = [fcs]
+    assert isinstance(ln, nn.LayerNorm)
+    for fc in fcs:
+        assert isinstance(fc, nn.Linear)
+
+    ############### YOUR CODE STARTS HERE ###############
+    # Step 1: layernorm의 weight와 bias를 scale로 나누어주세요.
+    # div_() 함수는 텐서 자체를 스케일로 나누는 인플레이스 연산
+    ln.weight
+    ln.bias
+    ############### YOUR CODE ENDS HERE #################
+
+    for fc in fcs:
+        ############### YOUR CODE STARTS HERE ###############
+        # Step 2: fc의 weight에 scale을 곱해주세요.
+        # mul_() 함수는 텐서 자체에 스케일을 곱하는 인플레이스 연산
+        fc.weight
+        ############### YOUR CODE ENDS HERE #################`;
+  const l5c50a = l5c50p
+    .replace("ln.weight\n", "ln.weight.div_(scale)\n")
+    .replace("ln.bias\n", "ln.bias.div_(scale)\n")
+    .replace("fc.weight\n", "fc.weight.mul_(scale)\n");
+
+  const l5c55p = `@torch.no_grad()
+def smooth_ln_fcs(ln, fcs, act_scales, alpha=0.5):
+    if not isinstance(fcs, list):
+        fcs = [fcs]
+    assert isinstance(ln, nn.LayerNorm)
+    for fc in fcs:
+        assert isinstance(fc, nn.Linear)
+        assert ln.weight.numel() == fc.in_features == act_scales.numel()
+
+    device, dtype = fcs[0].weight.device, fcs[0].weight.dtype
+    act_scales = act_scales.to(device=device, dtype=dtype)
+    weight_scales = torch.cat(
+        [fc.weight.abs().max(dim=0, keepdim=True)[0] for fc in fcs], dim=0
+    )
+    weight_scales = weight_scales.max(dim=0)[0].clamp(min=1e-5)
+
+    scales = (
+        ############### YOUR CODE STARTS HERE ###############
+        #Activation Scales 값과 Weight Scales 값에 alpha를 적절히 거듭제곱해주어야 합니다.
+
+        ############### YOUR CODE ENDS HERE #################
+    )
+
+    scales.clamp(min=1e-5).to(device).to(dtype)
+
+    ln.weight.div_(scales)
+    ln.bias.div_(scales)
+
+    for fc in fcs:
+        fc.weight.mul_(scales.view(1, -1))`;
+  const l5c55a = l5c55p.replace(
+    "        #Activation Scales 값과 Weight Scales 값에 alpha를 적절히 거듭제곱해주어야 합니다.\n\n        ############### YOUR CODE ENDS HERE #################",
+    "        #Activation Scales 값과 Weight Scales 값에 alpha를 적절히 거듭제곱해주어야 합니다.\n        act_scales.pow(alpha) / weight_scales.pow(1 - alpha)\n        ############### YOUR CODE ENDS HERE #################"
+  );
+
+  const l5c67p = `def rotate_model_weight(model, R1):
+    """
+    모델의 모든 Embedding 및 Linear Layer 파라미터에 회전 행렬(R1)을 적용하여
+    Weight Space Rotation을 수행하는 함수.
+
+    - QuaRot, SpinQuant 등의 기법에서 사용되는 핵심 단계로, 모델의 weight를 직교 행렬로 회전시켜 Outlier 완화
+    - 회전 행렬 R1은 (hidden_dim × hidden_dim) 형태의 직교 행렬이어야 함.
+    """
+    for n, m in model.named_modules():
+        ############### YOUR CODE STARTS HERE ###############
+        # Pytorch에서 '@' 연산자는 행렬 곱 (dot product)을 의미합니다.
+        # nn.Linear의 weight 파라미터는 W^T 형태로 저장되어 있다는 점을 유의해야 합니다.
+        #
+        # Shape 요약:
+        #   Embedding  : (num_tokens, hidden_dim)
+        #   Linear     : (out_channels, in_channels)
+        #   Rotation R : (hidden_dim, hidden_dim)
+
+        if isinstance(m, nn.Embedding):
+            # Embedding Weight: (num_tokens, hidden_dim)
+            W_ = m.weight.data
+            m.weight.data =
+
+        if isinstance(m, nn.Linear):
+            # Linear Layer: (out_features, in_features)
+            if "o_proj" in n or "down_proj" in n:
+                # Attention 출력 또는 FFN 다운프로젝션
+                W_ = m.weight.data
+                m.weight.data =
+            else:
+                # Q, K, V 프로젝션 및 FFN 게이트/업프로젝션
+                W_ = m.weight.data
+                m.weight.data =
+
+        ############### YOUR CODE ENDS HERE #################
+
+        # GPU 메모리 캐시 정리
+        torch.cuda.empty_cache()`;
+  const l5c67a = l5c67p
+    .replace("m.weight.data =\n", "m.weight.data = W_ @ R1\n")
+    .replace("m.weight.data =\n", "m.weight.data = R1.T @ W_\n")
+    .replace("m.weight.data =\n", "m.weight.data = W_ @ R1\n");
+
   const subjective = [
     S("q-scale-tensor", "fp_tensor/scale", "선형 양자화: 스케일", "fp_tensor를 정수 격자 단위로 환산하는 식을 작성하세요."),
     S("q-round", "torch.round(scaled_tensor)", "선형 양자화: 반올림", "스케일된 실수를 가장 가까운 정수로 반올림하세요."),
@@ -889,10 +1120,42 @@ def prune_wanda(model, sparsity, input_feat):
     ["l4m8","l4-mask","Mask 방향","중요도가 큰 weight를 유지하는 조건은?",2,["importance < threshold","importance == threshold","importance > threshold","W == 0","importance <= sparsity"],"True가 곱셈에서 1로 작동하므로 큰 importance를 True로 둡니다."],
   ].map(([id,source_question_id,topic,prompt,answer_index,options,explanation])=>({id,source_question_id,topic,prompt,answer_index,explanation,choices:options.map((text,i)=>({text,why:i===answer_index?"정답입니다.":"Magnitude 또는 WANDA의 실제 Tensor 흐름과 맞지 않습니다."}))}));
 
+  const llmQuantSubjective = [
+    S("l5-topk","torch.topk(importance, int(len(importance) * 0.01))[1]","Outlier channel 선택","importance 상위 1% 채널의 인덱스를 구하세요."),
+    S("l5-scaleup","m.weight.data[:, outlier_mask] *= scale_factor","Outlier scale-up","중요 channel을 양자화 전에 확대하세요."),
+    S("l5-scaledown","m.weight.data[:, outlier_mask] /= scale_factor","Outlier scale-down","pseudo quantization 후 같은 channel을 원래 scale로 복원하세요."),
+    S("l5-auto-scale","s_x ** ratio","Auto-scale 탐색","현재 ratio로 activation 기반 scale 후보를 계산하세요.", ["s_x ** ratio","s_x**ratio"]),
+    S("l5-fc-up","fc.weight.data *= scales","Auto-scale weight 확대","양자화 전에 Linear weight에 channel scale을 곱하세요."),
+    S("l5-fc-down","fc.weight.data /= scales","Auto-scale weight 복원","양자화 후 Linear weight에서 channel scale을 나누세요."),
+    S("l5-ln-weight","ln.weight.div_(scale)","LayerNorm weight smoothing","LayerNorm weight를 scale로 나누는 inplace 연산을 작성하세요."),
+    S("l5-ln-bias","ln.bias.div_(scale)","LayerNorm bias smoothing","LayerNorm bias를 scale로 나누는 inplace 연산을 작성하세요."),
+    S("l5-fc-mul","fc.weight.mul_(scale)","FC compensation","LayerNorm에서 줄인 scale을 FC weight에 곱해 상쇄하세요."),
+    S("l5-smooth-scale","act_scales.pow(alpha) / weight_scales.pow(1 - alpha)","SmoothQuant scale","activation과 weight scale을 alpha로 균형 잡는 식을 작성하세요."),
+    S("l5-embed-rotate","W_ @ R1","Embedding rotation","Embedding의 hidden dimension에 R1을 적용하세요."),
+    S("l5-output-rotate","R1.T @ W_","Output projection rotation","o_proj/down_proj의 output 방향에 역회전을 적용하세요."),
+    S("l5-input-rotate","W_ @ R1","Input projection rotation","Q/K/V 및 FFN input 방향에 R1을 적용하세요."),
+  ];
+  const llmQuantSources = {
+    "l5-topk":l5c27a,"l5-scaleup":l5c27a,"l5-scaledown":l5c27a,
+    "l5-auto-scale":l5c34a,"l5-fc-up":l5c34a,"l5-fc-down":l5c34a,
+    "l5-ln-weight":l5c50a,"l5-ln-bias":l5c50a,"l5-fc-mul":l5c50a,
+    "l5-smooth-scale":l5c55a,"l5-embed-rotate":l5c67a,"l5-output-rotate":l5c67a,"l5-input-rotate":l5c67a,
+  };
+  const llmQuantMcq = [
+    ["l5m1","l5-topk","Outlier 선택","torch.topk 결과에서 channel 인덱스를 얻는 위치는?",0,["[1]","[0]","[-1][0]",".values",".shape"],"topk는 (values, indices)를 반환하므로 인덱스는 [1]입니다."],
+    ["l5m2","l5-scaledown","Scale 보상","중요 channel을 양자화 전 확대했다면 이후에는?",1,["다시 곱한다","같은 scale_factor로 나눈다","0으로 만든다","평균을 뺀다","transpose한다"],"Pseudo quantization 전후의 역연산으로 원래 함수 출력을 유지합니다."],
+    ["l5m3","l5-auto-scale","Auto-scale","activation scale 후보를 ratio로 만드는 식은?",2,["s_x + ratio","ratio / s_x","s_x ** ratio","s_x.mean()","torch.topk(s_x, ratio)"],"Grid의 ratio가 alpha 역할을 하므로 s_x를 ratio 제곱합니다."],
+    ["l5m4","l5-fc-up","AWQ simulation","Linear weight의 quantization 전 적용은?",3,["fc.weight.data /= scales","fc.bias *= scales","fc.weight.data += scales","fc.weight.data *= scales","scales *= ratio"],"Scale-up 후 양자화하고 동일 scale로 나눠 오차 변화를 시뮬레이션합니다."],
+    ["l5m5","l5-fc-mul","Smooth compensation","LayerNorm 파라미터를 scale로 나눈 뒤 FC weight에는?",4,["나눈다","clamp한다","전치한다","zero point를 더한다","scale을 곱한다"],"연결된 두 layer에서 반대 연산을 적용해 전체 함수는 유지합니다."],
+    ["l5m6","l5-smooth-scale","SmoothQuant","alpha가 activation과 weight 사이를 조절하는 식은?",0,["act_scales.pow(alpha) / weight_scales.pow(1-alpha)","act_scales+weight_scales","weight_scales/act_scales","act_scales.pow(1-alpha)*weight_scales","alpha/(act_scales*weight_scales)"],"Activation은 alpha, weight는 1-alpha 거듭제곱으로 분배합니다."],
+    ["l5m7","l5-output-rotate","Weight rotation","o_proj/down_proj에 적용하는 행렬곱은?",1,["W_ @ R1","R1.T @ W_","R1 @ W_ @ R1","W_.T @ R1","W_ + R1"],"출력 방향 projection은 저장된 W 형태를 고려해 왼쪽에서 R1.T를 곱합니다."],
+    ["l5m8","l5-input-rotate","Weight rotation","Embedding과 Q/K/V input 방향의 공통 회전은?",2,["R1.T @ W_","W_ @ R1.T","W_ @ R1","R1 @ W_","W_.T @ R1"],"두 경우 모두 hidden/input dimension이 오른쪽 축이므로 W_ @ R1입니다."],
+  ].map(([id,source_question_id,topic,prompt,answer_index,options,explanation])=>({id,source_question_id,topic,prompt,answer_index,explanation,choices:options.map((text,i)=>({text,why:i===answer_index?"정답입니다.":"Outlier 완화, smoothing 또는 회전의 실제 연산과 맞지 않습니다."}))}));
+
   window.LLM_COURSE = {
     subject: "5. On-device AI",
     sample_mode: false,
-    cells: Object.fromEntries(Object.entries({...sources, ...pruningSources, ...distillSources, ...llmPruneSources}).map(([id, source]) => [id, { source }])),
+    cells: Object.fromEntries(Object.entries({...sources, ...pruningSources, ...distillSources, ...llmPruneSources, ...llmQuantSources}).map(([id, source]) => [id, { source }])),
     chapters: [{
       id: "quantization-cnn", number: "01", title: "CNN Quantization",
       file: "2. Quantization for CNN.ipynb",
@@ -973,6 +1236,26 @@ def prune_wanda(model, sparsity, input_feat):
       full_code_cells:[cell(10,l4c10p,l4c10a),cell(16,l4c16p,l4c16a),cell(19,l4c19p,l4c19a)],
       subjective:llmPruneSubjective,
       mcq:llmPruneMcq,
+    },{
+      id:"quantization-llm",number:"05",title:"LLM Quantization",file:"5. Quantization for LLM.ipynb",
+      capability:"LLM weight와 activation outlier를 scale·smoothing·rotation으로 완화한 뒤 저비트 pseudo quantization을 적용한다.",
+      summary:"중요 channel scale-up, activation 기반 auto-scale, SmoothQuant, orthogonal weight rotation의 보존 관계를 코드로 구분합니다.",
+      notebook_goal:"LLM의 outlier가 양자화 오차를 키우는 문제를 channel scaling과 weight rotation으로 완화한다.",
+      key_points:[
+        {title:"Outlier channel scale-up",purpose:"상위 1% 중요 channel을 확대해 양자화에서 상대적으로 더 정밀하게 표현합니다.",code:"topk(...)[1] → *= scale_factor → quantize → /= scale_factor",flow:"importance → top-k index → scale-up → pseudo quantize → inverse scale",watch:"topk의 [0]은 값, [1]은 channel 인덱스입니다."},
+        {title:"Auto-scale search",purpose:"원본 block 출력과 양자화 출력의 MSE가 가장 작은 activation exponent를 탐색합니다.",code:"scales = s_x ** ratio",flow:"ratio grid → scale weight → quantize → inverse scale → output MSE → best",watch:"각 후보 뒤 state_dict를 복원해야 탐색이 누적되지 않습니다."},
+        {title:"SmoothQuant compensation",purpose:"Activation outlier를 weight 쪽으로 이동하면서 전체 layer 함수는 유지합니다.",code:"LN ÷ scale, FC × scale",flow:"act/weight 통계 → alpha scale → LayerNorm divide → Linear multiply",watch:"연결된 두 layer에 같은 방향 연산을 하면 출력이 보존되지 않습니다."},
+        {title:"Weight rotation",purpose:"직교 회전으로 outlier를 여러 차원에 분산해 양자화 범위를 고르게 만듭니다.",code:"Embedding/QKV: W@R, output projection: R.T@W",flow:"layer 역할 확인 → 올바른 축 회전 → 함수적 대응 유지",watch:"Linear weight가 W^T 형태로 저장된 점 때문에 곱셈 방향이 달라집니다."},
+      ],
+      theory_guide:[
+        {title:"Scale 후 역연산",concept:"양자화 전후에 곱셈과 나눗셈을 짝지으면 원래 weight 효과는 유지하면서 양자화 오차만 바뀝니다.",flow:"selected channel ×s → Q(·) → ÷s",code_signal:"주석의 확대/다시 축소가 *=와 /=를 직접 지시합니다.",exam_clue:"같은 outlier_mask와 scale_factor를 두 줄에서 재사용합니다."},
+        {title:"AWQ auto-scale",concept:"Calibration activation이 큰 channel에 더 많은 표현 정밀도를 배분하고 출력 오차로 ratio를 선택합니다.",flow:"s_x → ratio grid → s_x**ratio → quantization simulation → MSE",code_signal:"ratio가 alpha라는 주석과 n_grid 반복이 거듭제곱 탐색을 뜻합니다.",exam_clue:"scales shape은 s_x와 같아야 하므로 scalar가 아닌 channel vector입니다."},
+        {title:"SmoothQuant",concept:"act_scale^alpha / weight_scale^(1-alpha)로 activation과 weight outlier 부담을 재분배합니다.",flow:"통계 → scale → LN divide → FC multiply",code_signal:"alpha와 1-alpha가 두 통계에 각각 사용됩니다.",exam_clue:"분자는 activation, 분모는 weight입니다."},
+        {title:"회전 축",concept:"직교행렬은 정보를 보존하면서 좌표축만 바꾸며, 저장된 weight shape에 따라 좌·우 곱을 선택합니다.",flow:"Embedding/input projection W@R, output projection R.T@W",code_signal:"o_proj/down_proj 이름 분기가 곱셈 방향을 결정합니다.",exam_clue:"입력 hidden 축은 오른쪽, 출력 hidden 축은 왼쪽입니다."},
+      ],
+      full_code_cells:[cell(27,l5c27p,l5c27a),cell(34,l5c34p,l5c34a),cell(50,l5c50p,l5c50a),cell(55,l5c55p,l5c55a),cell(67,l5c67p,l5c67a)],
+      subjective:llmQuantSubjective,
+      mcq:llmQuantMcq,
     }],
   };
 })();
