@@ -1,0 +1,160 @@
+(() => {
+  const line = (text, highlight=false) => ({text,highlight});
+  const cell = (cell_number, problem, answer, marked) => ({cell_number,blank_count:marked.length,problem_lines:problem.map((x,i)=>line(x,marked.includes(i))),answer_lines:answer.map((x,i)=>line(x,marked.includes(i)))});
+  const fill = (problem, replacements) => problem.map((x,i)=>replacements[i] ?? x);
+  const S = (id,answer,topic,prompt,accepted=[answer]) => ({id,sourceId:id,occurrence:0,answer,accepted_answers:accepted,topic,prompt,isSourceBlank:true});
+
+  const buildP = [
+    "### YOUR CODE HERE ###",
+    "documents = ????(\"data\").????()",
+    "",
+    "### YOUR CODE HERE ###",
+    "for i in range(len(documents)):",
+    "  print(documents[i].text)",
+    "",
+    "### YOUR CODE HERE ###",
+    "index = ????.????(documents)",
+    "",
+    "### YOUR CODE HERE ###",
+    "query_engine = index.????()",
+    "response = query_engine.????(\"What is the first programs the author tried writing?\")",
+    "print(response)",
+  ];
+  const buildA = fill(buildP,{1:'documents = SimpleDirectoryReader("data").load_data()',8:'index = VectorStoreIndex.from_documents(documents)',11:'query_engine = index.as_query_engine()',12:'response = query_engine.query("What is the first programs the author tried writing?")'});
+
+  const splitP = [
+    "### YOUR CODE HERE ###",
+    "from llama_index.core.node_parser import SentenceSplitter",
+    "parser = SentenceSplitter(chunk_size=1024, chunk_overlap=200)",
+    "# you can change chunk_size, chunk_overlap",
+    "nodes = parser.????(documents)",
+    "print(len(nodes))",
+    "",
+    "text_splitter = SentenceSplitter(chunk_size=200, chunk_overlap=50)",
+    "index = VectorStoreIndex.from_documents(documents=documents, ????=[text_splitter])",
+    "node_id = index.index_struct.????",
+    "print(\"The number of nodes: \", len(node_id.values()))",
+  ];
+  const splitA = fill(splitP,{4:'nodes = parser.get_nodes_from_documents(documents)',8:'index = VectorStoreIndex.from_documents(documents=documents, transformations=[text_splitter])',9:'node_id = index.index_struct.nodes_dict'});
+
+  const retrieveP = [
+    "### YOUR CODE HERE ###",
+    "retriever = index.????()",
+    "ret_passages = retriever.????(\"Who is the author?\")",
+    "for i in range(len(ret_passages)):",
+    "  print(\"###Retrieved Passage\\n\", ret_passages[i].text)",
+    "",
+    "ret_context = \"\"",
+    "for ret_result in ret_passages:",
+    "  ret_context += ret_result.text",
+    "",
+    "question = f\"\"\"Context information is below.",
+    "---------------------",
+    "{????}",
+    "---------------------",
+    "Given the context information and not prior knowledge,",
+    "answer the query and the reasons of answer.",
+    "Query: Who is the author?",
+    "Answer:",
+    "\"\"\"",
+    "print(generate_answer(question))",
+  ];
+  const retrieveA = fill(retrieveP,{1:'retriever = index.as_retriever()',2:'ret_passages = retriever.retrieve("Who is the author?")',12:'{ret_context}'});
+
+  const crudP = [
+    "### YOUR CODE HERE ###",
+    "docu = Document(text=data_text, ????=\"new_doc_id\")",
+    "index.????(docu)",
+    "new_query_engine = index.as_query_engine()",
+    "",
+    "docu.????(value=updated_text)",
+    "output = index.????(",
+    "    docu,",
+    "    update_kwargs={\"delete_kwargs\": {\"delete_from_docstore\": True}},",
+    ")",
+    "",
+    "id = docu.????",
+    "index.????(id, delete_from_docstore=True)",
+  ];
+  const crudA = fill(crudP,{1:'docu = Document(text=data_text, id_="new_doc_id")',2:'index.insert(docu)',5:'docu.set_content(value=updated_text)',6:'output = index.update_ref_doc(',11:'id = docu.doc_id',12:'index.delete_ref_doc(id, delete_from_docstore=True)'});
+
+  const standardP = [
+    "### YOUR CODE HERE ###",
+    "class StandardQueryEngine(CustomQueryEngine):",
+    "    retriever: BaseRetriever",
+    "    response_synthesizer: BaseSynthesizer",
+    "    def custom_query(self, query_str: str):",
+    "        nodes = self.retriever.????(query_str)",
+    "        response_obj = self.response_synthesizer.????(query_str, nodes)",
+    "        return response_obj",
+    "",
+    "retriever = index.as_retriever()",
+    "synthesizer = get_response_synthesizer(response_mode=\"compact\")",
+    "query_engine = StandardQueryEngine(",
+    "    retriever=????, response_synthesizer=????",
+    ")",
+  ];
+  const standardA = fill(standardP,{5:'        nodes = self.retriever.retrieve(query_str)',6:'        response_obj = self.response_synthesizer.synthesize(query_str, nodes)',12:'    retriever=retriever, response_synthesizer=synthesizer'});
+
+  const customP = [
+    "### YOUR CODE HERE ###",
+    "class OurCustomQueryEngine(CustomQueryEngine):",
+    "    retriever: BaseRetriever",
+    "    response_synthesizer: BaseSynthesizer",
+    "    llm: OpenAI",
+    "    qa_prompt: PromptTemplate = simple_qa_prompt",
+    "    def custom_query(self, query_str: str):",
+    "        nodes = self.retriever.????(query_str)",
+    "        context_str = \"\\n\\n\".join([n.node.????() for n in nodes])",
+    "        response = self.llm.????(",
+    "            self.qa_prompt.????(context_str=context_str, query_str=query_str)",
+    "        )",
+    "        return str(response)",
+  ];
+  const customA = fill(customP,{7:'        nodes = self.retriever.retrieve(query_str)',8:'        context_str = "\\n\\n".join([n.node.get_content() for n in nodes])',9:'        response = self.llm.complete(',10:'            self.qa_prompt.format(context_str=context_str, query_str=query_str)'});
+
+  window.LLM_COURSE = {
+    subject:"2. RAG", sample_mode:false,
+    cells:{
+      "rag1-q1":{source:'SimpleDirectoryReader("data").load_data()'},"rag1-q2":{source:"VectorStoreIndex.from_documents(documents)"},"rag1-q3":{source:"index.as_query_engine()"},"rag1-q4":{source:"query_engine.query"},
+      "rag1-q5":{source:"parser.get_nodes_from_documents(documents)"},"rag1-q6":{source:"transformations=[text_splitter]"},"rag1-q7":{source:"index.index_struct.nodes_dict"},
+      "rag1-q8":{source:"index.as_retriever()"},"rag1-q9":{source:"retriever.retrieve"},"rag1-q10":{source:"ret_context"},
+      "rag1-q11":{source:'id_="new_doc_id"'},"rag1-q12":{source:"index.insert(docu)"},"rag1-q13":{source:"docu.set_content"},"rag1-q14":{source:"index.update_ref_doc"},"rag1-q15":{source:"docu.doc_id"},"rag1-q16":{source:"index.delete_ref_doc"},
+      "rag1-q17":{source:"self.response_synthesizer.synthesize(query_str, nodes)"},"rag1-q18":{source:"n.node.get_content()"},"rag1-q19":{source:"self.llm.complete"},"rag1-q20":{source:"self.qa_prompt.format"}
+    },
+    chapters:[{
+      id:"rag-01",number:"01",title:"LlamaIndex Query Engine",file:"1. Llama_index.ipynb",
+      capability:"문서를 load·chunk·index한 뒤 retrieve와 response synthesis를 연결하고 index 문서를 추가·수정·삭제할 수 있다.",
+      summary:"텍스트 파일이 Document와 Node로 분할되어 embedding index에 저장되고, 질문은 관련 Node 검색과 LLM 응답 합성을 거쳐 답변이 됩니다.",
+      notebook_goal:"LlamaIndex의 문서 로딩부터 VectorStoreIndex, QueryEngine, 검색·합성, 문서 CRUD까지 RAG의 전체 흐름을 구현한다.",
+      key_points:[
+        {title:"Load와 Index",purpose:"폴더의 파일을 Document로 읽고 embedding 기반 검색 index를 만듭니다.",code:'SimpleDirectoryReader("data").load_data()\nVectorStoreIndex.from_documents(documents)',flow:"files → Documents → Nodes → embeddings → index",watch:"API key 문자열은 코드에 저장하지 말고 환경변수를 사용합니다."},
+        {title:"Chunking",purpose:"긴 문서를 검색 가능한 작은 Node로 나누되 문맥 단절을 줄이기 위해 overlap을 둡니다.",code:"SentenceSplitter(chunk_size=200, chunk_overlap=50)",flow:"Document → overlapping Nodes",watch:"transformations에 splitter 목록을 전달해야 index 생성에 반영됩니다."},
+        {title:"Retrieve와 Query",purpose:"retriever는 관련 문맥을 찾고 query engine은 검색 결과로 답을 합성합니다.",code:"retriever.retrieve(query)\nquery_engine.query(query)",flow:"query → retrieved Nodes → prompt → LLM answer",watch:"retrieve 결과 자체와 최종 response를 구분합니다."},
+        {title:"Index CRUD",purpose:"새 지식을 반영하거나 오래된 문서를 갱신·삭제합니다.",code:"insert / update_ref_doc / delete_ref_doc",flow:"Document id → index mutation → new query engine",watch:"참조 문서 작업에는 doc_id가 필요합니다."},
+        {title:"Custom Query Engine",purpose:"검색과 응답 합성 또는 직접 prompt 호출의 순서를 명시적으로 구성합니다.",code:"retrieve → synthesize\nretrieve → context join → prompt.format → llm.complete",flow:"query string → Nodes → response",watch:"PromptTemplate의 context_str와 query_str 변수를 모두 채웁니다."}
+      ],
+      theory_guide:[
+        {title:"1. RAG",concept:"RAG는 질문과 관련된 외부 문서를 먼저 검색하고 그 문맥을 LLM 입력에 넣어 답하게 하는 방식입니다.",flow:"load → split → embed/index → retrieve → synthesize",code_signal:"from_documents 뒤 as_retriever 또는 as_query_engine이 이어집니다.",exam_clue:"기출 핵심 두 줄은 문서 load와 VectorStoreIndex 생성입니다."},
+        {title:"2. Document와 Node",concept:"Document는 원본 단위, Node는 검색을 위해 나눈 chunk 단위입니다.",flow:"1 Document → many Nodes",code_signal:"get_nodes_from_documents가 Document 목록을 Node 목록으로 바꿉니다.",exam_clue:"chunk_overlap은 인접 Node 사이 문맥을 일부 중복합니다."},
+        {title:"3. Retriever와 Synthesizer",concept:"Retriever는 근거를 고르고 Synthesizer는 질문과 근거를 이용해 자연어 답을 만듭니다.",flow:"query → retrieve nodes → synthesize response",code_signal:"StandardQueryEngine의 custom_query 두 줄이 역할을 분리합니다.",exam_clue:"retrieve의 입력은 query_str, synthesize의 입력은 query_str과 nodes입니다."},
+        {title:"4. Prompt 기반 직접 합성",concept:"검색 Node의 content를 합친 뒤 PromptTemplate 변수에 넣고 LLM complete를 호출할 수 있습니다.",flow:"nodes → context_str → format → complete",code_signal:"get_content → join → format → complete 순서입니다.",exam_clue:"prior knowledge를 막고 싶으면 prompt에 context만 사용하라고 명시합니다."}
+      ],
+      full_code_cells:[cell(12,buildP,buildA,[1,8,11,12]),cell(21,splitP,splitA,[4,8,9]),cell(49,retrieveP,retrieveA,[1,2,12]),cell(59,crudP,crudA,[1,2,5,6,11,12]),cell(75,standardP,standardA,[5,6,12]),cell(80,customP,customA,[7,8,9,10])],
+      subjective:[
+        S("rag1-q1",'SimpleDirectoryReader("data").load_data()',"문서 로딩","data 폴더의 문서를 읽는 한 줄을 쓰세요."),S("rag1-q2","VectorStoreIndex.from_documents(documents)","Index 생성","documents로 vector index를 만드는 표현을 쓰세요."),S("rag1-q3","index.as_query_engine()","Query engine","index에서 query engine을 만드는 표현을 쓰세요."),S("rag1-q4","query_engine.query","질의","질문을 실행하는 메서드까지 쓰세요."),
+        S("rag1-q5","parser.get_nodes_from_documents(documents)","Chunking","parser로 documents를 Node로 분할하는 호출을 쓰세요."),S("rag1-q6","transformations=[text_splitter]","Transformation","index 생성 시 splitter를 적용하는 인자를 쓰세요."),S("rag1-q7","index.index_struct.nodes_dict","Index 구조","index의 Node ID 사전을 가져오는 표현을 쓰세요."),
+        S("rag1-q8","index.as_retriever()","Retriever","index에서 retriever를 만드는 표현을 쓰세요."),S("rag1-q9","retriever.retrieve","검색","관련 passage를 검색하는 메서드까지 쓰세요."),S("rag1-q10","ret_context","Prompt context","f-string의 context 자리에 들어갈 변수를 쓰세요."),
+        S("rag1-q11",'id_="new_doc_id"',"Document ID","Document 생성자에서 문서 ID를 지정하세요."),S("rag1-q12","index.insert(docu)","Insert","Document를 index에 추가하는 한 줄을 쓰세요."),S("rag1-q13","docu.set_content","Update content","Document 내용을 바꾸는 메서드까지 쓰세요."),S("rag1-q14","index.update_ref_doc","Update index","변경된 참조 문서를 index에 반영하는 메서드까지 쓰세요."),S("rag1-q15","docu.doc_id","Document ID","삭제에 사용할 문서 ID 표현을 쓰세요."),S("rag1-q16","index.delete_ref_doc","Delete","참조 문서를 index에서 삭제하는 메서드까지 쓰세요."),
+        S("rag1-q17","self.response_synthesizer.synthesize(query_str, nodes)","응답 합성","검색 Node와 질문으로 response를 합성하는 호출을 쓰세요."),S("rag1-q18","n.node.get_content()","Node content","검색 결과에서 실제 Node text를 얻는 호출을 쓰세요."),S("rag1-q19","self.llm.complete","LLM 호출","완성된 prompt를 실행하는 LLM 메서드까지 쓰세요."),S("rag1-q20","self.qa_prompt.format","Prompt formatting","context와 query를 PromptTemplate에 넣는 메서드까지 쓰세요.")
+      ],
+      mcq:[
+        {id:"rag1-m1",source_question_id:"rag1-q2",topic:"RAG index",prompt:"documents를 검색 가능한 vector index로 만드는 표현은?",answer_index:2,explanation:"from_documents가 Document를 Node로 나누고 embedding index를 구성합니다.",choices:[{text:"SimpleDirectoryReader(documents)",why:"경로를 읽는 loader입니다."},{text:"Document.from_index(documents)",why:"해당 생성 흐름이 아닙니다."},{text:"VectorStoreIndex.from_documents(documents)",why:"정답입니다."},{text:"index.as_query_engine(documents)",why:"index 생성 이후 단계입니다."},{text:"retriever.retrieve(documents)",why:"질문 검색 단계입니다."}]},
+        {id:"rag1-m2",source_question_id:"rag1-q6",topic:"Chunk 적용",prompt:"custom SentenceSplitter를 index 생성에 적용하는 인자는?",answer_index:1,explanation:"LlamaIndex는 변환 pipeline 목록을 transformations로 받습니다.",choices:[{text:"documents=[text_splitter]",why:"문서 자리에 splitter를 넣습니다."},{text:"transformations=[text_splitter]",why:"정답입니다."},{text:"retriever=text_splitter",why:"retriever가 아닙니다."},{text:"embedding=text_splitter",why:"embedding model이 아닙니다."},{text:"query_engine=[text_splitter]",why:"query engine 인자가 아닙니다."}]},
+        {id:"rag1-m3",source_question_id:"rag1-q17",topic:"검색과 합성",prompt:"StandardQueryEngine에서 retrieve 다음 단계는?",answer_index:4,explanation:"검색된 nodes와 query를 synthesizer가 답변으로 합성합니다.",choices:[{text:"index.insert(nodes)",why:"문서 추가 작업입니다."},{text:"nodes.load_data()",why:"Node는 loader가 아닙니다."},{text:"retriever.query(nodes)",why:"검색을 반복하는 호출이 아닙니다."},{text:"llm.delete(nodes)",why:"삭제 작업이 아닙니다."},{text:"response_synthesizer.synthesize(query_str, nodes)",why:"정답입니다."}]},
+        {id:"rag1-m4",source_question_id:"rag1-q16",topic:"Index CRUD",prompt:"doc_id로 참조 문서를 완전히 삭제할 때 사용하는 호출은?",answer_index:0,explanation:"delete_ref_doc에 doc_id와 docstore 삭제 옵션을 전달합니다.",choices:[{text:"index.delete_ref_doc(id, delete_from_docstore=True)",why:"정답입니다."},{text:"docu.set_content(None)",why:"내용 변경이지 index 삭제가 아닙니다."},{text:"index.update_ref_doc(id)",why:"갱신 메서드입니다."},{text:"index.insert(id)",why:"추가 메서드입니다."},{text:"del query_engine[id]",why:"query engine을 dict처럼 지울 수 없습니다."}]},
+        {id:"rag1-m5",source_question_id:"rag1-q18",topic:"Custom context",prompt:"검색 결과 n에서 prompt용 실제 text를 얻는 표현은?",answer_index:3,explanation:"NodeWithScore 안의 node에서 get_content를 호출합니다.",choices:[{text:"n.text()",why:"이 객체 구조의 호출이 아닙니다."},{text:"n.get_embedding()",why:"embedding을 가져옵니다."},{text:"n.query_str",why:"질문 문자열 속성이 아닙니다."},{text:"n.node.get_content()",why:"정답입니다."},{text:"n.index_struct",why:"index 구조가 아닙니다."}]}
+      ]
+    }]
+  };
+})();
