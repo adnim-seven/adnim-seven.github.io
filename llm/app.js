@@ -81,6 +81,7 @@
     $("#capability").textContent = chapter().capability;
     $("#summary").textContent = chapter().summary;
     renderNav();
+    renderOverview();
     renderStudy();
     renderTheoryGuide();
     renderFullCode();
@@ -88,6 +89,37 @@
     renderSubjective();
     renderStats();
     renderResults();
+  }
+
+  function renderOverview() {
+    const data = chapter().overview || {};
+    const steps = data.steps || chapter().key_points.map((point) => ({
+      label: point.title,
+      code: point.code.split("\n")[0],
+      flow: point.flow
+    }));
+    const rules = data.rules || chapter().key_points.map((point) => point.watch);
+    $("#notebookOverview").innerHTML = `
+      <figcaption>
+        <span>NOTEBOOK AT A GLANCE</span>
+        <h2>${esc(data.title || chapter().title)}</h2>
+        <p>${esc(data.subtitle || chapter().capability)}</p>
+      </figcaption>
+      <div class="overview-flow">
+        ${steps.map((step, index) => `
+          <article class="overview-step">
+            <span class="overview-step-no">${String(index + 1).padStart(2, "0")}</span>
+            <h3>${esc(step.label)}</h3>
+            <code>${esc(step.code)}</code>
+            <p>${esc(step.flow)}</p>
+          </article>
+          ${index < steps.length - 1 ? '<span class="overview-arrow" aria-hidden="true">→</span>' : ""}
+        `).join("")}
+      </div>
+      <div class="overview-rules">
+        <strong>시험장에서 복원할 규칙</strong>
+        <ul>${rules.map((rule) => `<li>${esc(rule)}</li>`).join("")}</ul>
+      </div>`;
   }
 
   function renderStudy() {

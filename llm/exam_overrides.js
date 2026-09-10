@@ -4,6 +4,24 @@
   const chapter = course.chapters.find((item) => item.file === "Chapter_2_Exercise_Dataset.ipynb");
   if (!chapter) return;
 
+  chapter.overview = {
+    title: "텍스트가 학습용 Embedding Tensor가 되는 과정",
+    subtitle: "문자열을 다음 토큰 예측용 배치로 구성하고, Transformer 입력 형태 [B, T, D]까지 변환한다.",
+    steps: [
+      { label: "텍스트 토큰화", code: "token_ids = tokenizer.encode(txt)", flow: "str → list[int]" },
+      { label: "다음 토큰 쌍", code: "target = token_ids[i+1 : i+T+1]", flow: "input [T] ↔ target [T]" },
+      { label: "Dataset 저장", code: "torch.tensor(chunk)", flow: "list[int] → int64 Tensor [T]" },
+      { label: "배치 구성", code: "DataLoader(dataset, batch_size=B)", flow: "[T] → [B, T]" },
+      { label: "Embedding 결합", code: "tok_emb + pos_emb", flow: "[B,T,D] + [T,D] → [B,T,D]" }
+    ],
+    rules: [
+      "target은 input보다 시작과 끝을 모두 한 칸 오른쪽으로 이동한다.",
+      "Embedding의 입력은 정수 token ID이며 출력은 실수 벡터다.",
+      "DataLoader에는 Dataset 클래스가 아니라 생성된 dataset 객체를 넣는다.",
+      "position embedding은 broadcasting되어 token embedding과 같은 [B,T,D]가 된다."
+    ]
+  };
+
   course.cells["exam-ch2-position"] = {
     source: `vocab_size = 50257
 output_dim = 256

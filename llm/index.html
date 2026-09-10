@@ -34,7 +34,7 @@
       </div>
 
       <div class="mode-tabs" role="tablist" aria-label="학습 단계">
-        <button class="mode-tab active" data-panel="studyPanel" type="button">1. 핵심 정리</button>
+        <button class="mode-tab active" data-panel="studyPanel" type="button">0. 한 장 오버뷰</button>
         <button class="mode-tab" data-panel="fullCodePanel" type="button">2. 전체 코드</button>
         <button class="mode-tab" data-panel="mcqPanel" type="button">3. 코드 5지선다</button>
         <button class="mode-tab" data-panel="subjectivePanel" type="button">4. 주관식 시험</button>
@@ -42,6 +42,7 @@
       </div>
 
       <section id="studyPanel" class="panel active" aria-labelledby="chapterTitle">
+        <figure id="notebookOverview" class="notebook-overview" aria-label="현재 노트북 핵심 흐름 한 장 요약"></figure>
         <div class="study-intro"><span>학습 목표</span><h2 id="capability"></h2><p id="summary"></p></div>
         <div id="keyPoints" class="key-points"></div>
         <div class="panel-footer"><button class="primary-button next-mode" data-panel="fullCodePanel" type="button">전체 코드 보기</button></div>
