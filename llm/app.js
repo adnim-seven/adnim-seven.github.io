@@ -165,7 +165,8 @@
     if (position < 0) return `${question.prompt}\n????`;
     const line = source.slice(0, position).split("\n").length - 1;
     const lines = source.split("\n");
-    const first = Math.max(0, line - 4), last = Math.min(lines.length, line + 5);
+    const answerLineCount = answer.split("\n").length;
+    const first = Math.max(0, line - 4), last = Math.min(lines.length, line + answerLineCount + 4);
     return lines.slice(first, last).join("\n").replace(answer, "????");
   }
 
@@ -219,8 +220,9 @@
     const item = currentSubjective(); if (!item) return;
     hintUsed = true;
     const answer = item.answer.trim();
-    const shape = answer.includes("(") ? "함수·메서드 호출 또는 생성자" : answer.includes("[") ? "인덱싱·슬라이싱" : answer.includes("=") ? "대입문" : "코드 표현식";
-    feedback($("#subFeedback"), `힌트: ${shape}\n첫 문자: ${answer.slice(0, 1)} · 약 ${answer.length}자`, "neutral");
+    const lineCount = answer.split("\n").length;
+    const shape = lineCount > 1 ? `${lineCount}줄 구현 블록` : answer.includes("(") ? "함수·메서드 호출 또는 생성자" : answer.includes("[") ? "인덱싱·슬라이싱" : answer.includes("=") ? "대입문" : "코드 표현식";
+    feedback($("#subFeedback"), `힌트: ${shape}\n전후 변수의 dtype·shape와 다음 연산이 요구하는 입력을 확인하세요.`, "neutral");
   }
   function submitSubjective() {
     const item = currentSubjective(); if (!item) return;
