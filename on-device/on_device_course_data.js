@@ -479,6 +479,177 @@ print("Cubic sparsity schedule:", cubic_sparsity_schedule)`;
     .replace("sparsity =\n", "sparsity = sparsity_end\n")
     .replace("sparsity =\n", "sparsity = sparsity_end + (sparsity_start - sparsity_end) * (1 - (epoch - epoch_start) / (epoch_end - epoch_start)) ** exponent\n");
 
+  const d26p = `def train_knowledge_distillation(teacher,
+                                 student,
+                                 train_loader,
+                                 epochs,
+                                 learning_rate,
+                                 T,  # temperature
+                                 soft_target_loss_weight,
+                                 ce_loss_weight):
+    ce_loss = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(student.parameters(), lr=learning_rate)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, epochs * len(train_loader))
+
+    teacher.eval()  # Teacher set to evaluation mode
+    student.train() # Student to train mode
+
+    for epoch in range(epochs):
+        running_loss = 0.0
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.cuda(), labels.cuda()
+
+            optimizer.zero_grad()
+
+            ##################### YOUR CODE STARTS HERE #####################
+            # Forward pass with the teacher model - do not save gradients here as we do not change the teacher's weights
+            with torch.no_grad():
+                teacher_logits =
+
+            # Forward pass with the student model
+            student_logits =
+
+            # Soften the student logits by applying softmax
+            # Hint: nn.functional.softmax()
+            soft_targets =
+            student_prob =
+
+            # Calculate the soft targets loss. Scaled by T**2 as suggested by the authors of the paper "Distilling the knowledge in a neural network"
+            soft_targets_loss =
+
+            # Calculate the true label loss
+            label_loss =
+
+            # Weighted sum of the two losses
+            loss =
+            ##################### YOUR CODE ENDS HERE #######################
+
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
+
+            running_loss += loss.item()
+
+        print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader)}")`;
+  const d26a = d26p
+    .replace("teacher_logits =\n", "teacher_logits = teacher(inputs)\n")
+    .replace("student_logits =\n", "student_logits = student(inputs)\n")
+    .replace("soft_targets =\n", "soft_targets = nn.functional.softmax(teacher_logits / T, dim=-1)\n")
+    .replace("student_prob =\n", "student_prob = nn.functional.softmax(student_logits / T, dim=-1)\n")
+    .replace("soft_targets_loss =\n", "soft_targets_loss = torch.sum(soft_targets * (soft_targets.log() - student_prob.log())) / student_prob.size(0) * (T**2)\n")
+    .replace("label_loss =\n", "label_loss = ce_loss(student_logits, labels)\n")
+    .replace("loss =\n", "loss = soft_target_loss_weight * soft_targets_loss + ce_loss_weight * label_loss\n");
+
+  const d39p = `def train_cosine_loss(teacher,
+                      student,
+                      train_loader,
+                      epochs,
+                      learning_rate,
+                      hidden_rep_loss_weight,
+                      ce_loss_weight):
+    ce_loss = nn.CrossEntropyLoss()
+    cosine_loss = nn.CosineEmbeddingLoss()
+    optimizer = optim.Adam(student.parameters(), lr=learning_rate)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, epochs * len(train_loader))
+
+    teacher.eval()  # Teacher set to evaluation mode
+    student.train() # Student to train mode
+
+    for epoch in range(epochs):
+        running_loss = 0.0
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.cuda(), labels.cuda()
+
+            optimizer.zero_grad()
+
+            ##################### YOUR CODE STARTS HERE #####################
+            # Forward pass with the teacher model and keep only the hidden representation
+            with torch.no_grad():
+                _, teacher_hidden_representation =
+
+            # Forward pass with the student model
+            student_logits, student_hidden_representation =
+
+            # Calculate the cosine loss. Target is a vector of ones. From the loss formula above we can see that is
+            # the case where loss minimization leads to cosine similarity increase.
+            # Hint: cosine_loss(x, y, target)에서 target은 1로 이루어진 vector이며, torch.ones(inputs.size(0)).cuda())를 사용
+            hidden_rep_loss =
+
+            # Calculate the true label loss
+            label_loss =
+
+            # Weighted sum of the two losses
+            loss =
+            ##################### YOUR CODE ENDS HERE #######################
+
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
+
+            running_loss += loss.item()
+
+        print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader)}")`;
+  const d39a = d39p
+    .replace("_, teacher_hidden_representation =\n", "_, teacher_hidden_representation = teacher(inputs)\n")
+    .replace("student_logits, student_hidden_representation =\n", "student_logits, student_hidden_representation = student(inputs)\n")
+    .replace("hidden_rep_loss =\n", "hidden_rep_loss = cosine_loss(student_hidden_representation, teacher_hidden_representation, target=torch.ones(inputs.size(0)).cuda())\n")
+    .replace("label_loss =\n", "label_loss = ce_loss(student_logits, labels)\n")
+    .replace("loss =\n", "loss = hidden_rep_loss_weight * hidden_rep_loss + ce_loss_weight * label_loss\n");
+
+  const d52p = `def train_mse_loss(teacher,
+                   student,
+                   train_loader,
+                   epochs,
+                   learning_rate,
+                   feature_map_weight,
+                   ce_loss_weight):
+    ce_loss = nn.CrossEntropyLoss()
+    mse_loss = nn.MSELoss()
+    optimizer = optim.Adam(student.parameters(), lr=learning_rate)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, epochs * len(train_loader))
+
+    teacher.eval()  # Teacher set to evaluation mode
+    student.train() # Student to train mode
+
+    for epoch in range(epochs):
+        running_loss = 0.0
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.cuda(), labels.cuda()
+
+            optimizer.zero_grad()
+
+            ##################### YOUR CODE STARTS HERE #####################
+            # Again ignore teacher logits
+            with torch.no_grad():
+                _, teacher_feature_map =
+
+            # Forward pass with the student model
+            student_logits, regressor_feature_map =
+
+            # Calculate the loss
+            hidden_rep_loss =
+
+            # Calculate the true label loss
+            label_loss =
+
+            # Weighted sum of the two losses
+            loss =
+            ##################### YOUR CODE ENDS HERE #######################
+
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
+
+            running_loss += loss.item()
+
+        print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader)}")`;
+  const d52a = d52p
+    .replace("_, teacher_feature_map =\n", "_, teacher_feature_map = teacher(inputs)\n")
+    .replace("student_logits, regressor_feature_map =\n", "student_logits, regressor_feature_map = student(inputs)\n")
+    .replace("hidden_rep_loss =\n", "hidden_rep_loss = mse_loss(regressor_feature_map, teacher_feature_map)\n")
+    .replace("label_loss =\n", "label_loss = ce_loss(student_logits, labels)\n")
+    .replace("loss =\n", "loss = feature_map_weight * hidden_rep_loss + ce_loss_weight * label_loss\n");
+
   const subjective = [
     S("q-scale-tensor", "fp_tensor/scale", "선형 양자화: 스케일", "fp_tensor를 정수 격자 단위로 환산하는 식을 작성하세요."),
     S("q-round", "torch.round(scaled_tensor)", "선형 양자화: 반올림", "스케일된 실수를 가장 가까운 정수로 반올림하세요."),
@@ -560,10 +731,45 @@ print("Cubic sparsity schedule:", cubic_sparsity_schedule)`;
     ["pm8","p-schedule","Linear/Cubic schedule","linear와 cubic을 같은 식으로 제어하는 인자는?",2,["epoch_end","sparsity_end","exponent","num_epochs","num_zeros"],"exponent가 1이면 linear, 3이면 cubic 곡선이 됩니다."],
   ].map(([id,source_question_id,topic,prompt,answer_index,options,explanation])=>({id,source_question_id,topic,prompt,answer_index,explanation,choices:options.map((text,i)=>({text,why:i===answer_index?"정답 코드입니다.":"원본 구현의 목적이나 Tensor 흐름과 맞지 않습니다."}))}));
 
+  const distillSubjective = [
+    S("d-teacher-logits","teacher(inputs)","Teacher forward","gradient를 저장하지 않는 블록에서 teacher logits를 계산하세요."),
+    S("d-student-logits","student(inputs)","Student forward","학습할 student logits를 계산하세요."),
+    S("d-soft-targets","nn.functional.softmax(teacher_logits / T, dim=-1)","Teacher soft targets","temperature로 완화한 teacher 확률분포를 만드세요."),
+    S("d-student-prob","nn.functional.softmax(student_logits / T, dim=-1)","Student probability","같은 temperature를 적용한 student 확률분포를 만드세요."),
+    S("d-soft-loss","torch.sum(soft_targets * (soft_targets.log() - student_prob.log())) / student_prob.size(0) * (T**2)","Soft-target loss","teacher와 student 분포 차이를 batch 평균하고 T**2로 보정하는 식을 작성하세요."),
+    S("d-label-loss","ce_loss(student_logits, labels)","Hard-label loss","student 예측과 정답 label의 cross entropy를 계산하세요."),
+    S("d-kd-total","soft_target_loss_weight * soft_targets_loss + ce_loss_weight * label_loss","KD total loss","soft target loss와 hard label loss를 가중합하세요."),
+    S("d-cos-teacher","teacher(inputs)","Teacher hidden representation","teacher의 logits는 버리고 hidden representation만 받는 호출을 작성하세요."),
+    S("d-cos-student","student(inputs)","Student hidden representation","student의 logits와 hidden representation을 함께 받으세요."),
+    S("d-cos-loss","cosine_loss(student_hidden_representation, teacher_hidden_representation, target=torch.ones(inputs.size(0)).cuda())","Cosine representation loss","student와 teacher 표현의 cosine 유사도를 높이는 loss 호출을 작성하세요."),
+    S("d-cos-label","ce_loss(student_logits, labels)","Cosine KD label loss","cosine 방식에서도 정답 label loss를 계산하세요."),
+    S("d-cos-total","hidden_rep_loss_weight * hidden_rep_loss + ce_loss_weight * label_loss","Cosine total loss","표현 loss와 label loss를 가중합하세요."),
+    S("d-mse-teacher","teacher(inputs)","Teacher feature map","teacher logits는 버리고 feature map을 받는 호출을 작성하세요."),
+    S("d-mse-student","student(inputs)","Student regressor map","student logits와 regressor feature map을 함께 받으세요."),
+    S("d-mse-loss","mse_loss(regressor_feature_map, teacher_feature_map)","Feature-map MSE","student regressor map과 teacher feature map의 MSE를 계산하세요."),
+    S("d-mse-label","ce_loss(student_logits, labels)","MSE KD label loss","MSE 방식에서도 정답 label loss를 계산하세요."),
+    S("d-mse-total","feature_map_weight * hidden_rep_loss + ce_loss_weight * label_loss","MSE total loss","feature-map loss와 label loss를 가중합하세요."),
+  ];
+  const distillSources = {
+    "d-teacher-logits":d26a,"d-student-logits":d26a,"d-soft-targets":d26a,"d-student-prob":d26a,"d-soft-loss":d26a,"d-label-loss":d26a,"d-kd-total":d26a,
+    "d-cos-teacher":d39a,"d-cos-student":d39a,"d-cos-loss":d39a,"d-cos-label":d39a,"d-cos-total":d39a,
+    "d-mse-teacher":d52a,"d-mse-student":d52a,"d-mse-loss":d52a,"d-mse-label":d52a,"d-mse-total":d52a,
+  };
+  const distillMcq = [
+    ["dm1","d-teacher-logits","Teacher 고정","Teacher forward를 감싸야 하는 문맥은?",0,["with torch.no_grad():","with student.train():","with optimizer.step():","with torch.enable_grad():","with scheduler.step():"],"Teacher 가중치는 갱신하지 않으므로 gradient graph를 만들지 않습니다."],
+    ["dm2","d-soft-targets","Temperature","Teacher의 softened distribution을 만드는 코드는?",1,["softmax(teacher_logits*T)","nn.functional.softmax(teacher_logits / T, dim=-1)","softmax(student_logits/T)","teacher_logits.argmax(-1)","ce_loss(teacher_logits, labels)"],"logits를 T로 나눈 뒤 class 축에 softmax를 적용합니다."],
+    ["dm3","d-soft-loss","KD loss","Temperature를 사용한 분포 loss에 T**2를 곱하는 이유는?",2,["class 수를 늘리기 위해","teacher를 학습하기 위해","temperature로 줄어든 gradient 크기를 보정하기 위해","정답 label을 제거하기 위해","softmax를 생략하기 위해"],"원본 구현과 논문 설명대로 temperature scaling이 만든 gradient 축소를 보정합니다."],
+    ["dm4","d-kd-total","Loss 결합","기본 KD의 최종 loss는?",3,["soft_targets_loss-label_loss","soft_targets_loss*label_loss","ce_loss_weight/label_loss","soft_target_loss_weight*soft_targets_loss + ce_loss_weight*label_loss","teacher_logits+student_logits"],"Teacher의 soft target과 실제 label 신호를 각 가중치로 결합합니다."],
+    ["dm5","d-cos-loss","Cosine target","CosineEmbeddingLoss에서 두 표현을 같은 방향으로 만들 target은?",4,["-1","0","labels","torch.zeros(batch)","torch.ones(inputs.size(0)).cuda()"],"target=1은 두 벡터의 cosine similarity를 높이도록 학습합니다."],
+    ["dm6","d-cos-student","Tuple 출력","student cosine 모델의 출력 수신 방식은?",0,["student_logits, student_hidden_representation = student(inputs)","student_logits = student(inputs)[1]","_, student_logits = teacher(inputs)","student_hidden_representation = labels","student(inputs).backward()"],"분류 logits와 hidden representation 두 출력을 모두 사용합니다."],
+    ["dm7","d-mse-loss","Feature matching","feature map 증류의 올바른 MSE 입력 순서는?",1,["mse_loss(student_logits, labels)","mse_loss(regressor_feature_map, teacher_feature_map)","mse_loss(teacher_logits, student_logits)","ce_loss(regressor_feature_map, labels)","cosine_loss(teacher_feature_map)"],"Student regressor가 맞춘 feature map과 teacher feature map을 비교합니다."],
+    ["dm8","d-mse-total","MSE total loss","feature map 방식의 최종 loss는?",2,["hidden_rep_loss","label_loss","feature_map_weight*hidden_rep_loss + ce_loss_weight*label_loss","teacher_feature_map+labels","mse_loss*ce_loss"],"표현 정렬 loss와 실제 정답 기반 CE를 함께 사용합니다."],
+  ].map(([id,source_question_id,topic,prompt,answer_index,options,explanation])=>({id,source_question_id,topic,prompt,answer_index,explanation,choices:options.map((text,i)=>({text,why:i===answer_index?"정답입니다.":"Teacher 고정, Tensor 출력 또는 loss 결합 흐름과 맞지 않습니다."}))}));
+
   window.LLM_COURSE = {
     subject: "5. On-device AI",
     sample_mode: false,
-    cells: Object.fromEntries(Object.entries({...sources, ...pruningSources}).map(([id, source]) => [id, { source }])),
+    cells: Object.fromEntries(Object.entries({...sources, ...pruningSources, ...distillSources}).map(([id, source]) => [id, { source }])),
     chapters: [{
       id: "quantization-cnn", number: "01", title: "CNN Quantization",
       file: "2. Quantization for CNN.ipynb",
@@ -604,6 +810,26 @@ print("Cubic sparsity schedule:", cubic_sparsity_schedule)`;
       full_code_cells:[cell(28,p28p,p28a),cell(47,p47p,p47a),cell(53,p53p,p53a),cell(64,p64p,p64a)],
       subjective:pruningSubjective,
       mcq:pruningMcq,
+    },{
+      id:"knowledge-distillation",number:"03",title:"Knowledge Distillation",file:"3. Knowledge Distillation.ipynb",
+      capability:"고정된 Teacher의 예측·중간 표현과 정답 label을 함께 사용해 Student의 학습 loss를 구현한다.",
+      summary:"Logit 기반 KD, hidden representation cosine loss, feature-map MSE loss의 공통 학습 흐름과 차이를 코드로 구분합니다.",
+      notebook_goal:"Teacher의 지식을 soft target 또는 중간 feature로 전달하면서 Student를 실제 정답과 함께 학습한다.",
+      key_points:[
+        {title:"Teacher와 Student 역할",purpose:"Teacher는 지식 신호만 만들고 Student만 최적화합니다.",code:"with torch.no_grad(): teacher_logits = teacher(inputs)",flow:"teacher.eval → no_grad forward → student forward → loss → student optimizer",watch:"Teacher forward를 no_grad 밖에 두거나 optimizer에 teacher 파라미터를 넣지 않습니다."},
+        {title:"Logit distillation",purpose:"정답 class 외의 class 관계까지 soft probability로 전달합니다.",code:"softmax(logits / T, dim=-1)",flow:"두 logits를 같은 T로 완화 → 분포 차이 → T**2 보정 → CE와 결합",watch:"Teacher와 Student에 서로 다른 T를 적용하면 비교 기준이 달라집니다."},
+        {title:"Hidden cosine matching",purpose:"두 모델의 hidden representation 방향을 가깝게 만듭니다.",code:"CosineEmbeddingLoss(..., target=ones)",flow:"두 hidden 출력 → target=1 → cosine loss → label CE와 결합",watch:"target=-1은 반대 방향을 학습하므로 목적과 반대입니다."},
+        {title:"Feature-map regression",purpose:"작은 Student의 regressor feature map이 Teacher feature map을 근사합니다.",code:"mse_loss(regressor_feature_map, teacher_feature_map)",flow:"teacher feature → student regressor feature → MSE → CE와 가중합",watch:"크기가 다른 원본 feature map은 regressor로 shape를 맞춘 뒤 비교합니다."},
+      ],
+      theory_guide:[
+        {title:"공통 학습 골격",concept:"세 방법 모두 Teacher 신호와 실제 label 신호를 결합하되 Student만 역전파합니다.",flow:"zero_grad → teacher(no_grad) → student → distill loss + CE → backward/step",code_signal:"optimizer가 student.parameters()만 받는 부분이 학습 대상을 알려 줍니다.",exam_clue:"Teacher는 eval/no_grad, Student는 train/gradient라는 대비를 기억합니다."},
+        {title:"Temperature",concept:"T가 클수록 확률분포가 부드러워져 class 간 상대 정보를 더 드러냅니다.",flow:"logits/T → softmax → distribution loss → ×T**2",code_signal:"T 인자와 softmax 힌트가 두 logits 모두의 나눗셈을 요구합니다.",exam_clue:"dim=-1은 마지막 class 차원에서 확률 합을 1로 만듭니다."},
+        {title:"표현 loss 선택",concept:"Cosine은 방향, MSE는 원소별 값의 차이를 줄입니다.",flow:"hidden vector→cosine 또는 feature map→regressor→MSE",code_signal:"함수 선언의 CosineEmbeddingLoss/MSELoss와 model tuple 출력이 답을 결정합니다.",exam_clue:"cosine target은 ones, MSE는 두 feature map만 인자로 받습니다."},
+        {title:"가중합",concept:"증류 신호만 따르면 정답 task를 잃을 수 있어 label CE를 함께 사용합니다.",flow:"distill_weight×distill_loss + ce_weight×label_loss",code_signal:"함수 인자의 두 weight 이름이 어느 loss에 곱할지 직접 알려 줍니다.",exam_clue:"최종 loss만 backward되므로 두 항을 여기서 합쳐야 합니다."},
+      ],
+      full_code_cells:[cell(26,d26p,d26a),cell(39,d39p,d39a),cell(52,d52p,d52a)],
+      subjective:distillSubjective,
+      mcq:distillMcq,
     }],
   };
 })();
