@@ -650,6 +650,100 @@ print("Cubic sparsity schedule:", cubic_sparsity_schedule)`;
     .replace("label_loss =\n", "label_loss = ce_loss(student_logits, labels)\n")
     .replace("loss =\n", "loss = feature_map_weight * hidden_rep_loss + ce_loss_weight * label_loss\n");
 
+  const l4c10p = `@torch.no_grad()
+def prune_magnitude(model, sparsity):
+    for n, m in model.named_modules():
+        if isinstance(m, nn.Linear) and "lm_head" not in n:
+            W = m.weight.data
+            ##################### YOUR CODE STARTS HERE #####################
+            num_elements =
+            num_zeros =
+            importance =
+            threshold =
+            mask =
+            ##################### YOUR CODE ENDS HERE #######################
+            W.mul_(mask)`;
+  const l4c10a = l4c10p
+    .replace("num_elements =\n", "num_elements = W.numel()\n")
+    .replace("num_zeros =\n", "num_zeros = round(num_elements * sparsity)\n")
+    .replace("importance =\n", "importance = torch.abs(W)\n")
+    .replace("threshold =\n", "threshold = torch.kthvalue(importance.flatten(), num_zeros)[0]\n")
+    .replace("mask =\n", "mask = importance > threshold\n");
+
+  const l4c16p = `@torch.no_grad()
+def get_calib_feat(model, tokenizer, samples):
+    input_dict = dict()
+    nsamples_dict = dict()
+    def add_batch(m, x, y, name):
+        if name not in input_dict:
+            input_dict[name] = torch.zeros((m.weight.data.shape[1]), device=m.weight.data.device)
+            nsamples_dict[name] = 0
+
+        if isinstance(x, tuple):
+            x = x[0]
+
+        if len(x.shape) == 2:
+            x = x.unsqueeze(0)
+        tmp = x.shape[0]
+        if len(x.shape) == 3:
+            x = x.reshape((-1, x.shape[-1]))
+        x = x.t()
+
+        input_dict[name] *= nsamples_dict[name] / (nsamples_dict[name] + tmp)
+        nsamples_dict[name] += tmp
+
+        x = x.type(torch.float32)
+        ##################### YOUR CODE STARTS HERE #####################
+        # activation_norm을 계산하세요.
+        # x.shape => (hidden_size, batch_size)
+        activation_norm =
+        # activation_norm.shape => (hidden_size)
+        ##################### YOUR CODE ENDS HERE #######################
+        input_dict[name] += activation_norm / nsamples_dict[name]
+
+    hooks = []
+    for name, m in model.named_modules():
+        if isinstance(m, nn.Linear) and "lm_head" not in name:
+            hooks.append(
+                m.register_forward_hook(
+                    partial(add_batch, name=name)))
+
+    print("Collecting norm of input activations...")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    pbar = tqdm.tqdm(samples)
+    for input_ids in pbar:
+        input_ids = input_ids.to(device)
+        model(input_ids)
+
+    for key in input_dict.keys():
+        input_dict[key].sqrt_()
+
+    for hook in hooks:
+        hook.remove()
+    return input_dict`;
+  const l4c16a = l4c16p.replace("activation_norm =\n", "activation_norm = torch.norm(x, p=2, dim=1) ** 2\n");
+
+  const l4c19p = `@torch.no_grad()
+def prune_wanda(model, sparsity, input_feat):
+    for n, m in model.named_modules():
+        if isinstance(m, nn.Linear) and "lm_head" not in n:
+            W = m.weight.data
+            ##################### YOUR CODE STARTS HERE #####################
+            row, col =
+            num_zeros_per_row =
+            importance =
+            threshold =
+            mask =
+            ##################### YOUR CODE ENDS HERE #######################
+            W.mul_(mask)`;
+  const l4c19a = l4c19p
+    .replace("row, col =\n", "row, col = W.shape\n")
+    .replace("num_zeros_per_row =\n", "num_zeros_per_row = round(col * sparsity)\n")
+    .replace("importance =\n", "importance = torch.abs(W) * input_feat[n]\n")
+    .replace("threshold =\n", "threshold = torch.kthvalue(importance, num_zeros_per_row, dim=1)[0]\n")
+    .replace("mask =\n", "mask = importance > threshold.reshape(row, 1)\n");
+
   const subjective = [
     S("q-scale-tensor", "fp_tensor/scale", "선형 양자화: 스케일", "fp_tensor를 정수 격자 단위로 환산하는 식을 작성하세요."),
     S("q-round", "torch.round(scaled_tensor)", "선형 양자화: 반올림", "스케일된 실수를 가장 가까운 정수로 반올림하세요."),
@@ -766,10 +860,39 @@ print("Cubic sparsity schedule:", cubic_sparsity_schedule)`;
     ["dm8","d-mse-total","MSE total loss","feature map 방식의 최종 loss는?",2,["hidden_rep_loss","label_loss","feature_map_weight*hidden_rep_loss + ce_loss_weight*label_loss","teacher_feature_map+labels","mse_loss*ce_loss"],"표현 정렬 loss와 실제 정답 기반 CE를 함께 사용합니다."],
   ].map(([id,source_question_id,topic,prompt,answer_index,options,explanation])=>({id,source_question_id,topic,prompt,answer_index,explanation,choices:options.map((text,i)=>({text,why:i===answer_index?"정답입니다.":"Teacher 고정, Tensor 출력 또는 loss 결합 흐름과 맞지 않습니다."}))}));
 
+  const llmPruneSubjective = [
+    S("l4-numel","W.numel()","LLM magnitude 원소 수","Linear weight의 전체 원소 수를 구하세요."),
+    S("l4-numzeros","round(num_elements * sparsity)","LLM magnitude 제거 수","sparsity만큼 제거할 가중치 수를 계산하세요."),
+    S("l4-importance","torch.abs(W)","LLM magnitude importance","가중치 크기 기반 importance를 계산하세요."),
+    S("l4-threshold","torch.kthvalue(importance.flatten(), num_zeros)[0]","LLM magnitude threshold","전체 importance에서 제거 경계값을 구하세요."),
+    S("l4-mask","importance > threshold","LLM magnitude mask","threshold보다 큰 가중치를 유지하는 mask를 작성하세요."),
+    S("l4-activation","torch.norm(x, p=2, dim=1) ** 2","Calibration activation norm","hidden dimension별 activation의 제곱 L2 norm을 계산하세요.", ["torch.norm(x, p=2, dim=1) ** 2","torch.norm(x, p=2, dim=1)**2"]),
+    S("l4-shape","W.shape","WANDA weight shape","Linear weight의 row와 col을 받을 표현식을 작성하세요."),
+    S("l4-rowzeros","round(col * sparsity)","WANDA row 제거 수","각 row에서 제거할 column 수를 계산하세요."),
+    S("l4-wanda-importance","torch.abs(W) * input_feat[n]","WANDA importance","가중치 크기와 해당 layer 입력 activation 통계를 결합하세요."),
+    S("l4-row-threshold","torch.kthvalue(importance, num_zeros_per_row, dim=1)[0]","WANDA row threshold","각 row별 제거 경계값을 구하세요."),
+    S("l4-row-mask","importance > threshold.reshape(row, 1)","WANDA broadcast mask","row별 threshold를 column 방향으로 broadcast해 mask를 만드세요."),
+  ];
+  const llmPruneSources = {
+    "l4-numel":l4c10a,"l4-numzeros":l4c10a,"l4-importance":l4c10a,"l4-threshold":l4c10a,"l4-mask":l4c10a,
+    "l4-activation":l4c16a,
+    "l4-shape":l4c19a,"l4-rowzeros":l4c19a,"l4-wanda-importance":l4c19a,"l4-row-threshold":l4c19a,"l4-row-mask":l4c19a,
+  };
+  const llmPruneMcq = [
+    ["l4m1","l4-importance","Magnitude pruning","LLM Linear weight의 기본 중요도는?",0,["torch.abs(W)","torch.mean(W)","W > 0","torch.norm(sparsity)","input_feat[n]"],"Magnitude pruning은 가중치 절댓값을 중요도로 사용합니다."],
+    ["l4m2","l4-threshold","Global threshold","모든 weight 원소에서 num_zeros번째 작은 값을 구하는 코드는?",1,["torch.max(importance)","torch.kthvalue(importance.flatten(), num_zeros)[0]","torch.kthvalue(W, sparsity)[1]","importance[num_elements]","torch.topk(W, 1)"],"importance를 1차원으로 펼치고 kthvalue의 첫 번째 반환값을 사용합니다."],
+    ["l4m3","l4-activation","Activation 통계","x가 (hidden_size, batch_size)일 때 hidden별 제곱 L2 norm은?",2,["torch.norm(x, dim=0)","torch.mean(x, dim=1)","torch.norm(x, p=2, dim=1) ** 2","torch.abs(x).sum(dim=0)","x.shape[0] ** 2"],"batch 방향인 dim=1에서 L2 norm을 구한 뒤 제곱합니다."],
+    ["l4m4","l4-wanda-importance","WANDA","WANDA가 magnitude 외에 반영하는 정보는?",3,["출력 label","optimizer state","layer 이름 길이","입력 activation norm","lm_head logits"],"WANDA는 |W|와 calibration 입력 activation 통계를 곱합니다."],
+    ["l4m5","l4-rowzeros","Row-wise pruning","각 row에서 제거할 원소 수는?",4,["round(row*sparsity)","round(W.numel()*sparsity)","round(col/sparsity)","row-col","round(col*sparsity)"],"각 row는 col개의 원소를 가지므로 col에 sparsity를 곱합니다."],
+    ["l4m6","l4-row-threshold","Row threshold","WANDA가 row별 threshold를 구하는 차원은?",0,["dim=1","dim=0","dim=-2만 가능","차원 지정 없음","batch dimension"],"importance shape이 (row, col)이므로 dim=1에서 각 row를 비교합니다."],
+    ["l4m7","l4-row-mask","Broadcast","(row,) threshold를 (row,col) importance와 비교하려면?",1,["threshold.flatten()","threshold.reshape(row, 1)","threshold.reshape(1, row)","threshold.repeat(col, 1)","threshold.item()"],"각 row의 threshold가 모든 column에 적용되도록 (row,1)로 만듭니다."],
+    ["l4m8","l4-mask","Mask 방향","중요도가 큰 weight를 유지하는 조건은?",2,["importance < threshold","importance == threshold","importance > threshold","W == 0","importance <= sparsity"],"True가 곱셈에서 1로 작동하므로 큰 importance를 True로 둡니다."],
+  ].map(([id,source_question_id,topic,prompt,answer_index,options,explanation])=>({id,source_question_id,topic,prompt,answer_index,explanation,choices:options.map((text,i)=>({text,why:i===answer_index?"정답입니다.":"Magnitude 또는 WANDA의 실제 Tensor 흐름과 맞지 않습니다."}))}));
+
   window.LLM_COURSE = {
     subject: "5. On-device AI",
     sample_mode: false,
-    cells: Object.fromEntries(Object.entries({...sources, ...pruningSources, ...distillSources}).map(([id, source]) => [id, { source }])),
+    cells: Object.fromEntries(Object.entries({...sources, ...pruningSources, ...distillSources, ...llmPruneSources}).map(([id, source]) => [id, { source }])),
     chapters: [{
       id: "quantization-cnn", number: "01", title: "CNN Quantization",
       file: "2. Quantization for CNN.ipynb",
@@ -830,6 +953,26 @@ print("Cubic sparsity schedule:", cubic_sparsity_schedule)`;
       full_code_cells:[cell(26,d26p,d26a),cell(39,d39p,d39a),cell(52,d52p,d52a)],
       subjective:distillSubjective,
       mcq:distillMcq,
+    },{
+      id:"pruning-llm",number:"04",title:"LLM Pruning",file:"4. Pruning for LLM.ipynb",
+      capability:"LLM Linear layer의 weight magnitude와 calibration activation을 이용해 Magnitude 및 WANDA pruning을 구현한다.",
+      summary:"기본 magnitude pruning과 activation-aware WANDA의 importance, row-wise threshold, broadcast mask 차이를 코드로 익힙니다.",
+      notebook_goal:"LLM의 Linear weight에서 중요도가 낮은 원소를 제거하고 activation을 반영해 성능 저하를 줄이는 mask를 구현한다.",
+      key_points:[
+        {title:"LLM Magnitude pruning",purpose:"lm_head를 제외한 Linear weight에서 작은 절댓값을 제거합니다.",code:"importance = torch.abs(W)",flow:"Linear 선택 → numel×sparsity → flatten kthvalue → mask → W.mul_",watch:"lm_head를 제외하는 조건과 no_grad 문맥을 유지합니다."},
+        {title:"Calibration hook",purpose:"실제 sample이 각 Linear layer에 입력될 때 hidden dimension별 크기를 수집합니다.",code:"torch.norm(x, p=2, dim=1) ** 2",flow:"forward hook → 입력 reshape/transpose → 제곱 L2 누적 → 마지막 sqrt",watch:"x.t() 이후 dim=1이 sample/token 방향입니다."},
+        {title:"WANDA importance",purpose:"큰 activation과 연결된 weight를 더 중요하게 평가합니다.",code:"torch.abs(W) * input_feat[n]",flow:"|W| × activation scale → row별 kthvalue → row threshold broadcast",watch:"input_feat는 layer 이름 n으로 조회해 올바른 통계를 곱합니다."},
+        {title:"Row-wise mask",purpose:"각 output row에서 동일한 sparsity 비율을 유지합니다.",code:"threshold.reshape(row, 1)",flow:"col×sparsity → dim=1 kthvalue → (row,1) → (row,col) 비교",watch:"전역 flatten threshold와 WANDA의 row-wise threshold를 혼동하지 않습니다."},
+      ],
+      theory_guide:[
+        {title:"Magnitude 기준",concept:"가중치 절댓값이 작을수록 출력에 미치는 영향이 작다고 근사합니다.",flow:"W.numel → 제거 수 → abs → kthvalue → > mask",code_signal:"CNN pruning과 동일한 numel·abs·kthvalue·mask 패턴이 재사용됩니다.",exam_clue:"W.mul_(mask)에서 True가 유지이므로 부등호는 >입니다."},
+        {title:"Activation norm",concept:"Calibration sample에서 자주 크게 활성화되는 hidden input은 연결 weight의 중요도를 높입니다.",flow:"hook input x → (hidden,batch/token) → dim=1 L2² → 평균 → sqrt",code_signal:"주석의 x.shape와 마지막 sqrt_가 중간에 norm²를 누적해야 함을 알려 줍니다.",exam_clue:"p=2, dim=1, **2 세 요소를 함께 기억합니다."},
+        {title:"WANDA",concept:"Weight와 Activation-aware Pruning은 |W|만 보지 않고 입력 feature scale을 곱합니다.",flow:"importance[row,col] = |W| × input_feat[col]",code_signal:"input_feat[n]은 col 방향으로 자동 broadcast됩니다.",exam_clue:"layer 이름 n으로 calibration dictionary를 조회합니다."},
+        {title:"Broadcast threshold",concept:"row마다 하나의 threshold를 모든 column과 비교하려면 shape을 (row,1)로 바꿉니다.",flow:"kthvalue(dim=1) → (row,) → reshape(row,1) → compare",code_signal:"row, col = W.shape가 reshape 방향을 미리 제공합니다.",exam_clue:"reshape(1,row)는 column 축이 맞지 않습니다."},
+      ],
+      full_code_cells:[cell(10,l4c10p,l4c10a),cell(16,l4c16p,l4c16a),cell(19,l4c19p,l4c19a)],
+      subjective:llmPruneSubjective,
+      mcq:llmPruneMcq,
     }],
   };
 })();
