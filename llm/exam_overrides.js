@@ -245,6 +245,148 @@ print(input_embeddings.shape)`,
 (() => {
   "use strict";
   const course = window.LLM_COURSE;
+  const chapter = course.chapters.find((item) => item.file === "Chapter_4_Excercise_GPT.ipynb");
+  if (!chapter) return;
+
+  chapter.notebook_goal = "GPT의 정규화·FFN·Transformer block·출력 head를 조립하고 autoregressive 생성 루프를 구현한다.";
+  chapter.overview = {
+    title: "Token ID가 다음 토큰 Logits가 되는 GPT 흐름",
+    subtitle: "임베딩에서 Transformer block을 거쳐 vocab 점수를 만들고, 마지막 위치의 토큰을 반복 생성한다.",
+    steps: [
+      {label:"입력 임베딩",code:"tok_emb(in_idx) + pos_emb(arange(T))",flow:"[B,T] → [B,T,D]"},
+      {label:"Transformer block",code:"LN → Attention → Add → LN → FFN → Add",flow:"[B,T,D] 유지"},
+      {label:"출력 점수",code:"out_head(final_norm(x))",flow:"[B,T,D] → [B,T,V]"},
+      {label:"다음 토큰 선택",code:"argmax(logits[:, -1, :])",flow:"[B,T,V] → [B,1]"},
+      {label:"문맥 갱신",code:"cat((idx, idx_next), dim=1)",flow:"[B,T] + [B,1] → [B,T+1]"}
+    ],
+    rules: [
+      "LayerNorm은 마지막 embedding 축의 평균·분산으로 정규화한 뒤 scale과 shift를 학습한다.",
+      "FFN은 D→4D→D로 확장·축소하므로 residual 덧셈의 shape이 유지된다.",
+      "GPTModel의 최종 출력 차원은 다음 토큰 후보 수인 vocab_size다.",
+      "생성 시 모든 시점 중 마지막 위치 logits만 선택하고 새 ID를 시간축 dim=1에 붙인다."
+    ]
+  };
+
+  const cells = {
+    "exam-ch4-ln-norm":"norm_x = (x - mean) / torch.sqrt(var + self.eps)",
+    "exam-ch4-ln-affine":"return self.scale * norm_x + self.shift",
+    "exam-ch4-ffn":"self.layers = nn.Sequential(\n    nn.Linear(cfg[\"emb_dim\"], 4 * cfg[\"emb_dim\"]),\n    GELU(),\n    nn.Linear(4 * cfg[\"emb_dim\"], cfg[\"emb_dim\"]),\n)",
+    "exam-ch4-block":"x = self.att(x)\nx = self.ff(x)",
+    "exam-ch4-model-layers":"self.tok_emb = nn.Embedding(cfg[\"vocab_size\"], cfg[\"emb_dim\"])\nself.pos_emb = nn.Embedding(cfg[\"context_length\"], cfg[\"emb_dim\"])\nself.out_head = nn.Linear(cfg[\"emb_dim\"], cfg[\"vocab_size\"], bias=False)",
+    "exam-ch4-forward":"x = tok_embeds + pos_embeds\nx = self.trf_blocks(x)\nlogits = self.out_head(x)",
+    "exam-ch4-nograd":"with torch.no_grad():\n    logits = model(idx_cond)",
+    "exam-ch4-last":"logits = logits[:, -1, :]",
+    "exam-ch4-generate":"idx_next = torch.argmax(logits, dim=-1, keepdim=True)\nidx = torch.cat((idx, idx_next), dim=1)"
+  };
+  Object.entries(cells).forEach(([id, source]) => { course.cells[id] = {source}; });
+  const base={subject:"LLM",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,isSourceBlank:true,source_type:"원본 노트북 실제 빈칸"};
+  const make=(data)=>({...base,occurrence:0,accepted_answers:[data.answer],...data});
+
+  chapter.subjective = [
+    make({id:"exam-llm04-01",topic:"LayerNorm 정규화",difficulty:"2 · 계산식",sourceId:"exam-ch4-ln-norm",
+      prompt:"평균과 분산을 이용해 LayerNorm의 정규화 계산식을 완성하세요.",answer:"norm_x = (x - mean) / torch.sqrt(var + self.eps)",
+      problem_context:`mean = x.mean(dim=-1, keepdim=True)
+var = x.var(dim=-1, keepdim=True, unbiased=False)
+# TODO: LayerNorm 계산식의 통계량 변수를 채우세요.
+# 힌트: 평균(mean)과 분산(var)을 사용해 정규화합니다.
+norm_x = (x - ????) / torch.sqrt(???? + self.eps)`,
+      explanation:"입력에서 평균을 빼 중심을 0으로 만들고 표준편차 sqrt(var+eps)로 나눕니다. eps는 분산이 0일 때의 나눗셈 불안정을 막습니다.",tensor_flow:"x [B,T,D] → mean,var [B,T,1] → norm_x [B,T,D]",code_signal:"x-????에는 평균, sqrt 안에는 분산이 들어가야 합니다.",retry:"평균 제거와 표준편차 나눗셈을 순서대로 적어 다시 작성하세요."}),
+    make({id:"exam-llm04-02",topic:"LayerNorm affine",difficulty:"1 · 파라미터",sourceId:"exam-ch4-ln-affine",
+      prompt:"정규화 결과에 학습 가능한 scale과 shift를 적용하는 return 문을 완성하세요.",answer:"return self.scale * norm_x + self.shift",
+      problem_context:`self.scale = nn.Parameter(torch.ones(emb_dim))
+self.shift = nn.Parameter(torch.zeros(emb_dim))
+# TODO: LayerNorm 학습 파라미터를 채우세요.
+# 힌트: scale로 곱하고 shift를 더합니다.
+return self.???? * norm_x + self.????`,
+      explanation:"scale(γ)은 크기를, shift(β)는 위치를 학습해 정규화 뒤에도 필요한 표현 분포를 복원합니다.",tensor_flow:"[B,T,D] * [D] + [D] → [B,T,D]",code_signal:"ones로 초기화된 것은 곱셈 scale, zeros는 덧셈 shift입니다.",retry:"초깃값 1과 0이 각각 어떤 연산의 항등원인지 확인하세요."}),
+    make({id:"exam-llm04-03",topic:"FeedForward 구성",difficulty:"3 · 연결 구현",sourceId:"exam-ch4-ffn",
+      prompt:"D→4D→D 구조와 GELU를 포함하는 완성된 self.layers 블록을 작성하세요.",answer:cells["exam-ch4-ffn"],
+      problem_context:`# TODO: FeedForward의 확장 배수와 활성화 함수 클래스를 채우세요.
+self.layers = nn.Sequential(
+    nn.Linear(cfg["emb_dim"], ???? * cfg["emb_dim"]),
+    ????(),
+    nn.Linear(???? * cfg["emb_dim"], cfg["emb_dim"]),
+)`,
+      explanation:"첫 Linear가 표현 공간을 4D로 확장하고 GELU가 비선형성을 추가하며 두 번째 Linear가 D로 복원합니다.",tensor_flow:"[B,T,D] → [B,T,4D] → [B,T,4D] → [B,T,D]",code_signal:"주석의 '4배 확장'과 'GELU', residual에 다시 더할 수 있어야 한다는 shape이 답입니다.",retry:"각 Linear의 입출력 차원을 화살표로 쓴 다음 블록을 다시 작성하세요."}),
+    make({id:"exam-llm04-04",topic:"TransformerBlock 서브레이어",difficulty:"2 · 구조 연결",sourceId:"exam-ch4-block",
+      prompt:"Pre-LayerNorm 뒤에 각각 Attention과 FeedForward를 호출하는 두 줄을 작성하세요.",answer:cells["exam-ch4-block"],
+      problem_context:`shortcut = x
+x = self.norm1(x)
+# TODO
+x = self.????(x)
+x = self.drop_shortcut(x)
+x = x + shortcut
+
+shortcut = x
+x = self.norm2(x)
+# TODO
+x = self.????(x)
+x = self.drop_shortcut(x)
+x = x + shortcut`,
+      explanation:"첫 residual 가지는 토큰 간 정보를 모으는 self.att, 두 번째는 토큰별 표현을 변환하는 self.ff입니다.",tensor_flow:"두 가지 모두 [B,T,D] → [B,T,D], 따라서 shortcut과 덧셈 가능",code_signal:"norm1은 att 앞, norm2는 ff 앞이라는 __init__ 구성과 주석이 대응됩니다.",retry:"두 residual 가지의 역할을 '관계 수집/개별 변환'으로 구분하세요."}),
+    make({id:"exam-llm04-05",topic:"GPT 입출력 레이어",difficulty:"3 · 모델 구성",sourceId:"exam-ch4-model-layers",
+      prompt:"token·position Embedding과 vocab logits 출력 head의 완성된 세 줄을 작성하세요.",answer:cells["exam-ch4-model-layers"],
+      problem_context:`# 토큰 임베딩: token ID → D
+self.tok_emb = nn.Embedding(cfg["????"], cfg["emb_dim"])
+# 위치 임베딩: position ID → D
+self.pos_emb = nn.Embedding(cfg["????"], cfg["emb_dim"])
+# 출력 헤드: D → token 후보 점수
+self.out_head = nn.Linear(cfg["emb_dim"], cfg["????"], bias=False)`,
+      explanation:"토큰 lookup 행 수와 출력 후보 수는 vocab_size이고, 위치 lookup 행 수는 최대 context_length입니다.",tensor_flow:"token [B,T]→[B,T,D], position [T]→[T,D], head [B,T,D]→[B,T,V]",code_signal:"단어 ID/단어 후보는 vocab_size, 허용 위치 수는 context_length입니다.",retry:"각 레이어의 행 개수가 무엇을 세는지 적고 다시 작성하세요."}),
+    make({id:"exam-llm04-06",topic:"GPT forward 흐름",difficulty:"3 · 연결 구현",sourceId:"exam-ch4-forward",
+      prompt:"Embedding 결합, Transformer block 통과, logits 계산의 완성된 세 줄을 작성하세요.",answer:cells["exam-ch4-forward"],
+      problem_context:`tok_embeds = self.tok_emb(in_idx)
+pos_embeds = self.pos_emb(torch.arange(seq_len, device=in_idx.device))
+# TODO: 토큰 의미와 위치 정보 합산
+x = tok_embeds + ????
+x = self.drop_emb(x)
+# TODO: Transformer blocks 통과
+x = self.????(x)
+x = self.final_norm(x)
+# TODO: vocab logits 계산
+logits = self.????(x)`,
+      explanation:"토큰과 위치를 더해 [B,T,D]를 만든 뒤 모든 block과 final norm을 거쳐 out_head로 vocab 차원의 logits를 냅니다.",tensor_flow:"[B,T] → [B,T,D] → [B,T,D] → [B,T,V]",code_signal:"오른쪽에 이미 정의된 pos_embeds, trf_blocks, out_head를 forward 순서대로 연결합니다.",retry:"각 줄 뒤 shape D가 언제 V로 바뀌는지 표시하세요."}),
+    make({id:"exam-llm04-07",topic:"추론 모드",difficulty:"1 · 컨텍스트",sourceId:"exam-ch4-nograd",
+      prompt:"텍스트 생성 중 gradient 기록 없이 모델을 실행하는 두 줄을 작성하세요.",answer:cells["exam-ch4-nograd"],
+      problem_context:`idx_cond = idx[:, -context_size:]
+# 모델 예측 (기울기 계산 불필요)
+# TODO
+with torch.????():
+    logits = model(idx_cond)`,
+      explanation:"생성은 파라미터를 업데이트하지 않으므로 torch.no_grad()로 autograd 기록을 끄면 메모리와 연산을 줄일 수 있습니다.",tensor_flow:"idx_cond [B,T] → model → logits [B,T,V]",code_signal:"with torch.????(): 문법과 '기울기 계산 불필요' 주석이 no_grad를 지시합니다.",retry:"학습이 아닌 추론에서 끄는 PyTorch 기능명을 떠올리세요."}),
+    make({id:"exam-llm04-08",topic:"마지막 시점 logits",difficulty:"2 · Tensor 인덱싱",sourceId:"exam-ch4-last",
+      prompt:"모든 위치의 logits에서 마지막 토큰 위치만 선택하는 완성된 줄을 작성하세요.",answer:cells["exam-ch4-last"],
+      problem_context:`# logits: [batch, n_token, vocab_size]
+# 다음 단어 예측에는 마지막 time step만 사용합니다.
+# TODO
+logits = logits[:, ????, :]`,
+      explanation:"첫 축 batch와 마지막 축 vocab은 모두 유지하고, 시간축에서 -1을 선택합니다.",tensor_flow:"[B,T,V] → [B,V]",code_signal:"가운데 축이 n_token이며 '마지막' 인덱스는 -1입니다.",retry:"세 축 B,T,V 중 줄여야 할 축 하나를 고르세요."}),
+    make({id:"exam-llm04-09",topic:"Greedy 생성과 연결",difficulty:"3 · 생성 루프",sourceId:"exam-ch4-generate",
+      prompt:"가장 큰 logits의 token ID를 [B,1]로 선택하고 기존 idx 뒤에 붙이는 두 줄을 작성하세요.",answer:cells["exam-ch4-generate"],
+      accepted_answers:[cells["exam-ch4-generate"],"idx_next = torch.argmax(probas, dim=-1, keepdim=True)\nidx = torch.cat((idx, idx_next), dim=1)"],
+      problem_context:`# 가장 로짓값이 높은 토큰 선택
+# TODO
+idx_next = torch.????(logits, dim=-1, keepdim=True)
+# 예측 토큰을 기존 시퀀스 뒤에 연결
+# TODO
+idx = torch.????((idx, idx_next), dim=1)`,
+      explanation:"argmax는 vocab 축의 최고 점수 ID를 고르고 keepdim=True로 [B,1]을 유지합니다. cat은 token 시간축 dim=1에 이어 붙입니다.",tensor_flow:"logits [B,V] → idx_next [B,1]; idx [B,T] → [B,T+1]",code_signal:"'가장 높은'은 argmax, '이어 붙임'은 cat이며 두 Tensor의 증가 축은 시간축입니다.",retry:"각 함수의 출력 shape을 먼저 적고 두 줄을 다시 작성하세요."})
+  ];
+
+  chapter.mcq = [
+    {id:"exam-llm04-m1",source_question_id:"exam-llm04-01",topic:"LayerNorm 축",prompt:"[B,T,D]에서 토큰별 특성을 정규화하는 설정은?",answer_index:1,explanation:"마지막 D축 통계를 구하고 차원을 유지해야 broadcasting됩니다.",choices:[{text:"x.mean(dim=0)",why:"batch 축을 섞습니다."},{text:"x.mean(dim=-1, keepdim=True)",why:"각 토큰의 D축 통계를 [B,T,1]로 유지합니다."},{text:"x.mean(dim=1)",why:"시퀀스 위치들을 섞습니다."},{text:"x.mean()",why:"전체 Tensor를 하나의 값으로 정규화합니다."},{text:"x.mean(dim=-1, keepdim=False)",why:"[B,T]가 되어 [B,T,D]와 바로 broadcasting되지 않습니다."}]},
+    {id:"exam-llm04-m2",source_question_id:"exam-llm04-03",topic:"FFN shape",prompt:"residual 연결이 가능한 GPT FFN 구조는?",answer_index:2,explanation:"중간은 4D로 확장하되 최종 출력은 D로 돌아와야 합니다.",choices:[{text:"D→D→4D",why:"최종 4D라 shortcut과 더할 수 없습니다."},{text:"D→4D→4D",why:"D로 복원되지 않습니다."},{text:"D→4D→D",why:"표현을 확장·변환한 뒤 residual용 D로 복원합니다."},{text:"D→D/4→D",why:"원본 GPT의 확장 구조와 반대입니다."},{text:"D→V→D",why:"vocab head와 FFN의 역할을 혼동했습니다."}]},
+    {id:"exam-llm04-m3",source_question_id:"exam-llm04-04",topic:"Pre-LayerNorm 순서",prompt:"Transformer attention residual 가지의 올바른 순서는?",answer_index:3,explanation:"원본은 normalization을 서브레이어 전에 두고 결과에 shortcut을 더합니다.",choices:[{text:"Attention→LN→Add",why:"Post/Pre 순서가 다릅니다."},{text:"LN→Add→Attention",why:"서브레이어 전에 residual을 더합니다."},{text:"Attention→Add→LN→Dropout",why:"원본 구조와 순서가 다릅니다."},{text:"shortcut 저장→LN→Attention→Dropout→shortcut Add",why:"Pre-LN residual 흐름과 일치합니다."},{text:"LN→FFN→Attention→Add",why:"한 residual 가지에 두 서브레이어를 섞었습니다."}]},
+    {id:"exam-llm04-m4",source_question_id:"exam-llm04-06",topic:"GPT 출력 shape",prompt:"in_idx [B,T]에서 vocab logits까지 올바른 shape 흐름은?",answer_index:0,explanation:"Embedding과 blocks는 D를 유지하고 head에서만 vocab V로 변환합니다.",choices:[{text:"[B,T]→[B,T,D]→[B,T,D]→[B,T,V]",why:"전체 forward 흐름이 맞습니다."},{text:"[B,T]→[B,D]→[B,V]",why:"시퀀스 축이 사라집니다."},{text:"[B,T]→[T,D]→[T,V]",why:"batch 축이 사라집니다."},{text:"[B,T]→[B,T,V]→[B,T,D]",why:"head와 block 순서가 반대입니다."},{text:"[B,T]→[B,D,T]→[B,V,T]",why:"일반 GPT forward에서 T와 D를 전치하지 않습니다."}]},
+    {id:"exam-llm04-m5",source_question_id:"exam-llm04-09",topic:"Autoregressive 생성",prompt:"한 토큰 생성 뒤 다음 반복을 가능하게 하는 구현은?",answer_index:4,explanation:"새 ID를 시간축 뒤에 붙여 갱신된 idx를 다음 입력으로 사용합니다.",choices:[{text:"idx = idx_next",why:"기존 문맥을 모두 잃습니다."},{text:"idx = torch.stack((idx, idx_next))",why:"새 축을 만들고 shape도 맞지 않습니다."},{text:"idx = torch.cat((idx, idx_next), dim=0)",why:"batch 축에 붙입니다."},{text:"idx.append(idx_next)",why:"Tensor에는 list append를 사용하지 않습니다."},{text:"idx = torch.cat((idx, idx_next), dim=1)",why:"시간축 끝에 새 token ID를 연결합니다."}]}
+  ];
+  chapter.questionCount=chapter.subjective.length;
+  chapter.exam_design={version:2,style:"원본 골격 보존형 구현 문제",difficulty:["단일 값·호출","Tensor 연산","모델·생성 연결 구현"],excluded:["경로 암기","함수 전체 무문맥 삭제","설명만 묻는 문제"]};
+})();
+
+(() => {
+  "use strict";
+  const course = window.LLM_COURSE;
   const chapter = course.chapters.find((item) => item.file === "Chapter_3_Excercise_Attention.ipynb");
   if (!chapter) return;
 
