@@ -1,6 +1,6 @@
 /* Mobile-first overrides shared by every subject. */
 @media (max-width: 650px) {
-  html { scroll-padding-top: 126px; }
+  html { scroll-padding-top: 178px; }
   body { overflow-x: hidden; }
   .topbar { height: 58px; padding: 0 12px; }
   .brand { gap: 8px; font-size: .98rem; }
@@ -16,14 +16,16 @@
     overscroll-behavior-x: contain;
     scrollbar-width: thin;
   }
-  .chapter-button { min-width: 188px; padding: 9px 8px; scroll-snap-align: start; }
-  .side-actions { display: grid; grid-template-columns: 1fr; gap: 7px; overflow: visible; }
+  .chapter-button { min-width: 172px; padding: 9px 8px; scroll-snap-align: start; }
+  .side-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; overflow: visible; }
   .side-actions button { width: 100%; }
 
   .chapter-head { margin: 0 3px 10px; }
   .chapter-head h1 { font-size: 1.34rem; overflow-wrap: anywhere; }
   .chapter-head p { font-size: .72rem; overflow-wrap: anywhere; }
   .mode-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     position: sticky;
     top: 58px;
     z-index: 15;
@@ -31,22 +33,21 @@
     padding: 6px 8px;
     border-radius: 0;
     box-shadow: 0 3px 9px rgba(25,48,85,.1);
-    scroll-snap-type: x mandatory;
-    overscroll-behavior-x: contain;
+    overflow: visible;
   }
   .mode-tab {
-    flex: 0 0 auto;
-    min-width: 108px;
+    min-width: 0;
     min-height: 42px;
-    padding: 9px 10px;
-    font-size: .8rem;
-    scroll-snap-align: start;
+    padding: 8px 5px;
+    font-size: .76rem;
+    line-height: 1.25;
   }
 
   .workspace, .panel, .study-intro, .key-points, .key-card, .key-body { min-width: 0; max-width: 100%; }
   .panel { padding: 14px 12px; min-height: 0; border-radius: 12px; overflow: hidden; }
   .study-intro { padding-bottom: 14px; }
-  .study-intro h2, .results-head h2 { font-size: 1.12rem; }
+  .study-intro h2, .results-head h2 { font-size: 1.12rem; word-break: keep-all; overflow-wrap: anywhere; }
+  .study-intro p, .notebook-goal, .key-body p, .theory-card p, .theory-card dd { word-break: keep-all; overflow-wrap: anywhere; }
   .key-points { gap: 9px; margin-top: 12px; }
   .key-card h3 { padding: 10px 12px; }
   .key-body { padding: 11px 12px; }
@@ -101,14 +102,14 @@
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     position: sticky;
-    top: 108px;
+    top: 154px;
     z-index: 14;
     padding: 6px 0;
     background: #fff;
   }
   .code-view-button { min-width: 0; min-height: 42px; padding: 8px 4px; font-size: .76rem; }
   .full-code-cells { gap: 9px; margin-top: 9px; }
-  .code-cell { border-radius: 10px; scroll-margin-top: 160px; }
+  .code-cell { border-radius: 10px; scroll-margin-top: 210px; }
   .code-cell summary { min-height: 50px; padding: 10px; gap: 7px; }
   .code-cell summary strong { font-size: .82rem; overflow-wrap: anywhere; }
   .code-pane-title { padding: 8px 10px; font-size: .75rem; }
@@ -122,5 +123,6 @@
 
 @media (max-width: 390px) {
   .brand small { display: none; }
-  .mode-tab { min-width: 101px; }
+  .chapter-button { min-width: 162px; }
+  .side-actions { grid-template-columns: 1fr; }
 }
