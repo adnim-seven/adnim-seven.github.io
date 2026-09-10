@@ -242,6 +242,107 @@ print(input_embeddings.shape)`,
   };
 })();
 
+(() => {
+  "use strict";
+  const course=window.LLM_COURSE;
+  const chapter=course.chapters.find((item)=>item.file==="Chapter_5_Excercise_Pretraining.ipynb");
+  if(!chapter)return;
+  chapter.notebook_goal="다음 토큰 Cross Entropy loss를 계산하고, gradient 학습 루프와 autoregressive 생성을 구현한다.";
+  chapter.overview={title:"Logits에서 학습과 다음 토큰 생성으로 이어지는 흐름",subtitle:"같은 GPT 출력에서 학습은 loss·gradient 업데이트로, 생성은 마지막 logits·token 연결로 갈라진다.",steps:[
+    {label:"Forward",code:"logits = model(input_batch)",flow:"[B,T] → [B,T,V]"},
+    {label:"Loss",code:"cross_entropy(logits.flatten(0,1), target.flatten())",flow:"[B,T,V] → [B·T,V], [B,T] → [B·T]"},
+    {label:"학습",code:"zero_grad → loss → backward → step",flow:"gradient 초기화·계산·갱신"},
+    {label:"다음 토큰",code:"argmax(logits[:, -1, :])",flow:"[B,T,V] → [B,1]"},
+    {label:"문맥 확장",code:"cat((idx, idx_next), dim=1)",flow:"[B,T] → [B,T+1]"}
+  ],rules:["Cross Entropy의 class 축 V는 마지막에 남기고 B와 T만 합친다.","매 batch의 학습 순서는 zero_grad→forward/loss→backward→step이다.","평가·생성에서는 gradient 기록을 끄고, 학습으로 돌아오면 train 모드를 복구한다.","다음 토큰 생성에는 마지막 time step logits만 사용한다."]};
+  const cells={
+    "exam-ch5-loss":`loss = torch.nn.functional.cross_entropy(
+    logits.flatten(0, 1),
+    target_batch.flatten()
+)`,
+    "exam-ch5-train":"model.train()",
+    "exam-ch5-update":`optimizer.zero_grad()
+loss = calc_loss_batch(input_batch, target_batch, model, device)
+loss.backward()
+optimizer.step()`,
+    "exam-ch5-generate":`logits = logits[:, -1, :]
+idx_next = torch.argmax(logits, dim=-1, keepdim=True)
+idx = torch.cat((idx, idx_next), dim=1)`,
+    "exam-ch5-convert":`encoded_tensor = torch.tensor(encoded).unsqueeze(0)
+flat = token_ids.squeeze(0)`,
+    "exam-ch5-optimizer":`optimizer = torch.optim.AdamW(
+    model.parameters(), lr=settings["learning_rate"], weight_decay=settings["weight_decay"]
+)`
+  };
+  Object.entries(cells).forEach(([id,source])=>{course.cells[id]={source};});
+  const base={subject:"LLM",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,isSourceBlank:true,source_type:"원본 노트북 실제 빈칸"};
+  const make=(data)=>({...base,occurrence:0,accepted_answers:[data.answer],...data});
+  chapter.subjective=[
+    make({id:"exam-llm05-01",topic:"Next-token Cross Entropy",difficulty:"3 · Tensor reshape",sourceId:"exam-ch5-loss",prompt:"원본 TODO의 함수명과 두 flatten 연산을 채워 완성된 loss 블록을 작성하세요.",answer:cells["exam-ch5-loss"],
+      problem_context:`logits = model(input_batch)  # [B,T,V]
+# CrossEntropy 입력은 [N,C], target은 [N]이어야 합니다.
+# TODO: 함수명과 logits/target 평탄화 메서드를 채우세요.
+loss = torch.nn.functional.????(
+    logits.????(0, 1),
+    target_batch.????()
+)`,
+      explanation:"모든 B·T 위치가 하나의 분류 sample이고 V가 class 축입니다. logits는 앞 두 축만 합치고 target은 전체를 1차원으로 펴야 위치가 대응됩니다.",tensor_flow:"logits [B,T,V]→[B·T,V], target [B,T]→[B·T], loss→scalar",code_signal:"주석의 CrossEntropy [N,C] 조건과 flatten(0,1) 힌트가 축 변환을 결정합니다.",retry:"V축을 보존해야 한다는 기준으로 두 출력 shape을 먼저 적으세요."}),
+    make({id:"exam-llm05-02",topic:"Train mode",difficulty:"1 · 모드 전환",sourceId:"exam-ch5-train",prompt:"각 epoch의 학습 시작 전에 호출할 완성된 한 줄을 작성하세요.",answer:cells["exam-ch5-train"],
+      problem_context:`for epoch in range(num_epochs):
+    # TODO: 학습 루프 시작 전 모델 모드를 설정하세요.
+    model.????()
+    for input_batch, target_batch in train_loader:`,
+      explanation:"train()은 Dropout 등 모듈을 학습 동작으로 전환합니다. optimizer를 학습 모드로 바꾸는 것이 아닙니다.",tensor_flow:"Tensor shape 변화 없음; module.training=True",code_signal:"호출 대상이 model이고 주석이 '학습 모드'를 지시합니다.",retry:"평가용 eval()의 반대 메서드를 작성하세요."}),
+    make({id:"exam-llm05-03",topic:"Batch 학습 4단계",difficulty:"3 · 실행 순서",sourceId:"exam-ch5-update",prompt:"이전 gradient 초기화부터 파라미터 갱신까지 원본 네 빈칸을 완성한 네 줄을 순서대로 작성하세요.",answer:cells["exam-ch5-update"],
+      problem_context:`for input_batch, target_batch in train_loader:
+    # Step 1: 이전 gradient 초기화
+    optimizer.????()
+    # Step 2: 현재 batch loss
+    loss = ????(input_batch, target_batch, model, device)
+    # Step 3: gradient 계산
+    loss.????()
+    # Step 4: 파라미터 갱신
+    optimizer.????()`,
+      explanation:"PyTorch gradient는 누적되므로 먼저 비우고, loss를 만든 뒤 backward로 gradient를 계산해야 step이 이를 사용해 가중치를 바꿀 수 있습니다.",tensor_flow:"batch→scalar loss→parameter.grad→updated parameters",code_signal:"호출 대상 optimizer/loss와 네 Step 주석이 각 메서드와 순서를 제한합니다.",retry:"초기화·계산·역전파·갱신을 소리 내어 말한 뒤 코드를 다시 쓰세요."}),
+    make({id:"exam-llm05-04",topic:"Greedy autoregressive 생성",difficulty:"3 · 연결 구현",sourceId:"exam-ch5-generate",prompt:"마지막 위치 logits 선택, 최고 점수 token ID 선택, 시간축 연결의 완성된 세 줄을 작성하세요.",answer:cells["exam-ch5-generate"],
+      problem_context:`# logits: [batch, seq_len, vocab_size]
+# TODO: 마지막 시점 logits만 추출
+logits = logits[:, ????, :]
+# TODO: Greedy decoding으로 token ID 선택
+idx_next = torch.????(logits, dim=-1, keepdim=True)
+# TODO: 새 token을 기존 문맥 뒤에 연결
+idx = torch.cat((idx, ????), dim=1)`,
+      explanation:"시간축 -1을 선택해 [B,V]를 만들고 argmax를 keepdim=True로 [B,1]로 유지해야 idx [B,T]의 시간축에 연결할 수 있습니다.",tensor_flow:"[B,T,V]→[B,V]→[B,1]; [B,T]+[B,1]→[B,T+1]",code_signal:"'마지막', '가장 높은', '이어붙이기'가 각각 -1, argmax, idx_next를 가리킵니다.",retry:"각 줄의 출력 shape을 확인하면서 세 줄을 다시 작성하세요."}),
+    make({id:"exam-llm05-05",topic:"Text·token batch 차원",difficulty:"2 · 차원 변환",sourceId:"exam-ch5-convert",prompt:"단일 token 시퀀스에 batch 축을 추가하고, decoding 전 다시 제거하는 완성된 두 줄을 작성하세요.",answer:cells["exam-ch5-convert"],
+      problem_context:`encoded = tokenizer.encode(text)  # [T]
+# TODO: 모델 입력용 batch 축 추가
+encoded_tensor = torch.tensor(encoded).????(0)
+
+# token_ids: [1,T]
+# TODO: decoding 전 batch 축 제거
+flat = token_ids.????(0)`,
+      explanation:"모델은 [B,T]를 요구하므로 단일 문장 [T] 앞에 크기 1 축을 추가합니다. decode에는 다시 [T] ID 목록이 필요해 그 축만 제거합니다.",tensor_flow:"list[int] [T]→Tensor [1,T]→Tensor [T]→list[int]",code_signal:"'추가/제거'와 명시된 축 0이 서로 반대인 unsqueeze/squeeze를 지시합니다.",retry:"변환 전후 shape을 [T]와 [1,T]로 써 놓고 메서드를 고르세요."}),
+    make({id:"exam-llm05-06",topic:"AdamW 연결",difficulty:"2 · 학습 구성",sourceId:"exam-ch5-optimizer",prompt:"모델의 학습 파라미터와 settings의 학습률·가중치 감쇠를 연결한 완성된 optimizer 블록을 작성하세요.",answer:cells["exam-ch5-optimizer"],
+      problem_context:`model = GPTModel(gpt_config)
+model.to(device)
+# TODO: AdamW에 파라미터 이터레이터와 학습률 키워드를 채우세요.
+optimizer = torch.optim.AdamW(
+    model.????(), ????=settings["learning_rate"],
+    weight_decay=settings["weight_decay"]
+)`,
+      explanation:"optimizer는 값 복사본이 아니라 model.parameters() 이터레이터를 받아야 실제 Parameter를 갱신합니다. 학습률 키워드는 lr입니다.",tensor_flow:"model Parameters + scalar hyperparameters → optimizer state",code_signal:"model.????() 형태와 settings['learning_rate'] 앞 키워드가 parameters와 lr을 요구합니다.",retry:"optimizer가 무엇을 갱신하는지와 학습률의 PyTorch 키워드를 다시 확인하세요."})
+  ];
+  chapter.mcq=[
+    {id:"exam-llm05-m1",source_question_id:"exam-llm05-01",topic:"Cross Entropy shape",prompt:"logits [B,T,V]와 target [B,T]의 올바른 변환은?",answer_index:2,explanation:"B와 T를 합치고 V는 class 축으로 보존합니다.",choices:[{text:"logits.flatten(), target.flatten()",why:"logits의 V축까지 사라집니다."},{text:"logits.flatten(1), target.flatten(1)",why:"logits가 [B,T·V]가 됩니다."},{text:"logits.flatten(0,1), target.flatten()",why:"[B·T,V]와 [B·T]가 됩니다."},{text:"logits.mean(1), target[:,0]",why:"시퀀스 위치 대부분을 잃습니다."},{text:"logits.transpose(1,2), target",why:"일반 cross_entropy 호출에서 요구 shape와 다릅니다."}]},
+    {id:"exam-llm05-m2",source_question_id:"exam-llm05-03",topic:"Gradient 순서",prompt:"한 batch의 올바른 학습 순서는?",answer_index:0,explanation:"이전 gradient를 비운 뒤 현재 loss의 gradient로 갱신합니다.",choices:[{text:"zero_grad→loss→backward→step",why:"올바른 순서입니다."},{text:"loss→step→backward→zero_grad",why:"gradient 계산 전에 갱신합니다."},{text:"backward→loss→step",why:"backward할 loss가 없습니다."},{text:"zero_grad→step→loss→backward",why:"현재 gradient 없이 step합니다."},{text:"loss→backward→zero_grad→step",why:"계산한 gradient를 갱신 전에 지웁니다."}]},
+    {id:"exam-llm05-m3",source_question_id:"exam-llm05-04",topic:"마지막 logits",prompt:"[B,T,V]에서 다음 token용 [B,V]를 얻는 인덱싱은?",answer_index:4,explanation:"batch와 vocab은 유지하고 시간축 마지막만 선택합니다.",choices:[{text:"logits[-1,:,:]",why:"마지막 batch를 선택합니다."},{text:"logits[:,:,-1]",why:"마지막 vocab class만 선택합니다."},{text:"logits[:,0,:]",why:"첫 time step입니다."},{text:"logits[:,-1]",why:"동일 결과지만 시험 원본의 세 축 표현을 보존하지 않습니다."},{text:"logits[:,-1,:]",why:"시간축 마지막 위치를 선택합니다."}]},
+    {id:"exam-llm05-m4",source_question_id:"exam-llm05-05",topic:"Batch 차원",prompt:"[T]를 [1,T]로 만드는 연산은?",answer_index:1,explanation:"0번 위치에 크기 1인 축을 삽입합니다.",choices:[{text:"squeeze(0)",why:"축을 제거합니다."},{text:"unsqueeze(0)",why:"앞에 batch 축을 추가합니다."},{text:"flatten(0)",why:"이미 1차원이며 batch 축이 생기지 않습니다."},{text:"transpose(0,1)",why:"1차원에는 교환할 두 축이 없습니다."},{text:"view(-1)",why:"계속 [T]입니다."}]},
+    {id:"exam-llm05-m5",source_question_id:"exam-llm05-06",topic:"Optimizer 대상",prompt:"AdamW의 첫 번째 인자로 알맞은 것은?",answer_index:3,explanation:"학습할 Parameter 이터레이터를 전달합니다.",choices:[{text:"model",why:"모듈 자체는 parameter iterable이 아닙니다."},{text:"model.state_dict()",why:"Tensor 사전이며 optimizer의 Parameter 참조가 아닙니다."},{text:"model.forward",why:"실행 메서드입니다."},{text:"model.parameters()",why:"학습 가능한 Parameter 이터레이터입니다."},{text:"model.eval()",why:"평가 모드 전환 결과입니다."}]}
+  ];
+  chapter.questionCount=chapter.subjective.length;
+  chapter.exam_design={version:3,style:"원본 TODO·???? 골격 보존형",difficulty:["단일 모드","Tensor 변환","학습·생성 연결 구현"],excluded:["URL·경로","고정 데이터 암기","설명만 묻기"]};
+})();
+
 // Chapter 2 final pass: preserve the exercise notebook's original TODO/???? skeleton.
 (() => {
   "use strict";
