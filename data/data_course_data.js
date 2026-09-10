@@ -133,6 +133,107 @@
   ];
   const seqA = seqP.map((x, i) => ({4:"    self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)",7:"    _, h = self.rnn(x)",8:"    return h",15:"    self.fc = nn.Linear(hidden_size, input_size)",18:"    out, h = self.rnn(x, h)",19:"    out = self.fc(out)",20:"    return out, h"}[i] || x));
 
+  const ngcfLayerP = [
+    "### TODO : NGCF Layer 완성 ###",
+    "class NGCFLayer(nn.Module):",
+    "    def __init__(self, input_dim, output_dim, dropout=0.1):",
+    "        super().__init__()",
+    "        self.W1 = nn.Linear(input_dim, output_dim)",
+    "        self.W2 = nn.Linear(input_dim, output_dim)",
+    "        # self.dropout = nn.Dropout(dropout)",
+    "        self.leaky_relu = nn.LeakyReLU(0.2)",
+    "",
+    "    def forward(self, edge_index, node_features, user_num, item_num):",
+    "        '''",
+    "        edge_index : 엣지 정보 (src, dst)의 집합.",
+    "        node_features: node별 이전 layer에서 생성된 벡터 정보가 담긴 matrix (H^(l-1)) (|V| * d)",
+    "        '''",
+    "        src, dst = edge_index # src : user, dst : movie",
+    "        # calculate node degree",
+    "        deg = torch.zeros(node_features.size(0), device=node_features.device)",
+    "        # calculate user degree",
+    "        deg.index_add_(0, src, torch.ones_like(src, dtype=torch.float))",
+    "        # calculate movie degree",
+    "        deg.index_add_(0, dst, torch.ones_like(dst, dtype=torch.float))",
+    "        # calculate 1/(root(deg(u)) * root(deg(i))) for all edge",
+    "        norm = ????",
+    "        src_feat = node_features[src] # H_u",
+    "        dst_feat = node_features[dst] # H_i",
+    "        # edge_messages for user(src) = m_(u<-i)) 결과 저장.",
+    "        # Hint: step1. self.W1(h_i) + self.W2(h_u * h_i) 계산",
+    "        # Hint: step2. 최종 m_(u<-i)를 위해선 앞선 norm을 앞서 계산한 message에 곱하기",
+    "        edge_messages_for_src = self.W1(dst_feat) + self.W2(src_feat * dst_feat)",
+    "        edge_messages_for_src *= norm.unsqueeze(1)",
+    "        # edge_messages for movie(dst) = m_(i<-u)) 결과 저장.",
+    "        # Hint: step1. self.W1(h_u) + self.W2(h_i * h_u) 계산",
+    "        # Hint: step2. 최종 m_(i<-u)를 위해선 앞선 norm을 앞서 계산한 message에 곱하기",
+    "        edge_messages_for_dst = ????",
+    "        edge_messages_for_dst *= ????",
+    "        # aggregated_features = Combine()의 결과 저장.",
+    "        aggregated_messages = torch.zeros_like(node_features)",
+    "        # m_(u<-u) = self.W1(h_u) 계산해 더해주기",
+    "        aggregated_messages.index_add(0, src, edge_messages_for_src)",
+    "        aggregated_messages[:user_num] += self.W1(node_features[:user_num])",
+    "        # m_(i<-i) = self.W1(h_i) 계산해 더해주기",
+    "        ????",
+    "        ????",
+    "        aggregated_features = self.leaky_relu(aggregated_messages)",
+    "        # engineering approach",
+    "        # aggregated_features = self.dropout(aggregated_features)",
+    "        return aggregated_features",
+  ];
+  const ngcfLayerA = ngcfLayerP.map((x, i) => ({
+    22:"        norm = 1.0/torch.sqrt(deg[src]*deg[dst])",
+    33:"        edge_messages_for_dst = self.W1(src_feat) + self.W2(src_feat*dst_feat)",
+    34:"        edge_messages_for_dst *= norm.unsqueeze(1)",
+    41:"        aggregated_messages.index_add_(0, dst, edge_messages_for_dst)",
+    42:"        aggregated_messages[user_num:] += self.W1(node_features[user_num:])",
+  }[i] || x));
+
+  const ngcfModelP = [
+    "### TODO: NGCF 모델 완성.",
+    "class NGCF(nn.Module):",
+    "    def __init__(self, num_users, num_items, embedding_dim, layer_dims, dropout=0.1):",
+    "        super().__init__()",
+    "        self.num_users = num_users",
+    "        self.num_items = num_items",
+    "        self.embedding_dim = embedding_dim",
+    "        ### self.node_embeddings = H_(0) = learnable embedding matrix ###",
+    "        self.node_embeddings = nn.Embedding(self.num_users+self.num_items,self.embedding_dim)",
+    "        nn.init.xavier_uniform_(self.node_embeddings.weight)",
+    "        self.layers = nn.ModuleList([",
+    "            NGCFLayer(input_dim=(embedding_dim if i == 0 else layer_dims[i - 1]),",
+    "                      output_dim=layer_dims[i], dropout=dropout)",
+    "            for i in range(len(layer_dims))",
+    "        ])",
+    "",
+    "    def forward(self, edge_index):",
+    "        node_features = self.node_embeddings.weight",
+    "        layer_outputs = [node_features]",
+    "        for layer in self.layers:",
+    "            node_features = ????",
+    "            layer_outputs.append(node_features)",
+    "        # Hint: NGCF의 final feature(representation)은 layer 별 feature에 대한 concatenated vector",
+    "        # Hint: 최종 final feature matrix에는 [feuture_vector for users + feature_vector for items]가 들어있음.",
+    "        final_features = ????",
+    "        user_features = ????",
+    "        item_features = ????",
+    "        return user_features, item_features",
+    "",
+    "    def bpr_loss(self, user_emb, pos_item_emb, neg_item_emb, reg_weight=1e-4):",
+    "        pos_scores = torch.sum(user_emb * pos_item_emb, dim=1)",
+    "        neg_scores = torch.sum(user_emb * neg_item_emb, dim=1)",
+    "        loss = -torch.mean(F.logsigmoid(pos_scores - neg_scores))",
+    "        reg_loss = reg_weight * (user_emb.norm(2).pow(2) + pos_item_emb.norm(2).pow(2) + neg_item_emb.norm(2).pow(2)) / user_emb.size(0)",
+    "        return loss + reg_loss",
+  ];
+  const ngcfModelA = ngcfModelP.map((x, i) => ({
+    20:"            node_features = layer(edge_index, node_features,self.num_users, self.num_items)",
+    24:"        final_features = torch.concat(layer_outputs,dim=-1)",
+    25:"        user_features = final_features[:self.num_users]",
+    26:"        item_features = final_features[self.num_users:]",
+  }[i] || x));
+
   const S = (id, answer, topic, prompt, accepted=[answer]) => ({id,sourceId:id,occurrence:0,answer,accepted_answers:accepted,topic,prompt,isSourceBlank:true});
   window.LLM_COURSE = {
     subject: "3. Data",
@@ -142,7 +243,12 @@
       "ts-q3":{source:"loss_fn(pred, batch_y)"}, "ts-q4":{source:"optimizer.zero_grad()"}, "ts-q5":{source:"loss.backward()"}, "ts-q6":{source:"optimizer.step()"},
       "ts-q7":{source:"y_test, test_predictions"}, "ts-q8":{source:"input_size, hidden_size"}, "ts-q9":{source:"hidden_size"},
       "ts-q10":{source:"input_size, hidden_size, num_layers"}, "ts-q11":{source:"out, _ = self.rnn(x)"}, "ts-q12":{source:"return self.fc(out)"},
-      "ts-q13":{source:"_, h = self.rnn(x)"}, "ts-q14":{source:"return h"}, "ts-q15":{source:"hidden_size, input_size"}, "ts-q16":{source:"out, h = self.rnn(x, h)"}
+      "ts-q13":{source:"_, h = self.rnn(x)"}, "ts-q14":{source:"return h"}, "ts-q15":{source:"hidden_size, input_size"}, "ts-q16":{source:"out, h = self.rnn(x, h)"},
+      "gcf-q1":{source:"1.0/torch.sqrt(deg[src]*deg[dst])"}, "gcf-q2":{source:"self.W1(src_feat) + self.W2(src_feat*dst_feat)"},
+      "gcf-q3":{source:"norm.unsqueeze(1)"}, "gcf-q4":{source:"aggregated_messages.index_add_(0, dst, edge_messages_for_dst)"},
+      "gcf-q5":{source:"aggregated_messages[user_num:] += self.W1(node_features[user_num:])"},
+      "gcf-q6":{source:"layer(edge_index, node_features,self.num_users, self.num_items)"}, "gcf-q7":{source:"torch.concat(layer_outputs,dim=-1)"},
+      "gcf-q8":{source:"final_features[:self.num_users]"}, "gcf-q9":{source:"final_features[self.num_users:]"}
     },
     chapters: [{
       id:"data-ts-01", number:"01", title:"Time Series Forecasting", file:"ts_practice.ipynb",
@@ -187,6 +293,43 @@
         {id:"ts-m3",source_question_id:"ts-q8",topic:"Conv1D 입력",prompt:"[B,T,input_size]를 transpose 후 Conv1d에 넣을 때 채널 설정은?",answer_index:0,explanation:"입력 feature가 채널이 되고 hidden_size개의 특징을 만듭니다.",choices:[{text:"input_size → hidden_size",why:"정답입니다."},{text:"hidden_size → input_size",why:"방향이 반대입니다."},{text:"T → hidden_size",why:"T는 sequence length입니다."},{text:"1 → T",why:"시간축은 채널 수가 아닙니다."},{text:"batch_size → hidden_size",why:"배치축은 채널이 아닙니다."}]},
         {id:"ts-m4",source_question_id:"ts-q13",topic:"Encoder–Decoder",prompt:"Encoder가 Decoder 초기 상태로 전달해야 하는 값은?",answer_index:3,explanation:"마지막 hidden state가 입력 sequence 문맥을 전달합니다.",choices:[{text:"loss",why:"학습 scalar입니다."},{text:"optimizer",why:"파라미터 갱신 객체입니다."},{text:"원본 source",why:"Decoder 초기 hidden state가 아닙니다."},{text:"hidden state h",why:"정답입니다."},{text:"RMSE",why:"평가 지표입니다."}]},
         {id:"ts-m5",source_question_id:"ts-q7",topic:"평가 Metric",prompt:"sklearn의 root_mean_squared_error 인자 순서는?",answer_index:4,explanation:"sklearn metric은 y_true, y_pred 순서입니다.",choices:[{text:"model, X_test",why:"Tensor 예측 전입니다."},{text:"pred, loss",why:"loss는 정답이 아닙니다."},{text:"X_test, y_test",why:"입력과 정답 조합입니다."},{text:"y_pred, model",why:"model 객체는 metric 인자가 아닙니다."},{text:"y_test, test_predictions",why:"정답입니다."}]}
+      ]
+    }, {
+      id:"data-gcf-02", number:"02", title:"NGCF Recommendation", file:"RecSys_GCF_practice.ipynb",
+      capability:"사용자–아이템 그래프에서 정규화된 양방향 메시지를 집계하고 여러 NGCF layer 표현을 결합해 추천 embedding을 구현할 수 있다.",
+      summary:"사용자와 영화 embedding이 edge를 따라 이웃 정보와 상호작용 항을 주고받고, 각 layer의 표현을 연결한 뒤 BPR loss로 긍정 아이템 점수가 부정 아이템보다 커지도록 학습합니다.",
+      notebook_goal:"MovieLens 상호작용 그래프를 구성하고 NGCF 메시지 전달·표현 결합·BPR 학습으로 Top-K 추천을 구현한다.",
+      key_points:[
+        {title:"그래프 인덱스",purpose:"사용자와 영화를 하나의 node 번호 공간에 배치합니다.",code:"dst = movieId + num_users",flow:"rating row → edge (user,item)",watch:"item feature를 분리할 때 num_users offset을 되돌립니다."},
+        {title:"Degree 정규화",purpose:"연결 수가 많은 node의 메시지가 과도하게 커지지 않게 edge별 가중치를 만듭니다.",code:"1 / sqrt(deg[src] * deg[dst])",flow:"degree pair → scalar norm → [E,1]",watch:"feature [E,D]에 곱하려면 unsqueeze(1)이 필요합니다."},
+        {title:"양방향 메시지",purpose:"item→user와 user→item 메시지를 각각 계산하고 목적 node에 합산합니다.",code:"W1(neighbor) + W2(source*neighbor)\nindex_add_(0, destination, message)",flow:"[E,D] messages → [V,D] aggregation",watch:"dst 메시지에는 src_feat, src 메시지에는 dst_feat가 이웃입니다."},
+        {title:"Layer 표현 결합",purpose:"초기 embedding과 모든 NGCF layer 출력을 feature 축으로 연결합니다.",code:"torch.concat(layer_outputs, dim=-1)",flow:"L×[V,D] → [V,sum(D)]",watch:"node 축이 아니라 마지막 feature 축으로 concat합니다."},
+        {title:"BPR 학습",purpose:"관측한 item의 점수가 임의의 negative item보다 높아지게 합니다.",code:"-mean(logsigmoid(pos_scores-neg_scores))",flow:"user,pos,neg embeddings → pairwise loss",watch:"negative sampling과 L2 regularization이 함께 사용됩니다."}
+      ],
+      theory_guide:[
+        {title:"1. NGCF 메시지",concept:"Graph message passing은 이웃 node 정보를 현재 node 표현에 모으는 계산입니다.",flow:"neighbor feature → edge message → destination aggregation",code_signal:"index_add_의 index가 메시지를 받을 node입니다.",exam_clue:"src에 모을 때 item 특징을, dst에 모을 때 user 특징을 사용합니다."},
+        {title:"2. 대칭 정규화",concept:"1/√(deg(u)deg(i))는 양 끝 node의 연결 수를 함께 보정합니다.",flow:"deg[src],deg[dst] → multiply → sqrt → reciprocal",code_signal:"edge마다 값이 하나이므로 norm shape은 [E]입니다.",exam_clue:"message와 곱하기 직전 [E,1]로 바꿉니다."},
+        {title:"3. Self·Neighbor 결합",concept:"NGCF는 이웃 메시지뿐 아니라 자신의 선형변환도 더해 현재 node 정보를 보존합니다.",flow:"aggregated neighbor + W1(self) → LeakyReLU",code_signal:"user slice는 [:user_num], item slice는 [user_num:]입니다.",exam_clue:"두 node 집합의 경계는 self.num_users입니다."},
+        {title:"4. Multi-layer representation",concept:"각 layer는 다른 거리의 이웃 정보를 담으므로 초기값까지 모두 concat해 최종 표현으로 사용합니다.",flow:"H0,H1,...,HL → concat(dim=-1)",code_signal:"layer_outputs는 초기 embedding을 먼저 포함합니다.",exam_clue:"stack이 아니라 feature 차원을 늘리는 concat입니다."}
+      ],
+      full_code_cells:[cell(13,ngcfLayerP,ngcfLayerA,[22,33,34,41,42]),cell(14,ngcfModelP,ngcfModelA,[20,24,25,26])],
+      subjective:[
+        S("gcf-q1","1.0/torch.sqrt(deg[src]*deg[dst])","Degree normalization","edge별 대칭 degree 정규화 식을 쓰세요."),
+        S("gcf-q2","self.W1(src_feat) + self.W2(src_feat*dst_feat)","Item message","movie node가 user 이웃으로부터 받을 메시지를 계산하세요."),
+        S("gcf-q3","norm.unsqueeze(1)","Broadcasting","[E] norm을 [E,D] 메시지에 곱할 수 있게 바꾸세요."),
+        S("gcf-q4","aggregated_messages.index_add_(0, dst, edge_messages_for_dst)","Aggregation","item 목적지 dst에 edge message를 합산하는 한 줄을 쓰세요."),
+        S("gcf-q5","aggregated_messages[user_num:] += self.W1(node_features[user_num:])","Self message","모든 item node에 자신의 W1 변환을 더하는 한 줄을 쓰세요."),
+        S("gcf-q6","layer(edge_index, node_features,self.num_users, self.num_items)","Layer call","현재 feature를 다음 NGCF layer로 갱신하는 호출을 쓰세요.",["layer(edge_index, node_features,self.num_users, self.num_items)","layer(edge_index, node_features, self.num_users, self.num_items)"]),
+        S("gcf-q7","torch.concat(layer_outputs,dim=-1)","Layer concat","모든 layer 출력을 feature 축으로 연결하세요.",["torch.concat(layer_outputs,dim=-1)","torch.concat(layer_outputs, dim=-1)"]),
+        S("gcf-q8","final_features[:self.num_users]","User split","최종 feature에서 사용자 부분을 선택하세요."),
+        S("gcf-q9","final_features[self.num_users:]","Item split","최종 feature에서 아이템 부분을 선택하세요.")
+      ],
+      mcq:[
+        {id:"gcf-m1",source_question_id:"gcf-q1",topic:"Degree 정규화",prompt:"edge (u,i)의 NGCF 정규화 계수는?",answer_index:1,explanation:"양 끝 node degree 곱의 제곱근 역수를 사용합니다.",choices:[{text:"deg[u]+deg[i]",why:"연결 수를 더하면 고차수 node가 더 커집니다."},{text:"1/sqrt(deg[u]*deg[i])",why:"정답입니다."},{text:"1/(deg[u]+deg[i])",why:"대칭 정규화 공식이 아닙니다."},{text:"sqrt(deg[u]/deg[i])",why:"두 방향이 대칭이 아닙니다."},{text:"deg[u]*deg[i]",why:"정규화가 아니라 증폭합니다."}]},
+        {id:"gcf-m2",source_question_id:"gcf-q3",topic:"Tensor shape",prompt:"norm [E]와 message [E,D]를 edge별로 곱하려면?",answer_index:3,explanation:"norm에 feature 축 하나를 추가해 [E,1]로 만듭니다.",choices:[{text:"norm.squeeze(0)",why:"축을 추가하지 않습니다."},{text:"norm.repeat(E)",why:"edge 축을 잘못 반복합니다."},{text:"norm.transpose(0,1)",why:"1차원 Tensor에는 필요한 두 축이 없습니다."},{text:"norm.unsqueeze(1)",why:"정답입니다."},{text:"norm.flatten()",why:"이미 [E]라 변화가 없습니다."}]},
+        {id:"gcf-m3",source_question_id:"gcf-q4",topic:"Message aggregation",prompt:"user→item 메시지를 어느 index에 합산해야 하나요?",answer_index:2,explanation:"메시지를 받는 목적 node는 dst인 item입니다.",choices:[{text:"src_feat",why:"feature 값이지 node index가 아닙니다."},{text:"src",why:"user 목적 집계에 쓰입니다."},{text:"dst",why:"정답입니다."},{text:"user_num",why:"node 경계값입니다."},{text:"edge_index.size(1)",why:"edge 개수입니다."}]},
+        {id:"gcf-m4",source_question_id:"gcf-q7",topic:"Layer 표현 결합",prompt:"H0,H1,H2를 node별 긴 embedding으로 만드는 연산은?",answer_index:0,explanation:"같은 node 축을 유지하고 feature 축 마지막을 연결합니다.",choices:[{text:"torch.concat(layer_outputs, dim=-1)",why:"정답입니다."},{text:"torch.stack(layer_outputs, dim=0)",why:"새 layer 축을 만듭니다."},{text:"torch.mean(layer_outputs)",why:"표현을 평균내 정보와 차원을 줄입니다."},{text:"torch.concat(layer_outputs, dim=0)",why:"node 수를 늘립니다."},{text:"layer_outputs[-1]",why:"이전 layer 표현을 버립니다."}]},
+        {id:"gcf-m5",source_question_id:"gcf-q8",topic:"User·Item 분리",prompt:"node가 user 다음 item 순서일 때 item feature slice는?",answer_index:4,explanation:"사용자 node 개수 이후가 모두 item입니다.",choices:[{text:"final_features[:num_items]",why:"앞부분은 user입니다."},{text:"final_features[-num_users:]",why:"사용자 수만큼 뒤에서 고릅니다."},{text:"final_features[:,num_users:]",why:"node가 아니라 feature 축을 자릅니다."},{text:"final_features[:self.num_users]",why:"user slice입니다."},{text:"final_features[self.num_users:]",why:"정답입니다."}]}
       ]
     }]
   };
