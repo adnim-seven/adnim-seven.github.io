@@ -106,6 +106,52 @@ print(input_embeddings.shape)`,
     ),
   ];
 
+  const feedback = {
+    "exam-llm02-01": {
+      explanation: "입력 x의 각 위치에서 바로 다음 token이 정답 y가 되어야 합니다. 따라서 y는 시작점과 끝점을 모두 1만큼 이동해야 x와 길이가 같습니다.",
+      tensor_flow: "enc_sample list[int] → x, y: 각각 길이 context_size의 list[int]",
+      code_signal: "변수명이 x/y로 짝을 이루고, 다음 token 예측이라는 앞 문맥이 slice의 +1 이동을 지시합니다.",
+      retry: "두 slice의 길이를 직접 계산하고 x[j]의 정답이 y[j]인지 확인한 뒤 다시 작성하세요.",
+    },
+    "exam-llm02-02": {
+      explanation: "슬라이딩 윈도우의 입력은 i부터 max_length개입니다. 정답은 같은 길이로 한 칸 오른쪽에 있어야 하므로 target을 만들 때 시작과 끝 모두 +1이 필요합니다.",
+      tensor_flow: "token_ids list[int] → input_chunk/target_chunk: 길이 max_length",
+      code_signal: "for문의 i와 max_length, 바로 아래 target_chunk 주석이 slice 범위를 결정합니다.",
+      retry: "i=0, max_length=4를 대입해 실제 index 0~3이 선택되는지 확인하세요.",
+    },
+    "exam-llm02-03": {
+      explanation: "DataLoader가 나중에 Tensor batch를 만들 수 있도록 입력과 정답을 각각 Tensor로 변환해 대응되는 리스트에 append해야 합니다. 대입하면 이전 sample을 덮어씁니다.",
+      tensor_flow: "input_chunk/target_chunk list[int] → torch.tensor → self.input_ids/self.target_ids",
+      code_signal: "두 저장소가 __init__에서 빈 list로 초기화되어 있으므로 append가 필요합니다.",
+      retry: "반복문이 두 번 돌았을 때 두 리스트의 길이가 모두 2가 되는 구현인지 확인하세요.",
+    },
+    "exam-llm02-04": {
+      explanation: "Dataset의 __getitem__은 하나의 idx에 대응하는 학습 입력과 정답을 함께 반환해야 DataLoader가 두 batch로 묶을 수 있습니다.",
+      tensor_flow: "idx int → input_ids[idx], target_ids[idx] → tuple(Tensor, Tensor)",
+      code_signal: "__len__이 input_ids의 sample 수를 반환하고 있으므로 __getitem__도 같은 저장소의 idx를 기준으로 합니다.",
+      retry: "반환값의 첫 번째가 모델 입력, 두 번째가 loss target인지 순서를 확인하세요.",
+    },
+    "exam-llm02-05": {
+      explanation: "DataLoader는 이미 생성한 dataset을 첫 인자로 받고, 헬퍼 함수가 받은 실행 설정을 같은 이름의 keyword 인자로 전달해야 합니다.",
+      tensor_flow: "GPTDatasetV1 sample → DataLoader → inputs/targets batch [B,T]",
+      code_signal: "함수 signature의 batch_size, shuffle, drop_last, num_workers가 DataLoader 생성자에 그대로 대응합니다.",
+      retry: "첫 인자가 클래스나 txt가 아닌 dataset 인스턴스인지, 네 설정이 빠짐없이 전달되는지 점검하세요.",
+    },
+    "exam-llm02-06": {
+      explanation: "Embedding은 token ID를 행 인덱스로 사용해 학습 가능한 벡터를 조회합니다. 생성자의 첫 인자는 조회 가능한 token 수, 둘째는 출력 벡터 차원입니다.",
+      tensor_flow: "input_ids int64 [B,T] → Embedding(vocab_size,D) → float [B,T,D]",
+      code_signal: "앞에서 vocab_size와 output_dim을 정의했고, 뒤에서 layer(input_ids) 형태로 호출합니다.",
+      retry: "Linear와 달리 입력 feature 수가 아니라 vocabulary 행 수를 첫 인자로 받는다는 점을 확인하세요.",
+    },
+    "exam-llm02-07": {
+      explanation: "Token embedding과 position embedding의 마지막 두 차원이 [T,D]로 맞으므로 덧셈 시 position이 batch 축으로 broadcasting됩니다. concatenate하면 D가 변해 모델 입력 규격이 깨집니다.",
+      tensor_flow: "token [B,T,D] + position [T,D] → input_embeddings [B,T,D]",
+      code_signal: "두 print의 shape와 '합산'이라는 region 주석이 연산과 출력 shape을 알려 줍니다.",
+      retry: "연산 전후 마지막 차원 D가 유지되는지 확인하고 다시 작성하세요.",
+    },
+  };
+  chapter.subjective.forEach((question) => Object.assign(question, feedback[question.id]));
+
   chapter.mcq = [
     {
       id: "exam-llm02-m1", source_question_id: "exam-llm02-01", topic: "다음 토큰 정렬",

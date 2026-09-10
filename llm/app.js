@@ -231,7 +231,11 @@
     recordAttempt(item.id, "subjective", correct, confidence("subConfidence"), hintUsed, correct ? "" : $("#errorCategory").value);
     const status = state.questions[item.id].status;
     const statusText = { mastered: "숙달", learned: "주관식 1회 성공", recognition: "5지선다 확인", wrong: "오답 재시험" }[status];
-    feedback($("#subFeedback"), `${correct ? "정답입니다." : "오답입니다."}\n현재 상태: ${statusText}\n\n정답\n${item.answer}`, correct ? "correct" : "wrong");
+    const explanation = item.explanation ? `\n\n왜 이 코드인가\n${item.explanation}` : "";
+    const tensorFlow = item.tensor_flow ? `\n\nTensor 흐름\n${item.tensor_flow}` : "";
+    const codeSignal = item.code_signal ? `\n\n문맥에서 찾을 신호\n${item.code_signal}` : "";
+    const retry = item.retry ? `\n\n다시 풀기\n${item.retry}` : "";
+    feedback($("#subFeedback"), `${correct ? "정답입니다." : "오답입니다."}\n현재 상태: ${statusText}\n\n정답\n${item.answer}${explanation}${tensorFlow}${codeSignal}${retry}`, correct ? "correct" : "wrong");
     saveState();
   }
   function nextSubjective() {
