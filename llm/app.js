@@ -186,6 +186,7 @@
   }
   function sourceContext(question) {
     if (!question) return "????";
+    if (question.problem_context) return question.problem_context;
     const source = course.cells[question.sourceId]?.source || "";
     const answer = question.answer;
     let position = -1, start = 0;

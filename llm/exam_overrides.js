@@ -241,3 +241,226 @@ print(input_embeddings.shape)`,
     excluded: ["URL", "로컬 경로", "의미 없는 고정 문자열"],
   };
 })();
+
+(() => {
+  "use strict";
+  const course = window.LLM_COURSE;
+  const chapter = course.chapters.find((item) => item.file === "Chapter_3_Excercise_Attention.ipynb");
+  if (!chapter) return;
+
+  chapter.notebook_goal = "입력 Tensor를 Q·K·V로 투영하고, 미래 토큰을 차단한 scaled dot-product attention을 직접 구현한다.";
+  chapter.overview = {
+    title: "Causal Attention이 문맥 벡터를 만드는 과정",
+    subtitle: "Q·K 유사도를 확률로 바꾼 뒤, 과거 Value를 가중합하여 각 토큰의 새 표현을 만든다.",
+    steps: [
+      { label: "Q·K·V 투영", code: "W_query(x), W_key(x), W_value(x)", flow: "[B,T,d_in] → 3 × [B,T,D]" },
+      { label: "토큰 간 점수", code: "Q @ K.transpose(1, 2)", flow: "[B,T,D] @ [B,D,T] → [B,T,T]" },
+      { label: "미래 차단", code: "masked_fill_(mask, -torch.inf)", flow: "미래 위치 score → -∞" },
+      { label: "확률 변환", code: "softmax(score / sqrt(D), dim=-1)", flow: "[B,T,T], 행별 합 = 1" },
+      { label: "정보 가중합", code: "attn_weights @ values", flow: "[B,T,T] @ [B,T,D] → [B,T,D]" }
+    ],
+    rules: [
+      "Query는 무엇을 찾을지, Key는 무엇과 비교할지, Value는 가져올 정보다.",
+      "모든 토큰 쌍의 점수 [T,T]를 만들려면 Key의 마지막 두 축을 전치한다.",
+      "마스크는 softmax 전에 -∞로 채워야 미래 위치 확률이 정확히 0이 된다.",
+      "score에는 Q·K를 쓰고 최종 context에는 attention weight·V를 쓴다."
+    ]
+  };
+
+  course.cells["exam-ch3-softmax"] = {
+    source: "attn_weights = torch.softmax(attn_scores / keys.shape[-1]**0.5, dim=-1)"
+  };
+  course.cells["exam-ch3-qkv-layers"] = {
+    source: "self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)\nself.W_key   = nn.Linear(d_in, d_out, bias=qkv_bias)\nself.W_value = nn.Linear(d_in, d_out, bias=qkv_bias)"
+  };
+  course.cells["exam-ch3-qkv-calc"] = {
+    source: "keys = self.W_key(x)\nqueries = self.W_query(x)\nvalues = self.W_value(x)"
+  };
+
+  const base = {
+    subject: "LLM", chapterId: chapter.id, chapterNumber: chapter.number,
+    chapterTitle: chapter.title, file: chapter.file, isSourceBlank: true,
+    source_type: "원본 노트북 실제 빈칸"
+  };
+  const make = (data) => ({ ...base, occurrence: 0, accepted_answers: [data.answer], ...data });
+
+  chapter.subjective = [
+    make({
+      id: "exam-llm03-01", topic: "Q·K·V 투영 레이어", difficulty: "3 · 연결 구현",
+      prompt: "원본 TODO와 같이 세 Linear 레이어의 타입과 입력·출력 차원을 채워 완성된 세 줄을 작성하세요.",
+      answer: "self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)\nself.W_key   = nn.Linear(d_in, d_out, bias=qkv_bias)\nself.W_value = nn.Linear(d_in, d_out, bias=qkv_bias)",
+      sourceId: "exam-ch3-qkv-layers",
+      problem_context: `# 1. 쿼리(Query), 키(Key), 밸류(Value)를 만들기 위한 선형 투영 레이어 정의
+# 입력 벡터(d_in)를 각각의 목적에 맞는 벡터(d_out)로 변환합니다.
+# TODO: Q/K/V 투영 레이어 타입과 인자를 채우세요.
+# 힌트: 입력 d_in, 출력 d_out을 사용하는 Linear 레이어를 선언하세요.
+self.W_query = nn.????(????, ????, bias=qkv_bias)
+self.W_key   = nn.????(????, ????, bias=qkv_bias)
+self.W_value = nn.????(????, ????, bias=qkv_bias)`,
+      explanation: "Q·K·V는 역할은 다르지만 모두 같은 입력 차원 d_in을 받아 같은 attention 차원 d_out으로 투영합니다. 서로 다른 Linear 인스턴스라 학습 가중치는 공유하지 않습니다.",
+      tensor_flow: "각 Linear: [B,T,d_in] → [B,T,d_out]",
+      code_signal: "생성자 인자 d_in, d_out과 세 속성명 W_query/W_key/W_value가 그대로 답의 구조를 제공합니다.",
+      retry: "세 레이어가 같은 크기이되 서로 다른 객체인지 확인하며 세 줄을 다시 작성하세요."
+    }),
+    make({
+      id: "exam-llm03-02", topic: "Q·K·V 벡터 계산", difficulty: "2 · 연결 구현",
+      prompt: "각 역할에 맞는 투영 레이어를 x에 적용하여 완성된 세 줄을 작성하세요.",
+      answer: "keys = self.W_key(x)\nqueries = self.W_query(x)\nvalues = self.W_value(x)",
+      sourceId: "exam-ch3-qkv-calc",
+      problem_context: `# 입력 x를 통과시켜 Query, Key, Value를 추출합니다.
+# region [Q, K, V 벡터 계산]
+# TODO: Q, K, V 계산 호출 대상을 채우세요.
+# 힌트: W_query, W_key, W_value를 각각 x에 적용하면 됩니다.
+keys = self.????(????)        # Shape: [b, num_tokens, d_out]
+queries = self.?????(????)   # Shape: [b, num_tokens, d_out]
+values = self.?????(????)    # Shape: [b, num_tokens, d_out]
+# endregion`,
+      explanation: "같은 x를 세 개의 서로 다른 projection에 넣습니다. 왼쪽 변수의 역할명과 오른쪽 W_* 이름이 일치해야 이후 score와 context 계산의 의미가 유지됩니다.",
+      tensor_flow: "x [B,T,d_in] → keys·queries·values [B,T,D]",
+      code_signal: "왼쪽 keys/queries/values와 같은 이름의 W_key/W_query/W_value를 대응시키면 됩니다.",
+      retry: "왼쪽 변수명을 하나씩 읽고 같은 역할의 W_*를 연결해 다시 작성하세요."
+    }),
+    make({
+      id: "exam-llm03-03", topic: "Attention score", difficulty: "2 · 핵심 연산",
+      prompt: "모든 Query와 Key 쌍의 내적이 [B,T,T]가 되도록 오른쪽 표현식을 완성하세요.",
+      answer: "queries @ keys.transpose(1, 2)", sourceId: "ch3-cell-126",
+      problem_context: `# Query와 Key의 내적을 통해 각 토큰 간의 관련성을 구합니다.
+# keys.transpose(1, 2): 행렬 곱을 위해 마지막 두 차원을 뒤집습니다.
+# TODO: 어텐션 스코어 행렬곱 피연산자를 채우세요.
+# 힌트: queries와 keys.transpose(1, 2)를 곱합니다.
+attn_scores = ???? @ ????.transpose(1, 2)`,
+      explanation: "queries의 마지막 D와 전치된 keys의 D가 곱해지고, 두 T축이 남아 모든 Query-Key 토큰 쌍의 점수가 만들어집니다.",
+      tensor_flow: "[B,T,D] @ [B,D,T] → [B,T,T]",
+      code_signal: "주석의 'Query와 Key의 내적'과 결과가 토큰 쌍이어야 한다는 점이 Key 전치를 요구합니다.",
+      retry: "행렬곱에서 안쪽 차원 D가 일치하는지 shape을 적은 뒤 다시 작성하세요."
+    }),
+    make({
+      id: "exam-llm03-04", topic: "Causal mask", difficulty: "1 · 단일 값",
+      prompt: "미래 토큰 위치가 softmax 후 정확히 0이 되도록 채울 값을 작성하세요.",
+      answer: "-torch.inf", sourceId: "ch3-cell-126",
+      problem_context: `# mask가 1인 미래 위치를 softmax에서 제외합니다.
+# TODO: 미래 시점의 어텐션 스코어를 가릴 값을 채우세요.
+# 힌트: Softmax를 통과하면 0이 되도록 마이너스 무한대를 입력하세요.
+attn_scores.masked_fill_(
+    self.mask.bool()[:num_tokens, :num_tokens],
+    ????
+)`,
+      explanation: "softmax는 exp(score)를 사용하므로 exp(-∞)=0입니다. 0이나 -1 같은 유한값은 작은 값일 뿐 확률이 완전히 사라지지 않습니다.",
+      tensor_flow: "masked score [B,T,T] → softmax에서 미래 위치 확률 0",
+      code_signal: "'Softmax를 통과하면 0'이라는 주석이 -torch.inf를 직접 지시합니다.",
+      retry: "exp(채울 값)의 결과가 정확히 0인지 생각하고 다시 작성하세요."
+    }),
+    make({
+      id: "exam-llm03-05", topic: "Scaled softmax", difficulty: "3 · 계산식",
+      prompt: "점수를 key 차원의 제곱근으로 나눈 후 마지막 축에서 확률화하는 전체 표현식을 작성하세요.",
+      answer: "torch.softmax(attn_scores / keys.shape[-1]**0.5, dim=-1)", sourceId: "exam-ch3-softmax",
+      problem_context: `# 스케일링: 차원이 커질수록 커지는 내적 값을 sqrt(d_k)로 나눕니다.
+# Softmax: 각 Query가 Key들에 부여할 확률로 변환합니다.
+# TODO: 어텐션 가중치 함수명을 채우세요.
+attn_weights = torch.????(
+    attn_scores / keys.shape[-1]**0.5, dim=-1
+)`,
+      explanation: "내적 분산을 안정시키기 위해 D 자체가 아니라 sqrt(D)로 나눕니다. dim=-1은 각 Query 행에서 모든 Key 위치에 대한 확률 합을 1로 만듭니다.",
+      tensor_flow: "scores [B,T,T] → scaled scores [B,T,T] → weights [B,T,T]",
+      code_signal: "함수명 빈칸 앞의 torch., 제곱근을 뜻하는 **0.5, Key 위치인 마지막 축이 단서입니다.",
+      retry: "나눗셈·제곱근·dim=-1 세 요소를 체크하며 전체 표현식을 다시 쓰세요."
+    }),
+    make({
+      id: "exam-llm03-06", topic: "Context vector", difficulty: "2 · 핵심 연산",
+      prompt: "각 Query의 attention 확률로 Value를 가중합하는 오른쪽 표현식을 작성하세요.",
+      answer: "attn_weights @ values", sourceId: "ch3-cell-126",
+      problem_context: `# 어텐션 가중치로 Value들을 가중 합산합니다.
+# TODO: 컨텍스트 벡터 계산 피연산자를 채우세요.
+# 힌트: attn_weights와 values를 곱해 최종 컨텍스트 벡터를 얻습니다.
+context_vec = attn_weights @ ????
+
+return context_vec`,
+      explanation: "attention weight는 어떤 토큰의 정보를 얼마나 가져올지 정한 [T,T] 확률이고, 실제 정보는 Value [T,D]에 있으므로 둘을 곱합니다.",
+      tensor_flow: "[B,T,T] @ [B,T,D] → context [B,T,D]",
+      code_signal: "'Value 가중 합산'이라는 주석과 출력 마지막 차원 D를 유지해야 한다는 점이 values를 지시합니다.",
+      retry: "score 계산의 K와 정보 결합의 V를 구분해 다시 작성하세요."
+    }),
+    make({
+      id: "exam-llm03-07", topic: "모듈 실행", difficulty: "1 · 호출",
+      prompt: "생성한 CausalAttention 인스턴스에 batch를 전달하는 오른쪽 표현식을 작성하세요.",
+      answer: "ca(batch)", sourceId: "ch3-cell-126",
+      problem_context: `context_length = batch.shape[1]
+
+# TODO: 어텐션 모듈 호출 대상을 채우세요.
+# 힌트: 직전에 생성한 CausalAttention 인스턴스(ca)를 호출하면 됩니다.
+ca = CausalAttention(d_in, d_out, context_length, 0.0)
+context_vecs = ????(batch)
+
+print(context_vecs.shape)`,
+      explanation: "nn.Module 인스턴스를 함수처럼 호출하면 내부적으로 __call__이 forward(batch)를 실행합니다. 클래스 CausalAttention이나 forward를 직접 호출하는 문제가 아닙니다.",
+      tensor_flow: "batch [B,T,d_in] → ca → context_vecs [B,T,d_out]",
+      code_signal: "바로 위에서 ca라는 인스턴스를 만들었고 빈칸 뒤에 이미 (batch)가 제공되어 있습니다.",
+      retry: "클래스명과 생성된 인스턴스 변수명을 구분해 다시 작성하세요."
+    })
+  ];
+
+  chapter.mcq = [
+    {
+      id: "exam-llm03-m1", source_question_id: "exam-llm03-02", topic: "Q·K·V 역할 대응", answer_index: 1,
+      prompt: "같은 x에서 역할이 올바르게 연결된 구현은?", explanation: "왼쪽 역할명과 같은 W_* projection을 x에 적용해야 합니다.",
+      choices: [
+        {text:"keys = self.W_query(x); queries = self.W_key(x); values = self.W_value(x)",why:"Q와 K projection이 서로 뒤바뀌었습니다."},
+        {text:"keys = self.W_key(x); queries = self.W_query(x); values = self.W_value(x)",why:"세 역할과 projection 이름이 정확히 대응합니다."},
+        {text:"keys = queries = values = x",why:"학습 가능한 서로 다른 투영을 수행하지 않습니다."},
+        {text:"keys = self.W_key; queries = self.W_query; values = self.W_value",why:"레이어를 x에 호출하지 않아 Tensor가 아니라 모듈 객체입니다."},
+        {text:"keys, queries, values = self.W_query(x)",why:"하나의 Tensor를 세 변수로 올바르게 분해할 수 없습니다."}
+      ]
+    },
+    {
+      id: "exam-llm03-m2", source_question_id: "exam-llm03-03", topic: "Score shape", answer_index: 3,
+      prompt: "queries와 keys가 [B,T,D]일 때 [B,T,T] 점수를 만드는 구현은?", explanation: "Key의 T와 D 축을 바꿔 D끼리 내적해야 합니다.",
+      choices: [
+        {text:"queries @ keys",why:"안쪽 차원이 D와 T여서 일반적으로 곱할 수 없습니다."},
+        {text:"queries.transpose(1, 2) @ keys",why:"결과가 [B,D,D]가 됩니다."},
+        {text:"keys @ queries.transpose(1, 2)",why:"shape은 [B,T,T]지만 Key가 행이 되어 Query별 검색이라는 의미가 반대입니다."},
+        {text:"queries @ keys.transpose(1, 2)",why:"[B,T,D]와 [B,D,T]가 곱해져 Query별 Key 점수가 됩니다."},
+        {text:"queries * keys",why:"원소별 곱으로 [B,T,D]에 머뭅니다."}
+      ]
+    },
+    {
+      id: "exam-llm03-m3", source_question_id: "exam-llm03-04", topic: "Mask 순서와 값", answer_index: 0,
+      prompt: "미래 위치의 attention 확률을 정확히 0으로 만드는 처리는?", explanation: "softmax 전에 미래 score를 -∞로 바꿉니다.",
+      choices: [
+        {text:"attn_scores.masked_fill_(mask.bool(), -torch.inf)",why:"exp(-∞)=0이므로 softmax 확률이 정확히 0이 됩니다."},
+        {text:"attn_scores.masked_fill_(mask.bool(), 0)",why:"0도 유한 score라 양의 확률을 가질 수 있습니다."},
+        {text:"attn_weights.masked_fill_(mask.bool(), -torch.inf)",why:"softmax 후 확률에 -∞를 넣으면 확률 분포가 깨집니다."},
+        {text:"attn_scores.masked_fill_(mask.bool(), torch.inf)",why:"미래 위치가 오히려 가장 큰 확률을 차지합니다."},
+        {text:"attn_scores = attn_scores * mask",why:"미래가 아닌 위치를 0으로 만드는 반대 마스크가 됩니다."}
+      ]
+    },
+    {
+      id: "exam-llm03-m4", source_question_id: "exam-llm03-05", topic: "Scaled softmax", answer_index: 2,
+      prompt: "scaled dot-product attention의 확률 계산으로 알맞은 것은?", explanation: "sqrt(D)로 나눈 score에 마지막 축 softmax를 적용합니다.",
+      choices: [
+        {text:"torch.softmax(attn_scores / keys.shape[-1], dim=0)",why:"D의 제곱근이 아니며 batch 축을 정규화합니다."},
+        {text:"torch.softmax(attn_scores * keys.shape[-1]**0.5, dim=-1)",why:"나누지 않고 곱해 score 분산을 더 키웁니다."},
+        {text:"torch.softmax(attn_scores / keys.shape[-1]**0.5, dim=-1)",why:"sqrt(D) 스케일과 Key 위치 축 정규화가 모두 맞습니다."},
+        {text:"torch.argmax(attn_scores, dim=-1)",why:"연속적인 가중치가 아니라 하나의 인덱스만 선택합니다."},
+        {text:"torch.softmax(keys / attn_scores, dim=-1)",why:"Q·K로 만든 score를 정규화하는 구조가 아닙니다."}
+      ]
+    },
+    {
+      id: "exam-llm03-m5", source_question_id: "exam-llm03-06", topic: "정보 가중합", answer_index: 4,
+      prompt: "[B,T,T] 확률을 사용해 [B,T,D] 문맥 정보를 만드는 연산은?", explanation: "확률 행렬과 실제 정보를 담은 Value를 곱합니다.",
+      choices: [
+        {text:"attn_weights @ keys",why:"Key는 비교용이며 가져올 정보는 Value입니다."},
+        {text:"attn_scores @ values",why:"정규화되지 않은 score를 사용합니다."},
+        {text:"queries @ values.transpose(1, 2)",why:"또 다른 [T,T] 점수를 만들 뿐 문맥 벡터가 아닙니다."},
+        {text:"attn_weights + values",why:"shape이 다르고 가중합도 수행하지 않습니다."},
+        {text:"attn_weights @ values",why:"각 Query의 확률로 Value를 가중합해 [B,T,D]를 만듭니다."}
+      ]
+    }
+  ];
+
+  chapter.questionCount = chapter.subjective.length;
+  chapter.exam_design = {
+    version: 2, style: "원본 골격 보존형 구현 문제",
+    difficulty: ["단일 호출·값", "핵심 Tensor 연산", "연결 계산식"],
+    excluded: ["함수 전체 가리기", "URL·경로 암기", "문맥 없는 단편 암기"]
+  };
+})();
