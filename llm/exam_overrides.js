@@ -242,6 +242,107 @@ print(input_embeddings.shape)`,
   };
 })();
 
+// Chapter 2 final pass: preserve the exercise notebook's original TODO/???? skeleton.
+(() => {
+  "use strict";
+  const course = window.LLM_COURSE;
+  const chapter = course.chapters.find((item) => item.file === "Chapter_2_Exercise_Dataset.ipynb");
+  if (!chapter) return;
+  const cells = {
+    "exam-ch2-final-codec":`integers = tokenizer.encode(text, allowed_special={"<|endoftext|>"})
+strings = tokenizer.decode(integers)`,
+    "exam-ch2-final-shift":"y = enc_sample[1:context_size+1]",
+    "exam-ch2-final-chunks":`input_chunk = token_ids[i : i + max_length]
+target_chunk = token_ids[i + 1 : i + max_length + 1]`,
+    "exam-ch2-final-getitem":"return self.input_ids[idx], self.target_ids[idx]",
+    "exam-ch2-final-loader":"dataset",
+    "exam-ch2-final-embedding":"embedding_layer = torch.nn.Embedding(vocab_size, output_dim)",
+    "exam-ch2-final-apply":"input_ids"
+  };
+  Object.entries(cells).forEach(([id, source]) => { course.cells[id] = {source}; });
+  const base={subject:"LLM",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,isSourceBlank:true,source_type:"원본 노트북 실제 빈칸"};
+  const make=(data)=>({...base,occurrence:0,accepted_answers:[data.answer],...data});
+  chapter.subjective=[
+    make({id:"exam-llm02-01",topic:"Tokenizer encode·decode",difficulty:"2 · 역할 구분",sourceId:"exam-ch2-final-codec",
+      prompt:"원본 TODO처럼 문자열을 token ID로 바꾸고 다시 문자열로 복원하는 완성된 두 줄을 작성하세요.",answer:cells["exam-ch2-final-codec"],
+      problem_context:`# region [token encoding]
+# TODO: 인코딩 메서드명을 채워 text를 토큰 ID로 변환하세요.
+# 힌트: tokenizer. 뒤 메서드 이름만 채우고 allowed_special 설정은 유지합니다.
+integers = tokenizer.????(text, allowed_special={"<|endoftext|>"})
+# endregion
+
+# region [token decoding]
+# TODO: 디코딩 메서드명을 채워 토큰 ID를 문자열로 복원하세요.
+strings = tokenizer.????(integers)
+# endregion`,
+      explanation:"encode는 문자열을 정수 ID 리스트로, decode는 ID 리스트를 문자열로 바꿉니다. 두 메서드의 방향을 바꾸면 입력 타입이 맞지 않습니다.",tensor_flow:"str → encode → list[int] → decode → str",code_signal:"출력 변수 integers와 strings, 그리고 주석의 '인코딩/복원'이 메서드 방향을 알려 줍니다.",retry:"각 줄의 입력 타입과 출력 타입을 먼저 적고 다시 완성하세요."}),
+    make({id:"exam-llm02-02",topic:"다음 토큰 정렬",difficulty:"1 · 슬라이싱",sourceId:"exam-ch2-final-shift",
+      prompt:"x와 길이는 같지만 한 칸 오른쪽인 y의 완성된 한 줄을 작성하세요.",answer:cells["exam-ch2-final-shift"],accepted_answers:[cells["exam-ch2-final-shift"],"1, 1"],
+      problem_context:`context_size = 4
+x = enc_sample[:context_size]
+# TODO: y 시퀀스가 x보다 한 칸 오른쪽으로 밀리도록 인덱스를 채우세요.
+# 두 빈칸은 모두 1이며 y는 x의 next-token 시퀀스가 됩니다.
+y = enc_sample[????:context_size+?????]`,
+      explanation:"target은 input의 각 위치에서 바로 다음 token이어야 하므로 시작과 끝을 모두 +1 이동합니다. 끝을 이동하지 않으면 길이가 하나 짧아집니다.",tensor_flow:"x [T] ↔ y [T], y의 시작 위치만 한 칸 뒤",code_signal:"'한 칸 오른쪽'과 '같은 길이'를 동시에 만족하려면 slice 양 끝에 +1이 필요합니다.",retry:"x와 y의 실제 index를 4개씩 써 보고 다시 작성하세요."}),
+    make({id:"exam-llm02-03",topic:"Sliding input·target chunk",difficulty:"3 · 연결 슬라이싱",sourceId:"exam-ch2-final-chunks",
+      prompt:"현재 i에서 길이 max_length의 input과 한 칸 뒤 target을 만드는 완성된 두 줄을 작성하세요.",answer:cells["exam-ch2-final-chunks"],
+      problem_context:`for i in range(0, len(token_ids) - max_length, stride):
+    # TODO: 입력 청크 슬라이싱 구간을 채우세요.
+    input_chunk = token_ids[???? : ???? + max_length]
+
+    # TODO: 타깃은 입력보다 한 칸 뒤에서 시작하고 같은 길이를 유지합니다.
+    target_chunk = token_ids[???? + ???? : ???? + max_length + ????]`,
+      explanation:"input은 i부터 i+max_length 직전까지, target은 양 끝을 모두 +1 이동합니다. stride는 다음 sample의 i를 이동시킬 뿐 target offset이 아닙니다.",tensor_flow:"token_ids → input [T], target [T]",code_signal:"loop 변수 i가 두 slice의 기준이고, next-token 관계가 target 양 끝의 +1을 결정합니다.",retry:"input의 시작·끝을 먼저 쓰고 각각에 +1을 더해 target을 만드세요."}),
+    make({id:"exam-llm02-04",topic:"Dataset 조회",difficulty:"1 · 반환 규약",sourceId:"exam-ch2-final-getitem",
+      prompt:"같은 idx의 입력과 정답 Tensor를 한 쌍으로 반환하는 완성된 return 문을 작성하세요.",answer:cells["exam-ch2-final-getitem"],
+      problem_context:`def __getitem__(self, idx):
+    # DataLoader가 해당 인덱스의 입력과 정답 쌍을 요청합니다.
+    # TODO: 같은 idx의 입력/타깃 쌍을 반환하세요.
+    return self.input_ids[????], self.target_ids[????]`,
+      explanation:"입력과 target은 생성 시 같은 순서로 저장되므로 동일한 idx를 사용해야 학습쌍이 유지됩니다.",tensor_flow:"idx → (input_ids[idx] [T], target_ids[idx] [T])",code_signal:"함수 인자 idx와 두 리스트의 같은 위치라는 주석이 답을 직접 제한합니다.",retry:"두 리스트에서 서로 다른 index를 쓰면 어떤 sample 쌍이 되는지 생각하세요."}),
+    make({id:"exam-llm02-05",topic:"DataLoader 연결",difficulty:"1 · 객체 선택",sourceId:"exam-ch2-final-loader",
+      prompt:"DataLoader의 첫 번째 빈칸에 들어갈 객체를 작성하세요.",answer:cells["exam-ch2-final-loader"],
+      problem_context:`dataset = GPTDatasetV1(txt, tokenizer, max_length, stride)
+
+# TODO: DataLoader의 첫 번째 인자를 채우세요.
+# 힌트: 바로 위에서 생성한 순회 대상 객체를 전달합니다.
+dataloader = DataLoader(
+    ????,
+    batch_size=batch_size,
+    shuffle=shuffle,
+    drop_last=drop_last,
+    num_workers=num_workers
+)`,
+      explanation:"DataLoader는 클래스나 원문이 아니라 __len__과 __getitem__을 제공하는 생성된 Dataset 인스턴스를 받습니다.",tensor_flow:"Dataset sample [T] → DataLoader batch [B,T]",code_signal:"바로 위 대입문의 왼쪽 변수 dataset이 이미 생성된 순회 대상입니다.",retry:"클래스와 인스턴스 중 DataLoader가 실제로 index 조회할 대상을 고르세요."}),
+    make({id:"exam-llm02-06",topic:"Embedding 생성",difficulty:"2 · 생성자 인자",sourceId:"exam-ch2-final-embedding",
+      prompt:"단어장 크기의 token ID를 output_dim 벡터로 바꾸는 완성된 layer 생성문을 작성하세요.",answer:cells["exam-ch2-final-embedding"],
+      problem_context:`vocab_size = 6
+output_dim = 3
+torch.manual_seed(123)
+# TODO: Embedding 생성자 인자를 채우세요.
+# 첫 인자는 단어장 크기, 두 번째는 각 벡터 차원입니다.
+embedding_layer = torch.nn.Embedding(????, ????)`,
+      explanation:"Embedding 표는 vocab_size개의 행과 output_dim개의 열을 가집니다. 두 인자를 바꾸면 조회 가능한 ID 범위와 벡터 차원이 뒤집힙니다.",tensor_flow:"weight [V,D], input IDs […] → output […,D]",code_signal:"주석의 '단어장 크기'와 '벡터 차원'이 생성자 인자 순서를 알려 줍니다.",retry:"Embedding weight의 예상 shape [V,D]를 먼저 쓰세요."}),
+    make({id:"exam-llm02-07",topic:"Embedding 적용",difficulty:"1 · 입력 Tensor",sourceId:"exam-ch2-final-apply",
+      prompt:"Embedding 레이어 호출의 빈칸에 들어갈 입력 변수를 작성하세요.",answer:cells["exam-ch2-final-apply"],
+      problem_context:`input_ids = torch.tensor([2, 3, 5, 1])
+
+# TODO: 임베딩 레이어 입력 변수를 채우세요.
+# Embedding은 정수 token ID Tensor를 입력으로 받습니다.
+token_embeddings = embedding_layer(????)`,
+      explanation:"Embedding은 실수 벡터나 원문이 아니라 행을 조회할 정수 token ID Tensor를 입력으로 받습니다.",tensor_flow:"input_ids [T] int64 → token_embeddings [T,D] float",code_signal:"바로 위 input_ids의 값과 주석의 '정수 token ID Tensor'가 입력 변수를 지시합니다.",retry:"레이어가 lookup할 index가 들어 있는 변수를 고르세요."})
+  ];
+  chapter.mcq=[
+    {id:"exam-llm02-m1",source_question_id:"exam-llm02-01",topic:"Tokenizer 방향",prompt:"text를 ID로 바꾸고 다시 복원하는 순서는?",answer_index:0,explanation:"문자열에는 encode, ID에는 decode를 적용합니다.",choices:[{text:"encode(text) → decode(ids)",why:"입출력 타입과 방향이 맞습니다."},{text:"decode(text) → encode(ids)",why:"메서드 입력 타입이 반대입니다."},{text:"encode(ids) → decode(text)",why:"각 입력이 뒤바뀌었습니다."},{text:"tokenize(ids) → detokenize(text)",why:"이 노트북 tokenizer의 실제 API가 아닙니다."},{text:"decode(decode(text))",why:"문자열을 ID로 만드는 단계가 없습니다."}]},
+    {id:"exam-llm02-m2",source_question_id:"exam-llm02-02",topic:"Next-token slice",prompt:"x와 같은 길이의 다음-token target은?",answer_index:1,explanation:"slice 시작과 끝을 모두 +1 이동합니다.",choices:[{text:"enc_sample[1:context_size]",why:"길이가 하나 짧습니다."},{text:"enc_sample[1:context_size+1]",why:"한 칸 이동하면서 길이를 유지합니다."},{text:"enc_sample[:context_size]",why:"입력과 같습니다."},{text:"enc_sample[-1:context_size]",why:"마지막 원소부터의 잘못된 구간입니다."},{text:"enc_sample[context_size:]",why:"위치별 다음 token 쌍이 아닙니다."}]},
+    {id:"exam-llm02-m3",source_question_id:"exam-llm02-03",topic:"Sliding target",prompt:"input이 token_ids[i:i+T]일 때 target은?",answer_index:3,explanation:"양 끝을 한 칸 오른쪽으로 이동합니다.",choices:[{text:"token_ids[i:i+T]",why:"현재 token 자체입니다."},{text:"token_ids[i+1:i+T]",why:"길이가 T-1입니다."},{text:"token_ids[i+T:i+2*T]",why:"다음 chunk이지 위치별 다음 token이 아닙니다."},{text:"token_ids[i+1:i+T+1]",why:"next-token 정렬과 길이가 모두 맞습니다."},{text:"token_ids[i-1:i+T-1]",why:"이전 token 방향입니다."}]},
+    {id:"exam-llm02-m4",source_question_id:"exam-llm02-05",topic:"DataLoader 대상",prompt:"DataLoader의 첫 인자로 알맞은 것은?",answer_index:2,explanation:"초기화된 Dataset 인스턴스를 전달합니다.",choices:[{text:"GPTDatasetV1",why:"클래스 자체입니다."},{text:"txt",why:"원문 문자열은 Dataset 규약을 제공하지 않습니다."},{text:"dataset",why:"생성된 Dataset 인스턴스입니다."},{text:"tokenizer",why:"Dataset 내부 변환 도구입니다."},{text:"dataset.input_ids",why:"target과의 쌍 반환 규약을 잃습니다."}]},
+    {id:"exam-llm02-m5",source_question_id:"exam-llm02-06",topic:"Embedding 인자",prompt:"weight shape [V,D]를 만드는 생성자는?",answer_index:4,explanation:"첫 인자는 조회 행 수 V, 둘째는 벡터 차원 D입니다.",choices:[{text:"Embedding(D,V)",why:"두 의미가 반대입니다."},{text:"Linear(V,D)",why:"token ID lookup이 아닙니다."},{text:"Embedding(input_ids,D)",why:"첫 인자는 Tensor가 아니라 정수 V입니다."},{text:"Embedding(V,V)",why:"출력 차원을 D로 설정하지 않습니다."},{text:"Embedding(V,D)",why:"단어장 행과 embedding 열이 맞습니다."}]}
+  ];
+  chapter.questionCount=chapter.subjective.length;
+  chapter.exam_design={version:3,style:"원본 TODO·???? 골격 보존형",difficulty:["단일 빈칸","다중 인자","연결 슬라이싱"],excluded:["원본에 없던 빈칸","URL·경로 암기","함수 전체 삭제"]};
+})();
+
 (() => {
   "use strict";
   const course = window.LLM_COURSE;
