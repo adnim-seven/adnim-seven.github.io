@@ -7,8 +7,8 @@
   .brand-mark { width: 32px; height: 32px; }
   .brand small { font-size: .66rem; }
 
-  .app-shell { padding: 8px; gap: 10px; }
-  .sidebar { padding: 9px; border-radius: 12px; box-shadow: 0 5px 16px rgba(25,48,85,.07); }
+  .app-shell { padding: 6px 3px; gap: 8px; }
+  .sidebar { padding: 7px; border-radius: 10px; box-shadow: 0 4px 12px rgba(25,48,85,.06); }
   #chapterNav {
     margin: 0 0 9px;
     gap: 7px;
@@ -29,8 +29,8 @@
     position: sticky;
     top: 58px;
     z-index: 15;
-    margin: 0 -8px 9px;
-    padding: 6px 8px;
+    margin: 0 -3px 8px;
+    padding: 5px 3px;
     border-radius: 0;
     box-shadow: 0 3px 9px rgba(25,48,85,.1);
     overflow: visible;
@@ -44,13 +44,13 @@
   }
 
   .workspace, .panel, .study-intro, .key-points, .key-card, .key-body { min-width: 0; max-width: 100%; }
-  .panel { padding: 14px 12px; min-height: 0; border-radius: 12px; overflow: hidden; }
+  .panel { padding: 12px 8px; min-height: 0; border-radius: 10px; overflow: hidden; }
   .study-intro { padding-bottom: 14px; }
   .study-intro h2, .results-head h2 { font-size: 1.12rem; word-break: keep-all; overflow-wrap: anywhere; }
   .study-intro p, .notebook-goal, .key-body p, .theory-card p, .theory-card dd { word-break: keep-all; overflow-wrap: anywhere; }
   .key-points { gap: 9px; margin-top: 12px; }
-  .key-card h3 { padding: 10px 12px; }
-  .key-body { padding: 11px 12px; }
+  .key-card h3 { padding: 9px 10px; }
+  .key-body { padding: 10px; }
   .panel > h2 { font-size: 1.14rem; }
   .question-meta { align-items: flex-start; gap: 6px; flex-wrap: wrap; }
   .question-meta strong { max-width: 100%; overflow-wrap: anywhere; }
@@ -58,7 +58,7 @@
 
   .code-box {
     max-width: 100%;
-    padding: 12px;
+    padding: 10px;
     font-size: 12.5px;
     line-height: 1.55;
     white-space: pre;
@@ -81,7 +81,7 @@
   .answer-input { min-height: 145px; font-size: 13px; }
   .primary-button, .quiet-button, .danger-button, .text-button { min-height: 44px; padding: 10px 12px; }
   .panel-footer .primary-button { width: 100%; }
-  .feedback { padding: 12px; font-size: .83rem; }
+  .feedback { padding: 10px; font-size: .83rem; }
 
   .results-head { gap: 10px; flex-wrap: wrap; }
   .result-cards { gap: 7px; }
@@ -94,7 +94,7 @@
   .full-code-head h2 { font-size: 1.12rem; }
   .full-code-head p { font-size: .81rem; }
   .full-code-head button { width: 100%; }
-  .theory-before-code { margin: 14px 0; padding: 12px; }
+  .theory-before-code { margin: 12px 0; padding: 9px; }
   .theory-title h3 { font-size: 1rem; }
   .theory-grid { gap: 8px; }
   .theory-card { padding: 11px; }
