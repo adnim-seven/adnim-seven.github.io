@@ -1,14 +1,19 @@
 /* Mobile-first overrides shared by every subject. */
+html, body { max-width: 100%; overflow-x: hidden; }
+.app-shell, .sidebar, .workspace, .panel, .full-code-cells,
+.code-cell, .code-compare, .code-pane { min-width: 0; }
+.code-box { max-width: 100%; }
+
 @media (max-width: 650px) {
   html { scroll-padding-top: 178px; }
-  body { overflow-x: hidden; }
+  body { width: 100%; max-width: 100vw; overflow-x: hidden; }
   .topbar { height: 58px; padding: 0 12px; }
   .brand { gap: 8px; font-size: .98rem; }
   .brand-mark { width: 32px; height: 32px; }
   .brand small { font-size: .66rem; }
 
-  .app-shell { padding: 6px 3px; gap: 8px; }
-  .sidebar { padding: 7px; border-radius: 10px; box-shadow: 0 4px 12px rgba(25,48,85,.06); }
+  .app-shell { width: 100%; max-width: 100vw; min-width: 0; padding: 6px 3px; gap: 8px; grid-template-columns: minmax(0, 1fr); overflow-x: hidden; }
+  .sidebar { width: 100%; max-width: 100%; min-width: 0; padding: 7px; border-radius: 10px; box-shadow: 0 4px 12px rgba(25,48,85,.06); overflow-x: hidden; }
   #chapterNav {
     margin: 0 0 9px;
     gap: 7px;
@@ -29,7 +34,9 @@
     position: sticky;
     top: 58px;
     z-index: 15;
-    margin: 0 -3px 8px;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 0 8px;
     padding: 5px 3px;
     border-radius: 0;
     box-shadow: 0 3px 9px rgba(25,48,85,.1);
@@ -43,7 +50,13 @@
     line-height: 1.25;
   }
 
-  .workspace, .panel, .study-intro, .key-points, .key-card, .key-body { min-width: 0; max-width: 100%; }
+  .workspace, .panel, .study-intro, .key-points, .key-card, .key-body,
+  .theory-before-code, .theory-grid, .theory-card, .full-code-cells,
+  .code-cell, .code-compare, .code-pane, .choices, .choice {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
   .panel { padding: 12px 8px; min-height: 0; border-radius: 10px; overflow: hidden; }
   .study-intro { padding-bottom: 14px; }
   .study-intro h2, .results-head h2 { font-size: 1.12rem; word-break: keep-all; overflow-wrap: anywhere; }
@@ -57,6 +70,7 @@
   .question-prompt { font-size: .94rem; }
 
   .code-box {
+    width: 100%;
     max-width: 100%;
     padding: 10px;
     font-size: 12.5px;
@@ -113,8 +127,8 @@
   .code-cell summary { min-height: 50px; padding: 10px; gap: 7px; }
   .code-cell summary strong { font-size: .82rem; overflow-wrap: anywhere; }
   .code-pane-title { padding: 8px 10px; font-size: .75rem; }
-  .code-cell .code-box { max-height: 68vh; padding: 8px 0; white-space: normal; }
-  .code-line { grid-template-columns: 30px minmax(max-content, 1fr); font-size: 12px; line-height: 1.55; }
+  .code-cell .code-box { width: 100%; max-width: 100%; max-height: 68vh; padding: 8px 0; white-space: normal; overflow-x: auto; }
+  .code-line { width: max-content; min-width: 100%; grid-template-columns: 30px auto; font-size: 12px; line-height: 1.55; }
   .code-line .line-no { padding-left: 5px; }
   .code-line .line-text { padding-right: 12px; white-space: pre; }
   .code-compare { grid-template-columns: 1fr; }
