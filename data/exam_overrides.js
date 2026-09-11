@@ -37,8 +37,7 @@ labels.append(data_seq[i + sequence_length, 0])
 features, labels = np.array(features), np.array(labels)
 features = torch.tensor(features, dtype=torch.float32)
 labels = torch.tensor(labels, dtype=torch.float32)`,
-    "exam-data1-train":`batch_x, batch_y = batch_x.to(device), batch_y.to(device)
-pred = model(batch_x)[:, -1, 0]
+    "exam-data1-train":`pred = model(batch_x)[:, -1, 0]
 loss = loss_fn(pred, batch_y)
 optimizer.zero_grad()
 loss.backward()
@@ -77,13 +76,13 @@ for t in range(target_len):
 features, labels = ????, ????
 features = torch.tensor(????, dtype=????)
 labels = torch.tensor(????, dtype=????)`,explanation:"입력은 i부터 i+sequence_length 직전까지, 정답은 바로 다음 시점 i+sequence_length의 첫 feature입니다. 리스트를 NumPy 배열로 바꾼 뒤 모델 연산을 위해 둘 다 float32 Tensor로 만듭니다.",tensor_flow:"scaled [N,1] → lists → NumPy arrays → X [N-T,T,1], y [N-T] float32",code_signal:"주석 sequence_length와 출력 shape [956,50,1]/[956]이 slice와 label index를 결정합니다.",retry:"작은 T=3 예제로 입력 [0:3]의 정답 index가 3인지 확인하세요."}),
-    make({id:"exam-data01-02",topic:"Training Step",difficulty:"3 · 전체 학습 연결",sourceId:"exam-data1-train",prompt:"batch를 device로 옮기고 마지막 시점 예측의 MSE gradient로 파라미터를 갱신하는 여섯 줄을 작성하세요.",answer:cells["exam-data1-train"],problem_context:`# model output: [B,T,1], target: [B]
-batch_x, batch_y = ????, ????
+    make({id:"exam-data01-02",topic:"Training Step",difficulty:"3 · 전체 학습 연결",sourceId:"exam-data1-train",prompt:"device에 준비된 batch에서 마지막 시점 예측의 MSE gradient로 파라미터를 갱신하는 다섯 줄을 작성하세요.",answer:cells["exam-data1-train"],problem_context:`# batch_x and batch_y are already on device
+# model output: [B,T,1], target: [B]
 pred = model(batch_x)[????, ????, ????]
 loss = loss_fn(????, ???? )
 optimizer.????()
 loss.????()
-optimizer.????()`,explanation:"입력·정답을 같은 device로 옮기고 [B,T,1]에서 마지막 시점의 scalar [B]를 선택해 target과 MSE를 계산합니다. 이전 gradient를 지운 뒤 backward와 step을 실행합니다.",tensor_flow:"[B,T,1] → model [B,T,1] → [:,-1,0] [B] → loss scalar → gradients",code_signal:"문제 주석에 출력 shape과 마지막 timestep index가 명시되고 optimizer 학습 표준 순서가 이어집니다.",retry:"각 줄 뒤 shape를 쓰고 zero_grad→backward→step 순서를 다시 확인하세요."}),
+optimizer.????()`,explanation:"[B,T,1]에서 마지막 시점의 scalar [B]를 선택해 target과 MSE를 계산합니다. 이전 gradient를 지운 뒤 backward와 step을 실행합니다.",tensor_flow:"[B,T,1] → model [B,T,1] → [:,-1,0] [B] → loss scalar → gradients",code_signal:"문제 주석에 출력 shape과 마지막 timestep index가 명시되고 optimizer 학습 표준 순서가 이어집니다.",retry:"각 줄 뒤 shape를 쓰고 zero_grad→backward→step 순서를 다시 확인하세요."}),
     make({id:"exam-data01-03",topic:"Evaluation Step",difficulty:"2 · 평가 연결",sourceId:"exam-data1-eval",prompt:"no_grad 안에서 평가 batch를 이동하고 마지막 시점 예측과 test loss를 계산하는 세 줄을 작성하세요.",answer:cells["exam-data1-eval"],problem_context:`with torch.no_grad():
     for test_x, test_y in test_loader:
         test_x, test_y = ????, ????
@@ -133,6 +132,42 @@ for t in range(????):
     {id:"exam-data01-m4",source_question_id:"exam-data01-08",topic:"Decoder Head",prompt:"Decoder의 예측을 다음 step 입력으로 재사용하려면 fc 출력 차원은?",answer_index:4,explanation:"다음 RNN 입력 feature 수와 같아야 합니다.",choices:[{text:"hidden_size",why:"RNN hidden 출력과 같지만 다음 input feature와 다를 수 있습니다."},{text:"num_layers",why:"layer 수는 feature 차원이 아닙니다."},{text:"target_len",why:"시간 step 수입니다."},{text:"batch_size",why:"출력 feature와 무관합니다."},{text:"input_size",why:"input=out feedback의 shape이 맞습니다."}]},
     {id:"exam-data01-m5",source_question_id:"exam-data01-04",topic:"Metric 인자",prompt:"sklearn RMSE 호출의 인자 순서는?",answer_index:2,explanation:"정답 y_true, 예측 y_pred 순서입니다.",choices:[{text:"prediction만",why:"비교 대상이 없습니다."},{text:"test_predictions,y_test",why:"일반 관례와 반대입니다."},{text:"y_test,test_predictions",why:"정답과 예측 순서가 맞습니다."},{text:"model,X_test",why:"Tensor 모델 입력이 metric 인자가 아닙니다."},{text:"loss,y_test",why:"batch loss를 평가 배열과 비교하지 않습니다."}]}
   ];chapter.questionCount=chapter.subjective.length;chapter.exam_design={version:2,style:"practice TODO·solution 검증형",difficulty:["데이터·Metric","Tensor 축","모델·학습 독립 구현"],excluded:["ticker·날짜","출력 수치 암기","경로"]};
+})();
+
+(() => {
+  "use strict";
+  const course=window.LLM_COURSE;
+  if(course.chapters.some(c=>c.id==="data-review-03")) return;
+  const ts=course.chapters.find(c=>c.file==="ts_practice.ipynb");
+  const gcf=course.chapters.find(c=>c.file==="RecSys_GCF_practice.ipynb");
+  if(!ts||!gcf) return;
+  const cells={
+    "exam-data-review-window":`features.append(data_seq[i:i + sequence_length])\nlabels.append(data_seq[i + sequence_length, 0])\nfeatures, labels = np.array(features), np.array(labels)\nfeatures = torch.tensor(features, dtype=torch.float32)\nlabels = torch.tensor(labels, dtype=torch.float32)`,
+    "exam-data-review-rnntrain":`out, _ = self.rnn(x)\nreturn self.fc(out)\npred = model(batch_x)[:, -1, 0]\nloss = loss_fn(pred, batch_y)`,
+    "exam-data-review-conv":`x = x.transpose(1, 2)\nout = self.conv1d(x)\nout = out.transpose(1, 2)\nout = self.fc(out)`,
+    "exam-data-review-message":`norm = 1.0/torch.sqrt(deg[src]*deg[dst])\nedge_messages_for_dst = self.W1(src_feat) + self.W2(src_feat*dst_feat)\nedge_messages_for_dst *= norm.unsqueeze(1)\naggregated_messages.index_add_(0, dst, edge_messages_for_dst)`,
+    "exam-data-review-forward":`node_features = layer(edge_index, node_features,self.num_users, self.num_items)\nlayer_outputs.append(node_features)\nfinal_features = torch.concat(layer_outputs,dim=-1)\nitem_features = final_features[self.num_users:]`,
+    "exam-data-review-rank":`pos_scores = torch.sum(user_emb * pos_item_emb, dim=1)\nneg_scores = torch.sum(user_emb * neg_item_emb, dim=1)\nloss = -torch.mean(F.logsigmoid(pos_scores - neg_scores))\nscores = torch.matmul(item_features, user_emb)\ntopk_scores, topk_indices = torch.topk(scores, k=k)`
+  };
+  Object.entries(cells).forEach(([id,source])=>course.cells[id]={source});
+  const base={subject:"Data",chapterId:"data-review-03",chapterNumber:"03",chapterTitle:"Data 종합 실전",file:"Time Series + NGCF mixed review",occurrence:0,isSourceBlank:true,source_type:"두 실습 노트북 혼합 전이 문제"};
+  const make=d=>({...base,accepted_answers:[d.answer],...d});
+  const subjective=[
+    make({id:"exam-data-review-01",topic:"시계열 데이터 구성",difficulty:"2 · Completion",sourceId:"exam-data-review-window",prompt:"연속된 실수 시계열에서 과거 T개를 입력, 다음 값을 label로 만들고 학습 가능한 float32 Tensor로 변환하는 핵심 다섯 줄을 작성하세요.",answer:cells["exam-data-review-window"],problem_context:`for i in range(len(data_seq) - sequence_length):\n    ????\n    ????\n????\n????\n????`,explanation:"시간 순서를 유지한 slice와 바로 다음 index로 지도학습 쌍을 만들고, 리스트를 배열로 모은 뒤 float32 Tensor로 바꿉니다.",tensor_flow:"[N,1] → X [N-T,T,1], y [N-T]",code_signal:"loop 범위의 sequence_length와 RNN 입력 dtype이 index와 변환을 결정합니다.",retry:"T=3인 다섯 값으로 X 첫 항과 y 첫 항을 직접 써 보세요."}),
+    make({id:"exam-data-review-02",topic:"RNN 회귀 연결",difficulty:"3 · Independent",sourceId:"exam-data-review-rnntrain",prompt:"batch-first RNN의 모든 시점 hidden 출력에 scalar head를 적용하고, 마지막 시점 예측만 target과 비교하는 네 줄을 작성하세요.",answer:cells["exam-data-review-rnntrain"],problem_context:`def forward(self, x):\n    ????\n    ????\n\n# model output [B,T,1], target [B]\npred = ????\nloss = ????`,explanation:"RNN의 sequence 출력 [B,T,H]를 Linear가 [B,T,1]로 바꾸고, 다음 값 label [B]와 shape를 맞추기 위해 마지막 time과 feature 0을 선택합니다.",tensor_flow:"[B,T,F] → [B,T,H] → [B,T,1] → [B] → scalar",code_signal:"target shape [B]와 batch_first=True가 [:,-1,0]의 세 index를 알려줍니다.",retry:"각 index가 batch, time, feature 중 어느 축인지 표시하세요."}),
+    make({id:"exam-data-review-03",topic:"Conv1D 축 변환",difficulty:"2 · Shape",sourceId:"exam-data-review-conv",prompt:"[B,T,F] 시계열을 Conv1d [B,C,L] 형식으로 바꾸고 convolution 후 다시 시점별 Linear에 전달하는 네 줄을 작성하세요.",answer:cells["exam-data-review-conv"],problem_context:`def forward(self, x):\n    x = ????\n    out = ????\n    out = ????\n    out = ????`,explanation:"feature를 channel 축으로 옮겨 Conv1d를 호출한 뒤 time을 다시 가운데 축으로 복원해야 Linear가 마지막 hidden channel을 읽습니다.",tensor_flow:"[B,T,F] → [B,F,T] → [B,H,T'] → [B,T',H] → [B,T',1]",code_signal:"Conv1d는 channel-first, Linear는 마지막 축을 입력 feature로 사용합니다.",retry:"각 줄 뒤 shape를 적어 마지막 H가 fc의 in_features인지 확인하세요."}),
+    make({id:"exam-data-review-04",topic:"그래프 메시지 전달",difficulty:"3 · Independent",sourceId:"exam-data-review-message",prompt:"사용자–아이템 edge에서 dst가 받을 메시지를 degree로 정규화하고 dst node에 누적하는 핵심 네 줄을 작성하세요.",answer:cells["exam-data-review-message"],problem_context:`norm = ????\nedge_messages_for_dst = ????\nedge_messages_for_dst *= ????\n????`,explanation:"양 끝 degree의 제곱근 역수로 edge 영향력을 보정하고, 이웃 src와 src·dst interaction으로 메시지를 만든 뒤 목적지 dst에 합산합니다.",tensor_flow:"deg [V] + edge features [E,D] → norm [E,1] → messages [E,D] → nodes [V,D]",code_signal:"for_dst는 목적지, src_feat는 이웃 정보, index_add_의 index는 수신 node입니다.",retry:"for_src 버전으로 방향만 바꿔 새 variation을 작성하세요."}),
+    make({id:"exam-data-review-05",topic:"NGCF 다중 Hop 표현",difficulty:"2 · Integration",sourceId:"exam-data-review-forward",prompt:"각 NGCF layer로 node 표현을 갱신·저장하고 모든 hop 표현을 feature 축으로 연결한 뒤 item 구간을 선택하는 네 줄을 작성하세요.",answer:cells["exam-data-review-forward"],problem_context:`for layer in self.layers:\n    ????\n    ????\nfinal_features = ????\nitem_features = ????`,explanation:"layer별 출력은 다음 layer 입력인 동시에 최종 representation의 일부입니다. node 축을 유지해 feature 축으로 concat하고 user 구간 이후를 item으로 선택합니다.",tensor_flow:"H0...HL → [V,sumD] → [I,sumD]",code_signal:"layer_outputs가 초기 embedding을 포함하고 node 순서가 user 다음 item입니다.",retry:"user_features를 만드는 대응 slice도 작성하세요."}),
+    make({id:"exam-data-review-06",topic:"학습 목표와 추천",difficulty:"3 · Transfer",sourceId:"exam-data-review-rank",prompt:"관측 item이 negative item보다 높은 점수를 갖도록 loss를 만들고, 평가 시 한 사용자의 전체 item 중 Top-K를 고르는 다섯 줄을 작성하세요.",answer:cells["exam-data-review-rank"],problem_context:`pos_scores = ????\nneg_scores = ????\nloss = ????\n\n# evaluation\nscores = ????\ntopk_scores, topk_indices = ????`,explanation:"학습에서는 user와 두 item의 내적 점수 차이에 BPR을 적용합니다. 평가에서는 같은 내적을 모든 item에 계산해 가장 큰 K개 index를 선택합니다.",tensor_flow:"train: 3×[B,D] → loss; eval: [I,D]@[D] → [I] → K",code_signal:"학습은 batch별 dim=1 합, 평가는 matrix-vector multiply라는 입력 shape 차이가 연산을 결정합니다.",retry:"negative score가 더 클 때 loss와 gradient가 어느 방향으로 움직여야 하는지 설명하세요."})
+  ];
+  const mcq=[
+    {id:"exam-data-review-m1",source_question_id:"exam-data-review-02",topic:"Tensor 축",prompt:"RNN 출력 [B,T,1]과 다음 값 정답 [B]를 비교할 index는?",answer_index:1,explanation:"batch는 유지하고 마지막 time과 단일 feature를 선택합니다.",choices:[{text:"[0,-1,0]",why:"첫 batch만 남습니다."},{text:"[:,-1,0]",why:"batch별 마지막 시점 scalar입니다."},{text:"[:,:,0]",why:"time 축이 남습니다."},{text:"[-1,:,:]",why:"마지막 batch입니다."},{text:"mean()",why:"batch까지 하나로 줄입니다."}]},
+    {id:"exam-data-review-m2",source_question_id:"exam-data-review-03",topic:"Layer 입력 형식",prompt:"[B,T,F]를 nn.Conv1d에 전달하기 직전 shape는?",answer_index:3,explanation:"Conv1d는 [batch,channel,length]를 요구합니다.",choices:[{text:"[T,B,F]",why:"batch와 time을 바꿨습니다."},{text:"[B,T,F]",why:"channel-first가 아닙니다."},{text:"[F,T,B]",why:"batch가 마지막입니다."},{text:"[B,F,T]",why:"feature가 channel, time이 length입니다."},{text:"[B,T]",why:"feature 축이 사라졌습니다."}]},
+    {id:"exam-data-review-m3",source_question_id:"exam-data-review-04",topic:"Broadcasting",prompt:"norm [E]을 message [E,D]에 edge별로 곱하기 위한 shape는?",answer_index:0,explanation:"마지막 singleton 축을 추가해 [E,1]로 만듭니다.",choices:[{text:"norm.unsqueeze(1)",why:"[E,1]로 edge마다 모든 feature에 적용됩니다."},{text:"norm.unsqueeze(0)",why:"[1,E]라 D와 맞지 않습니다."},{text:"norm.squeeze()",why:"이미 1차원입니다."},{text:"norm.flatten()",why:"shape가 변하지 않습니다."},{text:"norm.repeat(E)",why:"불필요하게 길이가 늘어납니다."}]},
+    {id:"exam-data-review-m4",source_question_id:"exam-data-review-06",topic:"학습 방식 구분",prompt:"다음 값 회귀의 MSE와 추천의 BPR을 올바르게 구분한 것은?",answer_index:4,explanation:"MSE는 수치 오차, BPR은 positive-negative 순위 차이를 학습합니다.",choices:[{text:"둘 다 Top-K 순위만 학습",why:"MSE는 값 차이를 학습합니다."},{text:"MSE는 graph degree, BPR은 시계열",why:"대상이 뒤바뀌었습니다."},{text:"둘 다 정답 class 확률 학습",why:"두 실습 모두 분류 cross entropy가 아닙니다."},{text:"MSE는 positive-negative 차이, BPR은 절대값",why:"목표가 반대입니다."},{text:"MSE는 예측값-정답 오차, BPR은 positive-negative 점수 차이",why:"두 loss의 목적을 정확히 구분합니다."}]},
+    {id:"exam-data-review-m5",source_question_id:"exam-data-review-05",topic:"표현 결합",prompt:"RNN은 마지막 시점을 선택하지만 NGCF는 여러 layer 출력을 concat하는 이유는?",answer_index:2,explanation:"시계열은 다음 값에 필요한 최종 시간 문맥을, NGCF는 서로 다른 hop 범위 정보를 사용합니다.",choices:[{text:"항상 Tensor를 1차원으로 만들기 위해",why:"둘 다 batch와 feature 축이 남습니다."},{text:"메모리를 최대한 사용하기 위해",why:"학습 의미가 아닙니다."},{text:"시간의 최종 문맥과 graph의 여러 hop 정보를 각각 쓰기 위해",why:"두 구조의 정보 축 차이를 설명합니다."},{text:"PyTorch 문법상 필수라서",why:"모델 설계 선택입니다."},{text:"평가 metric이 요구해서",why:"metric 입력 전에 모델 표현을 만드는 이유입니다."}]}
+  ];
+  course.chapters.push({id:"data-review-03",number:"03",title:"Data 종합 실전",file:"Time Series + NGCF mixed review",notebook_goal:"시계열 예측과 그래프 추천의 데이터 구성·Tensor 축·모델·학습·평가 코드를 단서 없이 구분해 구현한다.",capability:"문제의 입력 shape와 학습 목적만 보고 sequence regression과 graph ranking에 필요한 코드를 선택하고 구현할 수 있다.",summary:"두 노트북을 섞어 method 이름이 없는 상황에서도 데이터 흐름, layer shape, loss, metric을 복원하는 누적 모의고사입니다.",overview:{title:"Data 과목 통합 코드 지도",subtitle:"입력 구조는 다르지만 두 실습 모두 데이터를 Tensor로 구성하고 모델 출력과 정답 신호를 loss로 연결한 뒤 목적에 맞는 metric으로 검증한다.",steps:[{label:"데이터",code:"window or edge_index",flow:"raw records → model input"},{label:"모델",code:"RNN/Conv1D or NGCF",flow:"input → learned representation"},{label:"학습",code:"MSE or BPR",flow:"prediction + target signal → loss"},{label:"평가",code:"RMSE/MAPE or Recall/Precision/NDCG",flow:"outputs → metrics"}]},rules:["shape를 먼저 적고 layer가 기대하는 축과 맞춘다.","loss가 절대 수치 예측인지 상대 순위 학습인지 구분한다.","학습 코드와 평가 코드는 gradient 갱신 유무로 구분한다.","정답 확인 전 직접 코드를 작성하고 confidence를 기록한다."],key_points:[...ts.key_points.slice(0,3),...gcf.key_points.slice(1,4)],theory_guide:[...ts.theory_guide.slice(0,3),...gcf.theory_guide.slice(0,4)],full_code_cells:[...(ts.full_code_cells||[]).slice(0,2),...(gcf.full_code_cells||[])],subjective,mcq,questionCount:subjective.length,exam_design:{version:2,style:"과목 누적·교차 모의고사",difficulty:["completion","shape discrimination","independent transfer"],excluded:["URL·파일 경로","고정 수치 암기"]}});
 })();
 
 (() => {
