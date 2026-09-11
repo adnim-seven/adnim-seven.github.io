@@ -1,5 +1,5 @@
 (() => {
-const $=s=>document.querySelector(s), KEY='ai-specialist-mock-1-v1', items=window.EXAM;
+const $=s=>document.querySelector(s), examNumber=window.EXAM_NUMBER||1, examTitle=`모의고사 ${examNumber}회`, KEY=`ai-specialist-mock-${examNumber}-v1`, items=window.EXAM;
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let state={answers:{},overrides:{},started:null,submitted:null};
 try{const saved=JSON.parse(localStorage.getItem(KEY));if(saved&&saved.answers)state={...state,...saved};}catch{}
@@ -21,8 +21,8 @@ document.addEventListener('change',e=>{if(e.target.dataset.credit&&state.submitt
 document.addEventListener('keydown',e=>{if(e.key==='Tab'&&e.target.matches('textarea')&&!e.target.disabled){e.preventDefault();e.target.setRangeText('    ',e.target.selectionStart,e.target.selectionEnd,'end');e.target.dispatchEvent(new Event('input',{bubbles:true}));}});
 $('#start').onclick=()=>{state.started=Date.now();save();render();};
 $('#submit').onclick=()=>{const empty=items.flatMap(q=>q.slots.map(s=>state.answers[slotId(q,s)]||'')).filter(a=>!a.trim()).length;if(!confirm(`답안을 제출할까요? 미작성 ${empty}개입니다. 제출 후 답안은 잠기고 정답과 해설이 표시됩니다.`))return;state.submitted=Date.now();save();render();$('#result').scrollIntoView({behavior:'smooth'});};
-$('#reset').onclick=()=>{if(!confirm('이 브라우저의 모의고사 1회 답안과 점수를 초기화할까요? 보관하려면 먼저 답안을 내보내세요.'))return;state={answers:{},overrides:{},started:null,submitted:null};save();render();window.scrollTo(0,0);};
-$('#export').onclick=()=>{const blob=new Blob([JSON.stringify({exam:'모의고사 1회',...state},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='모의고사1회-답안.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+$('#reset').onclick=()=>{if(!confirm(`이 브라우저의 ${examTitle} 답안과 점수를 초기화할까요? 보관하려면 먼저 답안을 내보내세요.`))return;state={answers:{},overrides:{},started:null,submitted:null};save();render();window.scrollTo(0,0);};
+$('#export').onclick=()=>{const blob=new Blob([JSON.stringify({exam:examTitle,...state},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`모의고사${examNumber}회-답안.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 document.addEventListener('click',e=>{if(e.target.id==='wrongOnly'||e.target.id==='showAll')for(const q of items)document.getElementById('q-'+q.id).hidden=e.target.id==='wrongOnly'&&q.slots.every(s=>accepted(q,s));});
 render();setInterval(timer,1000);
 })();
