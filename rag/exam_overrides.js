@@ -126,3 +126,126 @@ index.????(id, delete_from_docstore=True)`,explanation:"set_content는 Document 
   chapter.questionCount = chapter.subjective.length;
   chapter.exam_design = {version:2,style:"원본 YOUR CODE HERE 기반 함수 문맥 구현형",difficulty:["핵심 API 연결","검색·합성 흐름","CRUD·Custom Engine"],excluded:["API 키","URL","로컬 경로","설치 명령"]};
 })();
+
+(() => {
+  "use strict";
+  const course = window.LLM_COURSE;
+  const chapter = course.chapters.find((item) => item.file === "2. RAG.ipynb");
+  if (!chapter) return;
+
+  chapter.notebook_goal = "외부 문서를 검색하는 기본 RAG를 구현하고 chunk·top-k·prompt를 바꿔 검색 품질과 최종 응답을 개선한다.";
+  chapter.summary = "Wikipedia 문서 수집부터 짧은/긴 chunk 비교, CustomQueryEngine, 두 단계 검색·요약을 거치는 Refine RAG까지 구현합니다.";
+  chapter.capability = "RAG의 검색·context 구성·LLM 생성 단계를 분리하고, 각 단계의 객체와 인자를 목적에 맞게 연결할 수 있다.";
+  chapter.overview = {
+    title: "기본 RAG를 개선형 RAG로 확장하는 흐름",
+    subtitle: "같은 문서도 chunk 크기, top-k, prompt, 중간 요약 방식에 따라 검색 근거와 답변 품질이 달라진다.",
+    steps: [
+      {label:"자료 수집",code:"WikipediaReader().load_data(...) ",flow:"titles → Documents"},
+      {label:"Chunk 비교",code:"SentenceSplitter(200/50 vs 1024/200)",flow:"Documents → short/long nodes"},
+      {label:"Top-k 검색",code:"index.as_retriever(similarity_top_k=k)",flow:"query → k nodes"},
+      {label:"Prompt 합성",code:"PromptTemplate.format(context_str, query_str)",flow:"nodes → grounded prompt"},
+      {label:"Refine",code:"retrieve → intermediate result → final LLM",flow:"raw evidence + summary → answer"}
+    ],
+    rules: [
+      "Reader는 문서 수집, SentenceSplitter는 검색 단위 결정, VectorStoreIndex는 embedding 검색을 담당한다.",
+      "chunk_size가 작으면 정밀도가, 크면 주변 문맥 보존이 유리할 수 있어 질문에 따라 비교한다.",
+      "similarity_top_k는 검색 근거 개수이며 모델 출력 개수가 아니다.",
+      "검색 결과는 context_str 자리표시자에, 사용자 질문은 query_str에 넣는다.",
+      "Refine RAG는 검색 결과와 중간 query 결과를 함께 사용하지만 역할이 겹치지 않는지 코드상 확인한다."
+    ]
+  };
+  chapter.key_points = [
+    {title:"Wikipedia 문서 수집",purpose:"도시명 목록을 LlamaIndex Document로 읽습니다.",code:"reader = WikipediaReader()\ndocuments = reader.load_data(city_names, auto_suggest=False)",flow:"list[str] → list[Document]",watch:"load_data의 대상은 질문이 아니라 문서 제목 목록입니다."},
+    {title:"Chunk와 Top-k",purpose:"검색 단위와 반환 근거 수를 조정해 질문별 검색 품질을 비교합니다.",code:"splitter = SentenceSplitter(chunk_size=200, chunk_overlap=50)\nretriever = index.as_retriever(similarity_top_k=2)",flow:"Documents → nodes; query → top 2 nodes",watch:"chunk_size와 similarity_top_k의 역할을 혼동하지 마세요."},
+    {title:"Custom Prompt",purpose:"검색 node의 본문을 PromptTemplate의 context에 주입해 근거 기반 답을 만듭니다.",code:"context = '\\n\\n'.join(n.node.get_content() for n in nodes)\nllm.complete(prompt.format(context_str=context, query_str=query))",flow:"nodes → string → formatted prompt → answer",watch:"get_content 호출과 format의 두 keyword를 모두 확인하세요."},
+    {title:"Refine 흐름",purpose:"원시 검색 근거와 중간 처리 결과를 최종 생성 단계에 연결합니다.",code:"ret, context_str = self.retrieve(query)\ncompletion = self.generate_response(query, context_str)",flow:"query → two retrieval outputs → final response",watch:"tuple 반환은 두 변수로 unpack해야 합니다."}
+  ];
+  chapter.theory_guide = [
+    {title:"Chunking trade-off",concept:"짧은 chunk는 관련 문장을 정밀하게 찾고 긴 chunk는 주변 설명을 더 보존합니다.",flow:"Document → short index / long index → 같은 query 결과 비교",code_signal:"두 SentenceSplitter의 chunk_size와 chunk_overlap 숫자를 비교합니다.",exam_clue:"숫자 자체보다 splitter가 transformations에 들어가는 구조가 핵심입니다."},
+    {title:"Retriever 설정",concept:"top-k는 유사도가 높은 node를 몇 개 context 후보로 반환할지 정합니다.",flow:"Index → as_retriever(top_k) → retrieve(query)",code_signal:"similarity_top_k가 as_retriever에 있고 retrieve에는 질문만 전달됩니다.",exam_clue:"검색기 생성 시 설정과 검색 실행 시 입력을 분리하세요."},
+    {title:"Prompt grounding",concept:"LLM이 사전지식이 아니라 검색 근거를 우선 사용하도록 context와 질문을 명시합니다.",flow:"nodes → get_content → context_str → PromptTemplate.format",code_signal:"{context_str}, {query_str} 자리표시자와 같은 이름의 keyword를 찾습니다.",exam_clue:"context와 query를 뒤바꾸면 prompt 의미가 깨집니다."},
+    {title:"파이프라인 연결",concept:"RAG 클래스의 query는 retrieve의 출력을 generate_response의 입력으로 넘기는 조정자입니다.",flow:"query → self.retrieve → self.generate_response → completion",code_signal:"앞줄의 왼쪽 변수명이 다음 줄의 인자로 재사용됩니다.",exam_clue:"각 함수의 return 값 개수와 unpack 변수 개수를 맞추세요."}
+  ];
+
+  const cells = {
+    "exam-rag2-wiki": `reader = WikipediaReader()
+documents = reader.load_data(city_names, auto_suggest=False)`,
+    "exam-rag2-basic-flow": `context_str = self.retrieve(query)
+completion = self.generate_response(query, context_str)
+return completion`,
+    "exam-rag2-chunk": `text_splitter_short = SentenceSplitter(chunk_size=200, chunk_overlap=50)
+index_short = VectorStoreIndex.from_documents(
+    documents=documents,
+    transformations=[text_splitter_short]
+)`,
+    "exam-rag2-topk": `retriever_short = index_short.as_retriever(similarity_top_k=1)
+ret_passages_short = retriever_short.retrieve(question)`,
+    "exam-rag2-custom": `nodes = self.retriever.retrieve(query_str)
+context_str = "\\n\\n".join([n.node.get_content() for n in nodes])
+response = self.llm.complete(
+    self.qa_prompt.format(context_str=context_str, query_str=query_str)
+)`,
+    "exam-rag2-engine": `query_engine_answer = OurCustomQueryEngine(
+    retriever=retriever,
+    response_synthesizer=synthesizer,
+    llm=llm,
+    qa_prompt=simple_qa_prompt,
+)`,
+    "exam-rag2-refine-retrieve": `ret = retriever.retrieve(query)
+results = query_engine.query(query)
+return ret, results`,
+    "exam-rag2-refine-flow": `ret, context_str = self.retrieve(query)
+completion = self.generate_response(query, context_str)
+return completion`
+  };
+  Object.entries(cells).forEach(([id, source]) => { course.cells[id] = {source}; });
+  const base = {subject:"RAG",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:false,source_type:"원본 YOUR CODE HERE 셀 기반"};
+  const make = (data) => ({...base,accepted_answers:[data.answer],...data});
+  chapter.subjective = [
+    make({id:"exam-rag02-01",topic:"WikipediaReader",difficulty:"1 · 객체 연결",sourceId:"exam-rag2-wiki",prompt:"Wikipedia reader를 만들고 city_names의 문서를 자동 제목 보정 없이 읽는 두 줄을 작성하세요.",answer:cells["exam-rag2-wiki"],problem_context:`# TODO: 문서 수집기와 입력 목록을 연결하세요.
+reader = ????()
+documents = reader.????(city_names, auto_suggest=????)`,explanation:"WikipediaReader가 문서 수집 객체이고 load_data가 도시명 목록을 Document 목록으로 바꿉니다. auto_suggest=False는 입력 제목을 임의 교정하지 않습니다.",tensor_flow:"city_names list[str] → documents list[Document]",code_signal:"import된 WikipediaReader, 결과 변수 documents, 제목 보정 옵션 주석을 함께 봅니다.",retry:"클래스 생성과 실제 로드 호출을 두 단계로 나눠 쓰세요."}),
+    make({id:"exam-rag02-02",topic:"기본 RAG query",difficulty:"2 · 함수 연결",sourceId:"exam-rag2-basic-flow",prompt:"query 메서드에서 검색 결과를 생성 함수로 전달하고 반환하는 세 줄을 작성하세요.",answer:cells["exam-rag2-basic-flow"],problem_context:`def query(self, query: str) -> str:
+    context_str = self.????(query)
+    completion = self.????(query, context_str)
+    return ????`,explanation:"query는 파이프라인 조정자입니다. retrieve 결과를 context_str에 받고 같은 query와 함께 generate_response로 넘긴 뒤 completion을 반환합니다.",tensor_flow:"query str → retrieved context → generated completion",code_signal:"클래스 안에 이미 정의된 retrieve와 generate_response 메서드, 왼쪽 변수명이 단서입니다.",retry:"앞줄의 출력 변수를 다음 줄 입력으로 그대로 연결해 쓰세요."}),
+    make({id:"exam-rag02-03",topic:"짧은 Chunk Index",difficulty:"3 · 구성 구현",sourceId:"exam-rag2-chunk",prompt:"200/50 splitter를 만들고 documents에 적용해 short index를 구성하는 전체 코드를 작성하세요.",answer:cells["exam-rag2-chunk"],problem_context:`# TODO: 짧은 검색 단위를 index 생성 과정에 적용하세요.
+text_splitter_short = SentenceSplitter(chunk_size=????, chunk_overlap=????)
+index_short = VectorStoreIndex.from_documents(
+    documents=documents,
+    ????=[text_splitter_short]
+)`,explanation:"짧은 splitter를 transformations 목록에 넣으면 문서가 200 크기, 50 중복의 node로 나뉜 뒤 index에 저장됩니다.",tensor_flow:"Documents → short overlapping Nodes → index_short",code_signal:"변수명 short와 바로 아래 원본 숫자 비교, from_documents의 transformations 인자가 단서입니다.",retry:"SentenceSplitter 설정과 index 적용을 각각 한 덩어리로 복원하세요."}),
+    make({id:"exam-rag02-04",topic:"Top-k 검색",difficulty:"2 · 설정·실행",sourceId:"exam-rag2-topk",prompt:"short index에서 top-1 검색기를 만들고 question을 검색하는 두 줄을 작성하세요.",answer:cells["exam-rag2-topk"],problem_context:`# TODO: 반환 근거 수를 1개로 제한해 검색하세요.
+retriever_short = index_short.????(similarity_top_k=????)
+ret_passages_short = retriever_short.????(question)`,explanation:"similarity_top_k는 검색기 생성 옵션이며 retrieve가 질문 embedding과 가까운 node를 반환합니다.",tensor_flow:"index_short → configured retriever; question → top-1 NodeWithScore",code_signal:"'top-1'과 변수명 retriever_short/ret_passages_short가 메서드와 값을 결정합니다.",retry:"설정은 as_retriever, 실행은 retrieve라는 쌍을 다시 쓰세요."}),
+    make({id:"exam-rag02-05",topic:"Custom Prompt RAG",difficulty:"3 · 전체 연결",sourceId:"exam-rag2-custom",prompt:"검색 node를 context 문자열로 합치고 qa_prompt를 채워 LLM을 호출하는 코드를 작성하세요.",answer:cells["exam-rag2-custom"],problem_context:`def custom_query(self, query_str: str):
+    nodes = self.retriever.????(query_str)
+    context_str = "\\n\\n".join([n.node.????() for n in nodes])
+    response = self.llm.????(
+        self.qa_prompt.????(context_str=context_str, query_str=query_str)
+    )`,explanation:"검색 결과 객체에서 get_content로 본문을 꺼내 하나의 context로 합칩니다. PromptTemplate.format 결과를 llm.complete에 전달합니다.",tensor_flow:"query → nodes → context string → formatted prompt → response",code_signal:"qa_prompt 자리표시자명과 self.retriever/self.llm field가 호출 순서를 알려줍니다.",retry:"retrieve → get_content → format → complete 네 동사를 순서대로 적으세요."}),
+    make({id:"exam-rag02-06",topic:"Custom Engine 구성",difficulty:"2 · 의존성 주입",sourceId:"exam-rag2-engine",prompt:"검색기, 합성기, LLM, QA prompt를 OurCustomQueryEngine에 연결하는 전체 생성 코드를 작성하세요.",answer:cells["exam-rag2-engine"],problem_context:`query_engine_answer = OurCustomQueryEngine(
+    retriever=????,
+    response_synthesizer=????,
+    llm=????,
+    qa_prompt=????,
+)`,explanation:"클래스에 선언된 네 field를 같은 역할의 기존 객체에 연결합니다. qa_prompt를 바꾸면 같은 engine 구현으로 답변/요약 동작을 전환할 수 있습니다.",tensor_flow:"Retriever + Synthesizer + LLM + Prompt → CustomQueryEngine",code_signal:"keyword 이름과 바로 위에서 만든 retriever, synthesizer, llm, simple_qa_prompt 변수가 일대일 대응합니다.",retry:"왼쪽 keyword와 같은 역할의 오른쪽 변수명을 선으로 연결하세요."}),
+    make({id:"exam-rag02-07",topic:"Refine 두 단계 검색",difficulty:"3 · Tuple 반환",sourceId:"exam-rag2-refine-retrieve",prompt:"Refine_RAG.retrieve에서 원시 passage와 query engine 결과를 모두 구해 tuple로 반환하는 세 줄을 작성하세요.",answer:cells["exam-rag2-refine-retrieve"],problem_context:`def retrieve(self, query: str) -> list:
+    ret = retriever.????(query)
+    results = query_engine.????(query)
+    return ????, ????`,explanation:"retriever.retrieve는 원시 node 목록, query_engine.query는 검색·합성이 반영된 중간 결과입니다. 둘을 함께 반환해 검사와 최종 생성에 활용합니다.",tensor_flow:"query → (raw nodes, intermediate response)",code_signal:"ret/results라는 왼쪽 변수와 바깥 객체 retriever/query_engine의 표준 실행 메서드가 대응합니다.",retry:"각 객체가 검색 전용인지 검색+생성인지 구분해 메서드를 채우세요."}),
+    make({id:"exam-rag02-08",topic:"Refine 최종 연결",difficulty:"2 · Tuple unpack",sourceId:"exam-rag2-refine-flow",prompt:"Refine_RAG.query에서 retrieve의 두 결과를 받고 context를 최종 생성 함수로 넘기는 세 줄을 작성하세요.",answer:cells["exam-rag2-refine-flow"],problem_context:`def query(self, query: str) -> str:
+    ????, ???? = self.retrieve(query)
+    completion = self.????(query, context_str)
+    return ????`,explanation:"retrieve가 두 값을 반환하므로 ret와 context_str로 unpack합니다. 최종 답에는 context_str을 사용하고 completion을 반환합니다.",tensor_flow:"query → (ret, context_str) → completion",code_signal:"retrieve의 return ret, results와 query 내부 주석의 intermediate summary를 함께 보면 unpack 구조를 알 수 있습니다.",retry:"반환값 두 개와 받는 변수 두 개의 순서를 먼저 맞추세요."})
+  ];
+  chapter.mcq = [
+    {id:"exam-rag02-m1",source_question_id:"exam-rag02-02",topic:"RAG 호출 순서",prompt:"클래스 query 메서드의 올바른 연결은?",answer_index:1,explanation:"검색 context를 만든 후 생성 함수에 query와 함께 전달합니다.",choices:[{text:"generate_response → retrieve → return query",why:"순서와 반환 대상이 틀립니다."},{text:"context = retrieve(query) → completion = generate_response(query, context) → return completion",why:"검색→생성 흐름이 맞습니다."},{text:"retrieve(generate_response(query))",why:"생성 결과를 검색하는 반대 흐름입니다."},{text:"return retrieve(query)",why:"생성 단계가 없습니다."},{text:"return generate_response(query)",why:"필요한 context 인자가 없습니다."}]},
+    {id:"exam-rag02-m2",source_question_id:"exam-rag02-03",topic:"Chunking 역할",prompt:"SentenceSplitter를 실제 index 생성에 적용하는 코드는?",answer_index:4,explanation:"from_documents의 transformations에 splitter를 넣습니다.",choices:[{text:"documents.split(text_splitter)",why:"Document 목록의 메서드가 아닙니다."},{text:"index.as_retriever(text_splitter)",why:"검색기 설정 단계가 아닙니다."},{text:"SentenceSplitter(documents)",why:"생성자에는 문서가 아니라 설정값이 들어갑니다."},{text:"VectorStoreIndex(text_splitter)",why:"문서를 전달하지 않습니다."},{text:"VectorStoreIndex.from_documents(documents=documents, transformations=[text_splitter])",why:"index 생성 중 splitter를 적용합니다."}]},
+    {id:"exam-rag02-m3",source_question_id:"exam-rag02-04",topic:"Top-k 위치",prompt:"검색 결과를 2개로 제한하려면 어디에 설정해야 하나?",answer_index:2,explanation:"similarity_top_k는 as_retriever에서 설정합니다.",choices:[{text:"retrieve(query, top_k=2)",why:"이 실습의 retrieve 호출 형태가 아닙니다."},{text:"SentenceSplitter(similarity_top_k=2)",why:"chunker의 설정이 아닙니다."},{text:"index.as_retriever(similarity_top_k=2)",why:"검색기 생성 시 반환 수를 설정합니다."},{text:"VectorStoreIndex.from_documents(top_k=2)",why:"index 생성 옵션이 아닙니다."},{text:"llm.complete(top_k=2)",why:"생성 모델의 출력 수가 아닙니다."}]},
+    {id:"exam-rag02-m4",source_question_id:"exam-rag02-05",topic:"Prompt context",prompt:"검색 node를 PromptTemplate의 context에 넣는 올바른 흐름은?",answer_index:0,explanation:"본문을 추출·결합한 뒤 context_str keyword로 format합니다.",choices:[{text:"join(n.node.get_content()) → prompt.format(context_str=context, query_str=query)",why:"근거와 질문을 올바른 자리표시자에 넣습니다."},{text:"prompt.format(context_str=query, query_str=context)",why:"근거와 질문이 뒤바뀝니다."},{text:"llm.complete(nodes)",why:"Node 객체 목록을 prompt 없이 직접 전달합니다."},{text:"prompt.retrieve(query)",why:"PromptTemplate은 검색하지 않습니다."},{text:"retriever.format(context)",why:"Retriever는 prompt를 채우지 않습니다."}]},
+    {id:"exam-rag02-m5",source_question_id:"exam-rag02-08",topic:"Tuple 연결",prompt:"retrieve가 return ret, results일 때 올바른 수신은?",answer_index:3,explanation:"반환 순서대로 두 변수에 unpack합니다.",choices:[{text:"context = self.retrieve(query)",why:"tuple 전체가 한 변수에 들어가 이후 context로 바로 쓰기 어렵습니다."},{text:"results, ret = self.retrieve(query)",why:"의미상 순서가 뒤바뀝니다."},{text:"ret = self.retrieve(query)[2]",why:"두 요소 tuple에 index 2는 없습니다."},{text:"ret, context_str = self.retrieve(query)",why:"첫 결과와 둘째 결과를 순서대로 받습니다."},{text:"ret, context_str, answer = self.retrieve(query)",why:"반환값보다 변수가 많습니다."}]}
+  ];
+  chapter.questionCount = chapter.subjective.length;
+  chapter.exam_design = {version:2,style:"원본 YOUR CODE HERE 기반 파이프라인 구현형",difficulty:["객체 연결","검색 설정","Custom·Refine 흐름"],excluded:["API 키","이메일·User-Agent 문자열","질문 문장 암기","설치 명령"]};
+})();
