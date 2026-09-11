@@ -130,6 +130,143 @@ index.????(id, delete_from_docstore=True)`,explanation:"set_content는 Document 
 (() => {
   "use strict";
   const course = window.LLM_COURSE;
+  const chapter = course.chapters.find((item) => item.file === "3. Task_2.ipynb");
+  if (!chapter) return;
+
+  chapter.notebook_goal = "자연어 질문을 구조화된 금융 query로 변환하고 Knowledge Graph 또는 웹 검색을 선택해 근거 기반 답변으로 연결한다.";
+  chapter.summary = "LLM entity extraction, CRAG 금융 API, metric 정규화, KG 문서화, finance/web routing을 결합한 hybrid RAG를 구현합니다.";
+  chapter.capability = "질문의 domain·entity·metric을 구조화하고, 적절한 검색 경로를 선택한 뒤 공통 Reader 입력 형식으로 결합할 수 있다.";
+  chapter.overview = {
+    title: "자연어 질문이 KG·Web Hybrid RAG 답변이 되는 흐름",
+    subtitle: "질문을 JSON query로 바꿔 금융 여부를 판별하고, KG 또는 vector 검색 근거를 같은 Reader에 전달한다.",
+    steps: [
+      {label:"Entity 추출",code:"LLM → flat JSON",flow:"query → domain/identifier/metric/time"},
+      {label:"Domain Routing",code:"domain == 'finance'",flow:"structured query → route"},
+      {label:"KG API",code:"requests.post(..., json=data)",flow:"ticker/metric → structured result"},
+      {label:"Web 검색",code:"retriever.retrieve(...) ",flow:"search_results → text chunks"},
+      {label:"공통 생성",code:"reader.generate_response(query, combined_results)",flow:"selected evidence → answer"}
+    ],
+    rules: [
+      "LLM 출력은 먼저 json.loads하고 실패할 때만 JSON 객체 복구 함수를 사용한다.",
+      "domain key가 없거나 finance가 아니면 KG 금융 경로를 선택하지 않는다.",
+      "API는 endpoint, JSON body, headers를 구성해 POST하고 result.text를 JSON으로 변환한다.",
+      "서로 다른 metric 표기는 특수문자 제거와 소문자화로 비교한다.",
+      "Hybrid RAG의 두 분기 모두 Reader가 받을 list 형태의 combined_results를 만들어야 한다."
+    ]
+  };
+  chapter.key_points = [
+    {title:"Structured Query",purpose:"자연어에서 domain·기업·metric·시간을 flat JSON으로 추출합니다.",code:"completion = llm(messages)\ncompletion = json.loads(completion)\nis_finance = completion['domain'] == 'finance'",flow:"query str → dict + route flag",watch:"JSON 파싱 실패와 domain 누락을 처리해야 합니다."},
+    {title:"CRAG API",purpose:"구조화 query의 기업과 metric을 금융 Knowledge Graph API 호출로 변환합니다.",code:"result = requests.post(url, json={'query': value}, headers=headers)\nreturn json.loads(result.text)",flow:"structured value → HTTP response → dict",watch:"GET이 아니라 POST이며 payload는 json keyword로 전달합니다."},
+    {title:"Metric 정규화",purpose:"P/E ratio처럼 표기가 다른 key도 같은 metric으로 비교합니다.",code:"re.sub(r'[^a-zA-Z0-9]', '', key).lower()",flow:"raw key → alphanumeric lowercase key",watch:"response가 None일 때 items를 순회하지 않습니다."},
+    {title:"Hybrid Routing",purpose:"금융 질문은 KG, 그 외 질문은 웹 vector 검색 근거를 Reader에 전달합니다.",code:"combined_results = [kg_results] if is_finance else retrieved_results",flow:"two retrievers → one list interface",watch:"kg_results 문자열도 Reader 계약에 맞게 list로 감쌉니다."}
+  ];
+  chapter.theory_guide = [
+    {title:"Query routing",concept:"Routing은 질문 성격에 따라 검색 도구를 선택하는 단계입니다. 구조화된 금융은 KG가, 일반 정보는 웹 문서 검색이 적합합니다.",flow:"query → domain classifier → KG or Web",code_signal:"is_finance boolean이 분기 조건으로 사용됩니다.",exam_clue:"두 분기의 결과 변수 타입을 공통 형태로 맞춰야 합니다."},
+    {title:"Structured extraction",concept:"LLM이 자유 문장이 아닌 정해진 JSON schema를 출력하면 후속 코드가 domain과 metric을 안정적으로 읽을 수 있습니다.",flow:"natural language → flat dict",code_signal:"system template의 key 이름과 completion 접근 key가 동일합니다.",exam_clue:"JSON 문자열과 파싱된 dict를 구분하세요."},
+    {title:"Knowledge Graph API",concept:"KG API는 이름→ticker 변환과 ticker→metric 조회를 분리해 구조화 관계를 따라갑니다.",flow:"company name → canonical name/ticker → metric result",code_signal:"첫 API의 result가 다음 API 입력으로 전달됩니다.",exam_clue:"API 응답의 실제 payload는 ['result']에 있습니다."},
+    {title:"Common Reader contract",concept:"검색 방법이 달라도 Reader는 query와 근거 목록이라는 동일한 입력 계약을 사용합니다.",flow:"KG string or Web chunks → list → Reader",code_signal:"combined_results가 if/else 양쪽에서 할당된 뒤 한 번만 generate_response에 전달됩니다.",exam_clue:"분기 안에서 별도 답을 만들지 말고 근거만 선택합니다."}
+  ];
+
+  const cells = {
+    "exam-rag5-api": `headers = {'accept': "application/json"}
+data = {'query': query}
+result = requests.post(url, json=data, headers=headers)
+return json.loads(result.text)`,
+    "exam-rag5-messages": `llm_input = [
+    {"role": "system", "content": entity_extract_template},
+    {"role": "user", "content": user_message},
+]
+return llm_input`,
+    "exam-rag5-parse": `try:
+    completion = json.loads(completion)
+except:
+    completion = extract_json_objects(completion)`,
+    "exam-rag5-route": `if "domain" in completion.keys():
+    domain = completion["domain"]
+    is_finance = domain == "finance"
+else:
+    is_finance = False`,
+    "exam-rag5-normalize": `normalized_metric = normalize_key(metric)
+if response is not None:
+    for key, value in response.items():
+        if normalize_key(key) == normalized_metric:
+            return value`,
+    "exam-rag5-kg-query": `generated_query, is_finance = self.generate_query(query)
+if is_finance:
+    kg_results = self.get_finance_kg_results(generated_query)
+else:
+    kg_results = ""
+return kg_results, is_finance`,
+    "exam-rag5-kg-rag": `kg_results, is_finance = self.kg_query_engine.query(query)
+answer = self.reader.generate_response(query, [kg_results])
+return answer, kg_results`,
+    "exam-rag5-hybrid": `if is_finance:
+    combined_results = [kg_results]
+else:
+    combined_results = retrieved_results
+answer = self.reader.generate_response(query, combined_results)`
+  };
+  Object.entries(cells).forEach(([id, source]) => { course.cells[id] = {source}; });
+  const base = {subject:"RAG",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:false,source_type:"원본 YOUR CODE HERE 셀 기반"};
+  const make = (data) => ({...base,accepted_answers:[data.answer],...data});
+  chapter.subjective = [
+    make({id:"exam-rag05-01",topic:"CRAG API 요청",difficulty:"2 · HTTP 연결",sourceId:"exam-rag5-api",prompt:"준비된 endpoint에 query를 JSON body로 POST하고 응답 문자열을 dict로 반환하는 네 줄을 작성하세요.",answer:cells["exam-rag5-api"],problem_context:`url = self.server + '/finance/get_company_name'
+headers = {'accept': ????}
+data = {'query': ????}
+result = requests.????(url, json=????, headers=????)
+return json.????(result.text)`,explanation:"서버가 JSON을 주고받으므로 accept header와 {'query': query} body를 준비합니다. requests.post의 json 인자가 직렬화를 담당하고 result.text는 json.loads로 dict가 됩니다.",tensor_flow:"query str → request JSON → HTTP response text → dict",code_signal:"메서드 이름 finance_get_*의 공통 골격과 서버 API 코드가 모두 같은 네 줄을 반복합니다.",retry:"header, body, POST, parse 네 단계를 순서대로 복원하세요."}),
+    make({id:"exam-rag05-02",topic:"Entity 추출 LLM 입력",difficulty:"2 · Message 구성",sourceId:"exam-rag5-messages",prompt:"JSON 출력 규칙과 실제 query를 system/user 역할로 나누어 메시지 목록을 구성하고 반환하세요.",answer:cells["exam-rag5-messages"],problem_context:`user_message = f"Query: {query}\\n"
+llm_input = [
+    {"role": ????, "content": ????},
+    {"role": ????, "content": ????},
+]
+return ????`,explanation:"entity_extract_template은 구조와 출력 규칙이므로 system role, 실제 질문 문자열은 user role에 둡니다. 이 목록을 Chat Completions messages로 전달합니다.",tensor_flow:"query + schema instructions → list[message dict]",code_signal:"template와 user_message 변수의 역할명이 각각 system/user에 대응합니다.",retry:"규칙과 실제 요청을 어느 role에 둘지 먼저 결정하세요."}),
+    make({id:"exam-rag05-03",topic:"LLM JSON 파싱 복구",difficulty:"2 · 예외 흐름",sourceId:"exam-rag5-parse",prompt:"LLM 응답을 JSON dict로 변환하고, 응답에 부가 문장이 섞이면 JSON 객체 추출 함수로 복구하는 블록을 작성하세요.",answer:cells["exam-rag5-parse"],problem_context:`try:
+    completion = json.????(completion)
+except:
+    completion = ????(completion)`,explanation:"정상 응답은 json.loads로 바로 dict가 됩니다. 형식 지시를 어긴 경우 extract_json_objects가 문자열 안의 JSON object를 찾아 복구합니다.",tensor_flow:"completion str → dict or recovered object",code_signal:"아래 코드가 completion.keys()를 호출하므로 이 지점에서 문자열을 구조화 객체로 바꿔야 합니다.",retry:"정상 경로와 fallback 경로의 목적을 나눠 쓰세요."}),
+    make({id:"exam-rag05-04",topic:"Finance Domain Routing",difficulty:"2 · 안전한 분기",sourceId:"exam-rag5-route",prompt:"파싱 결과에 domain이 있을 때만 금융 여부를 판단하고 누락 시 False로 처리하는 블록을 작성하세요.",answer:cells["exam-rag5-route"],problem_context:`if ???? in completion.????():
+    domain = completion[????]
+    is_finance = domain == ????
+else:
+    is_finance = ????`,explanation:"domain key 존재를 먼저 확인해 KeyError를 막습니다. 정확히 finance일 때만 KG 금융 경로를 선택하고 나머지는 웹 검색 경로로 보냅니다.",tensor_flow:"completion dict → domain str → boolean route",code_signal:"반환값 completion,is_finance와 뒤쪽 if is_finance 분기가 필요한 boolean을 알려줍니다.",retry:"key 존재 확인과 값 비교를 서로 다른 단계로 적으세요."}),
+    make({id:"exam-rag05-05",topic:"Metric Key 정규화",difficulty:"3 · 유연한 조회",sourceId:"exam-rag5-normalize",prompt:"요청 metric과 API response key를 같은 규칙으로 정규화해 일치하는 값을 반환하는 코드를 작성하세요.",answer:cells["exam-rag5-normalize"],problem_context:`normalized_metric = ????(metric)
+if response is not None:
+    for key, value in response.????():
+        if ????(key) == ????:
+            return ????`,explanation:"요청과 응답 양쪽을 normalize_key로 변환해야 대소문자·공백·특수문자 차이를 제거한 공정한 비교가 됩니다. 일치한 원래 value를 반환합니다.",tensor_flow:"metric str + response dict → normalized key comparison → selected value",code_signal:"normalize_key가 바로 위에 정의되고 response가 dict이므로 items 순회가 필요합니다.",retry:"비교 대상 양쪽에 같은 정규화가 적용됐는지 확인하세요."}),
+    make({id:"exam-rag05-06",topic:"KG Query Engine",difficulty:"3 · 구조화 검색",sourceId:"exam-rag5-kg-query",prompt:"자연어 query를 구조화하고 금융 질문일 때만 KG 결과를 조회해 결과와 route flag를 반환하는 코드를 작성하세요.",answer:cells["exam-rag5-kg-query"],problem_context:`generated_query, is_finance = self.????(query)
+if is_finance:
+    kg_results = self.????(generated_query)
+else:
+    kg_results = ????
+return ????, ????`,explanation:"generate_query가 구조화 dict와 route flag를 함께 만듭니다. finance이면 KG를 조회하고 아니면 빈 근거를 반환하며 상위 hybrid engine이 flag로 다음 경로를 결정합니다.",tensor_flow:"natural query → (structured query, bool) → (KG text, bool)",code_signal:"클래스 안의 generate_query/get_finance_kg_results 두 메서드와 return 사용처가 연결됩니다.",retry:"첫 tuple을 받고 분기한 뒤 같은 형태의 두 값을 반환하는지 보세요."}),
+    make({id:"exam-rag05-07",topic:"KG 전용 RAG",difficulty:"2 · 검색→생성",sourceId:"exam-rag5-kg-rag",prompt:"KG query 결과를 Reader가 요구하는 목록으로 감싸 답을 생성하고 답·근거를 반환하는 세 줄을 작성하세요.",answer:cells["exam-rag5-kg-rag"],problem_context:`kg_results, is_finance = self.????.????(query)
+answer = self.????.????(query, [????])
+return ????, ????`,explanation:"KGQueryEngine의 문자열 결과를 [kg_results]로 감싸 Reader의 top_k_chunks 목록 계약에 맞춥니다. 최종 답과 원 근거를 함께 반환합니다.",tensor_flow:"query → KG result str → list[str] → answer → tuple",code_signal:"__init__의 kg_query_engine/reader와 Reader의 generate_response signature가 단서입니다.",retry:"검색 객체, 생성 객체, list 변환, return 순서를 확인하세요."}),
+    make({id:"exam-rag05-08",topic:"KG·Web Hybrid RAG",difficulty:"3 · 독립 구현",sourceId:"exam-rag5-hybrid",prompt:"이미 조회된 KG·웹 결과 중 금융 여부에 맞는 근거를 선택하고 공통 Reader로 답을 생성하는 다섯 줄을 작성하세요.",answer:cells["exam-rag5-hybrid"],problem_context:`retrieved_results = self.retriever.retrieve(query, search_results, topk)
+kg_results, is_finance = self.kg_query_engine.query(query)
+
+if is_finance:
+    combined_results = [????]
+else:
+    combined_results = ????
+answer = self.reader.????(query, combined_results)`,explanation:"두 검색을 수행한 뒤 is_finance가 True면 구조화 KG 근거를 목록으로, 아니면 웹 chunks를 선택합니다. 이후 생성 코드는 분기 밖에서 한 번만 실행합니다.",tensor_flow:"KG/Web evidence → route-selected list → Reader answer",code_signal:"combined_results가 두 분기의 공통 출력이고 다음 줄 generate_response의 입력입니다.",retry:"각 분기가 동일 타입 list를 만드는지와 분기 밖에서 한 번만 생성하는지 검산하세요."})
+  ];
+  chapter.mcq = [
+    {id:"exam-rag05-m1",source_question_id:"exam-rag05-01",topic:"API Payload",prompt:"CRAG POST 요청의 query 전달 방식은?",answer_index:1,explanation:"requests.post의 json keyword에 dictionary를 전달합니다.",choices:[{text:"requests.get(url, params=query)",why:"실습 API는 POST JSON body를 사용합니다."},{text:"requests.post(url, json={'query': query}, headers=headers)",why:"endpoint가 기대하는 body 구조입니다."},{text:"requests.post(query, url)",why:"인자 순서와 대상이 틀립니다."},{text:"json.loads(requests)",why:"요청 함수 자체를 파싱합니다."},{text:"requests.post(url, data=json.loads(query))",why:"일반 질문 문자열은 JSON이 아닙니다."}]},
+    {id:"exam-rag05-m2",source_question_id:"exam-rag05-03",topic:"LLM Output",prompt:"completion.keys() 전에 필요한 처리는?",answer_index:3,explanation:"응답 문자열을 dict로 파싱해야 keys를 사용할 수 있습니다.",choices:[{text:"completion.lower()",why:"여전히 문자열입니다."},{text:"completion.split()",why:"단어 목록일 뿐 schema가 아닙니다."},{text:"str(completion)",why:"구조화하지 않습니다."},{text:"completion = json.loads(completion)",why:"JSON 문자열을 dict로 바꿉니다."},{text:"completion.keys()",why:"문자열 상태라 keys가 없습니다."}]},
+    {id:"exam-rag05-m3",source_question_id:"exam-rag05-05",topic:"Metric 비교",prompt:"'P/E ratio'와 'pe_ratio' 같은 표기를 비교하는 안전한 방법은?",answer_index:0,explanation:"양쪽 key를 같은 함수로 영숫자·소문자 정규화합니다.",choices:[{text:"normalize_key(response_key) == normalize_key(metric)",why:"표면 차이를 제거해 의미상 key를 비교합니다."},{text:"response_key == metric",why:"특수문자와 대소문자 차이에 실패합니다."},{text:"response_key in response.values()",why:"key와 value를 혼동합니다."},{text:"metric.upper() == response_key",why:"특수문자는 남아 있습니다."},{text:"sorted(metric) == response_key",why:"문자 순서를 훼손합니다."}]},
+    {id:"exam-rag05-m4",source_question_id:"exam-rag05-06",topic:"Routing",prompt:"KG 금융 검색을 실행해야 하는 조건은?",answer_index:4,explanation:"구조화 query의 domain이 finance일 때입니다.",choices:[{text:"query에 숫자가 있을 때",why:"숫자가 있어도 sports 등일 수 있습니다."},{text:"search_results가 비었을 때",why:"domain 판단 기준이 아닙니다."},{text:"metric key가 없을 때",why:"KG 호출 정보가 부족합니다."},{text:"모든 질문",why:"일반 질문에 금융 API를 쓰면 실패합니다."},{text:"completion['domain'] == 'finance'",why:"entity extraction 결과로 올바르게 routing합니다."}]},
+    {id:"exam-rag05-m5",source_question_id:"exam-rag05-08",topic:"Hybrid Evidence",prompt:"finance가 아닌 질문에서 Reader에 전달할 근거는?",answer_index:2,explanation:"웹 vector retriever가 반환한 retrieved_results를 사용합니다.",choices:[{text:"[kg_results]",why:"금융 KG 분기의 근거입니다."},{text:"generated_query",why:"검색 근거가 아니라 구조화 query입니다."},{text:"retrieved_results",why:"일반 질문의 웹 검색 chunks입니다."},{text:"is_finance",why:"boolean flag는 근거가 아닙니다."},{text:"search_results 원본 HTML",why:"정제·검색되지 않은 전체 결과입니다."}]}
+  ];
+  chapter.questionCount = chapter.subjective.length;
+  chapter.exam_design = {version:2,style:"구조화 Query·KG/Web Routing 구현형",difficulty:["API·JSON 연결","안전한 parsing","Hybrid pipeline"],excluded:["서버 URL","API 키","회사명·metric 예시 문자열","샘플 index"]};
+})();
+
+(() => {
+  "use strict";
+  const course = window.LLM_COURSE;
   const chapter = course.chapters.find((item) => item.file === "2. Task_1.ipynb");
   if (!chapter) return;
 
