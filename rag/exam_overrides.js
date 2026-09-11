@@ -130,6 +130,142 @@ index.????(id, delete_from_docstore=True)`,explanation:"set_content는 Document 
 (() => {
   "use strict";
   const course = window.LLM_COURSE;
+  const chapter = course.chapters.find((item) => item.file === "2. Task_1.ipynb");
+  if (!chapter) return;
+
+  chapter.notebook_goal = "웹 검색 HTML을 정제·임베딩 검색하고, 선택된 근거를 역할별 LLM 메시지로 구성해 검증 가능한 RAG 응답을 생성한다.";
+  chapter.summary = "수동 cosine 검색과 LlamaIndex 검색을 구현하고, 검색 근거를 제한된 prompt로 만든 뒤 Retriever와 Reader를 하나의 RAG inference로 연결합니다.";
+  chapter.capability = "검색 결과 schema에서 근거를 만들고 embedding 유사도 또는 LlamaIndex로 top-k를 선택한 뒤 LLM 입력과 최종 반환값까지 구현할 수 있다.";
+  chapter.overview = {
+    title: "Web Search 결과가 RAG 답변이 되는 전체 흐름",
+    subtitle: "HTML 정제부터 검색, prompt 구성, LLM 생성까지 각 단계의 출력을 다음 단계 입력으로 정확히 연결한다.",
+    steps: [
+      {label:"HTML 정제",code:"page_result → BeautifulSoup → text",flow:"search_results → documents"},
+      {label:"문장 분할",code:"offsets → text[start:end]",flow:"documents → chunks"},
+      {label:"Embedding 검색",code:"cosine(query, chunks) → top-k",flow:"chunks → relevant chunks"},
+      {label:"LLM 입력",code:"system + references/user message",flow:"query + chunks → messages"},
+      {label:"RAG 응답",code:"Retriever → Reader",flow:"query/search_results → answer + evidence"}
+    ],
+    rules: [
+      "HTML 전체 본문인 page_result를 먼저 일반 텍스트로 바꾼 뒤 문장 단위로 분할한다.",
+      "query embedding은 하나의 벡터이므로 batch 결과에서 첫 번째 행을 선택한다.",
+      "cosine similarity는 dot product를 두 벡터 norm의 곱으로 나누며 높은 점수 순으로 top-k를 고른다.",
+      "검색 근거는 길이를 제한한 뒤 user message에 넣고, 답변 규칙은 system message에 둔다.",
+      "RAG.inference는 Retriever의 결과를 Reader 입력으로 넘기고 answer와 evidence를 함께 반환한다."
+    ]
+  };
+  chapter.key_points = [
+    {title:"HTML→Chunk",purpose:"웹 페이지의 태그를 제거하고 문장 경계가 유지된 검색 단위를 만듭니다.",code:"soup = BeautifulSoup(page['page_result'], features='lxml')\ntext = soup.get_text(' ', strip=True)\nchunk = text[start:end][:MAX_CONTEXT_SENTENCE_LENGTH]",flow:"HTML → text → sentence chunks",watch:"빈 문서도 placeholder를 유지해 입력 구조를 보존합니다."},
+    {title:"Embedding Cosine 검색",purpose:"질문 벡터와 chunk 벡터 방향이 가까운 근거를 선택합니다.",code:"scores = dot(chunk_embs, query_emb) / (norm(chunk_embs) * norm(query_emb))\nindices = (-scores).argsort()[:topk]",flow:"[N,D] and [D] → [N] → top-k chunks",watch:"내림차순을 위해 점수에 음수를 붙인 뒤 argsort합니다."},
+    {title:"LlamaIndex Retriever",purpose:"Document 구성, chunking, embedding index, top-k 검색을 library 흐름으로 연결합니다.",code:"index = VectorStoreIndex.from_documents(documents, transformations=[parser])\nretriever = index.as_retriever(similarity_top_k=topk)",flow:"texts → Documents → Index → nodes",watch:"검색 결과에서 실제 본문은 node.get_content()로 꺼냅니다."},
+    {title:"Reader와 RAG",purpose:"근거와 질문을 역할별 messages로 구성하고 답변과 근거를 함께 반환합니다.",code:"llm_input = [system_message, user_message]\nanswer = reader.generate_response(query, retrieved_results)\nreturn answer, retrieved_results",flow:"query + evidence → messages → answer",watch:"근거가 없으면 모른다고 답하는 system 규칙을 유지합니다."}
+  ];
+  chapter.theory_guide = [
+    {title:"Cosine similarity",concept:"두 벡터의 방향 유사도를 -1~1 범위로 비교하며 길이 차이의 영향을 norm으로 제거합니다.",flow:"[N,D]·[D] / ([N]×scalar) → [N] scores",code_signal:"np.dot와 두 번의 np.linalg.norm이 같은 식에 등장합니다.",exam_clue:"chunk norm은 axis=1, query norm은 단일 벡터라 axis가 필요 없습니다."},
+    {title:"LLM messages",concept:"system 메시지는 답변 규칙, user 메시지는 검색 근거와 실제 질문을 전달합니다.",flow:"system_prompt + references/query → list[dict]",code_signal:"각 dictionary에 role과 content 두 key가 필요합니다.",exam_clue:"system_prompt와 user_message를 서로 다른 role에 연결합니다."},
+    {title:"Retrieval abstraction",concept:"수동 Retriever와 LlamaIndex Retriever는 내부 구현이 달라도 retrieve(query, search_results, topk) 인터페이스를 공유합니다.",flow:"same inputs → top-k text chunks",code_signal:"RAG는 구체적인 index 코드가 아니라 self.retriever.retrieve만 호출합니다.",exam_clue:"교체 가능한 구성 요소는 같은 입력·출력 계약을 유지해야 합니다."},
+    {title:"검증 가능한 반환",concept:"답변과 함께 검색 근거를 반환하면 오답이 검색 실패인지 생성 실패인지 분리해 확인할 수 있습니다.",flow:"Retriever result → Reader answer → (answer, retrieved_results)",code_signal:"inference 마지막 return이 tuple입니다.",exam_clue:"평가·디버깅 목적이면 answer 하나만 반환하지 않습니다."}
+  ];
+
+  const cells = {
+    "exam-rag4-html": `soup = BeautifulSoup(html_text["page_result"], features="lxml")
+text = soup.get_text(" ", strip=True)
+all_documents.append(text)`,
+    "exam-rag4-chunks": `_, offsets = text_to_sentences_and_offsets(document)
+for start, end in offsets:
+    chunk = document[start:end][:MAX_CONTEXT_SENTENCE_LENGTH]
+    all_chunks.append(chunk)`,
+    "exam-rag4-embed": `response = self.client.embeddings.create(
+    model="text-embedding-3-small",
+    input=texts
+)
+embeddings = [np.array(item.embedding) for item in response.data]
+return np.array(embeddings)`,
+    "exam-rag4-cosine": `cosine_scores = np.dot(all_embeddings, query_embedding) / (
+    np.linalg.norm(all_embeddings, axis=1) * np.linalg.norm(query_embedding)
+)
+top_k_indices = (-cosine_scores).argsort()[:topk]
+top_k_chunks = np.array(all_chunks)[top_k_indices]`,
+    "exam-rag4-llama": `base_index = VectorStoreIndex.from_documents(documents=documents, transformations=[self.parser])
+base_retriever = base_index.as_retriever(similarity_top_k=topk)
+retrieved_nodes = base_retriever.retrieve(query)
+retrieved_results = [retrieved_node.node.get_content().strip() for retrieved_node in retrieved_nodes]
+return retrieved_results`,
+    "exam-rag4-prompt": `references = references[:MAX_CONTEXT_REFERENCES_LENGTH]
+llm_input = [
+    {"role": "system", "content": system_prompt},
+    {"role": "user", "content": user_message},
+]
+return llm_input`,
+    "exam-rag4-reader": `llm_input = self.prompt_generator(query, top_k_chunks)
+completion = oai_client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    temperature=0,
+    messages=llm_input
+).choices[0].message.content`,
+    "exam-rag4-inference": `retrieved_results = self.retriever.retrieve(query, search_results, topk)
+answer = self.reader.generate_response(query, retrieved_results)
+return answer, retrieved_results`
+  };
+  Object.entries(cells).forEach(([id, source]) => { course.cells[id] = {source}; });
+  const base = {subject:"RAG",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:false,source_type:"원본 YOUR CODE HERE 셀 기반"};
+  const make = (data) => ({...base,accepted_answers:[data.answer],...data});
+  chapter.subjective = [
+    make({id:"exam-rag04-01",topic:"HTML 문서 정제",difficulty:"2 · Library 연결",sourceId:"exam-rag4-html",prompt:"검색 결과의 전체 HTML을 lxml로 분석하고 본문 문자열을 all_documents에 저장하는 세 줄을 작성하세요.",answer:cells["exam-rag4-html"],problem_context:`for html_text in search_results:
+    soup = ????(html_text[????], features=????)
+    text = soup.????(" ", strip=True)
+    all_documents.????(text)`,explanation:"page_result가 전체 HTML이고 BeautifulSoup이 구조를 분석합니다. get_text는 태그를 제거한 본문을 만들며 append로 문서 순서를 보존합니다.",tensor_flow:"list[page dict] → HTML str → text str → list[str]",code_signal:"page schema의 page_result, import된 BeautifulSoup, 초기화된 all_documents=[]가 단서입니다.",retry:"입력 field, parser, text 추출, 저장 네 역할을 순서대로 확인하세요."}),
+    make({id:"exam-rag04-02",topic:"문장 Chunk 추출",difficulty:"3 · Offset 연결",sourceId:"exam-rag4-chunks",prompt:"문장 offset을 얻고 각 문장을 최대 허용 길이로 잘라 all_chunks에 저장하는 블록을 작성하세요.",answer:cells["exam-rag4-chunks"],problem_context:`????, offsets = ????(document)
+for start, end in offsets:
+    chunk = document[????:????][:????]
+    all_chunks.????(chunk)`,explanation:"문장 분할 함수의 offset 결과를 사용해 원문 경계를 보존합니다. 각 문장 slice 뒤에 최대 길이 제한을 적용하고 검색 후보 목록에 저장합니다.",tensor_flow:"document str → offsets → bounded chunks → list[str]",code_signal:"start/end 반복 변수와 MAX_CONTEXT_SENTENCE_LENGTH 상수가 slice 구조를 결정합니다.",retry:"문장 범위 slice와 길이 제한 slice를 두 단계로 적으세요."}),
+    make({id:"exam-rag04-03",topic:"Embedding API",difficulty:"3 · 응답 변환",sourceId:"exam-rag4-embed",prompt:"문자열 목록의 embedding을 요청하고 응답 객체의 각 vector를 NumPy 2차원 배열로 반환하는 코드를 작성하세요.",answer:cells["exam-rag4-embed"],problem_context:`response = self.client.????.????(
+    model="text-embedding-3-small",
+    input=????
+)
+embeddings = [np.array(item.????) for item in response.????]
+return np.array(????)`,explanation:"embeddings.create는 입력마다 response.data 항목을 반환합니다. 각 item.embedding을 NumPy vector로 바꾸고 전체 목록을 [N,D] 배열로 묶습니다.",tensor_flow:"list[str] N → API response.data N → ndarray [N,D]",code_signal:"client 아래 embeddings 리소스, create 동사, response.data/item.embedding 구조를 따라갑니다.",retry:"API 호출 결과에서 목록과 개별 vector가 각각 어느 속성인지 구분하세요."}),
+    make({id:"exam-rag04-04",topic:"Cosine Top-k",difficulty:"3 · 수치 계산",sourceId:"exam-rag4-cosine",prompt:"chunk embedding과 query embedding의 cosine 점수를 계산하고 높은 순서의 top-k chunk를 선택하는 코드를 작성하세요.",answer:cells["exam-rag4-cosine"],problem_context:`cosine_scores = np.????(all_embeddings, query_embedding) / (
+    np.linalg.????(all_embeddings, axis=????) * np.linalg.????(query_embedding)
+)
+top_k_indices = (????cosine_scores).????()[:topk]
+top_k_chunks = np.array(all_chunks)[????]`,explanation:"[N,D]와 [D]의 dot은 [N] 분자를 만들고 각 chunk norm(axis=1)과 query norm으로 정규화합니다. argsort는 오름차순이므로 음수 점수를 정렬해 높은 원래 점수를 먼저 얻습니다.",tensor_flow:"[N,D]·[D] → scores [N] → indices [K] → chunks [K]",code_signal:"cosine 공식, axis=1, 높은 점수 선택을 위한 음수 부호가 핵심입니다.",retry:"분자, 분모, 정렬, indexing 네 단계를 따로 검산하세요."}),
+    make({id:"exam-rag04-05",topic:"LlamaIndex Top-k 검색",difficulty:"3 · 전체 검색 연결",sourceId:"exam-rag4-llama",prompt:"documents를 parser로 분할해 index를 만들고 top-k 검색 후 본문 문자열 목록을 반환하는 다섯 줄을 작성하세요.",answer:cells["exam-rag4-llama"],problem_context:`base_index = VectorStoreIndex.????(documents=documents, ????=[self.parser])
+base_retriever = base_index.????(similarity_top_k=topk)
+retrieved_nodes = base_retriever.????(query)
+retrieved_results = [retrieved_node.node.????().strip() for retrieved_node in retrieved_nodes]
+return ????`,explanation:"from_documents가 parser transformation으로 node와 index를 만들고 as_retriever에서 top-k를 설정합니다. retrieve 결과의 node 본문을 get_content로 꺼냅니다.",tensor_flow:"Documents → VectorStoreIndex → NodeWithScore[K] → list[str]",code_signal:"각 왼쪽 변수명 base_index/base_retriever/retrieved_nodes/retrieved_results가 다음 객체 변환을 알려줍니다.",retry:"문서→index→retriever→nodes→text의 타입 변화를 적으세요."}),
+    make({id:"exam-rag04-06",topic:"LLM Input 구성",difficulty:"2 · 역할 메시지",sourceId:"exam-rag4-prompt",prompt:"검색 근거 길이를 제한하고 system 규칙과 user 질문을 올바른 role로 구성해 반환하는 코드를 작성하세요.",answer:cells["exam-rag4-prompt"],problem_context:`references = references[:????]
+llm_input = [
+    {"role": ????, "content": ????},
+    {"role": ????, "content": ????},
+]
+return ????`,explanation:"reference 문자열을 최대 context 길이로 제한합니다. system에는 답변 규칙을, user에는 근거와 질문이 합쳐진 user_message를 넣고 messages 목록을 반환합니다.",tensor_flow:"chunks/query → bounded reference/user text → list[message dict]",code_signal:"system_prompt와 user_message 변수명, Chat API의 role/content schema가 일대일 대응합니다.",retry:"두 message의 role과 content를 표로 맞춘 뒤 다시 쓰세요."}),
+    make({id:"exam-rag04-07",topic:"Reader LLM 호출",difficulty:"3 · Prompt→응답",sourceId:"exam-rag4-reader",prompt:"Reader에서 prompt_generator 결과를 Chat Completions에 전달하고 최종 문자열을 추출하는 코드를 작성하세요.",answer:cells["exam-rag4-reader"],problem_context:`llm_input = self.????(query, top_k_chunks)
+completion = oai_client.chat.completions.????(
+    model="gpt-3.5-turbo",
+    temperature=0,
+    messages=????
+).choices[????].message.????`,explanation:"prompt_generator가 Chat API 형식의 messages를 반환합니다. create에 그대로 넘기고 첫 choice의 message.content가 실제 답변 문자열입니다.",tensor_flow:"query+chunks → messages → completion object → answer str",code_signal:"llm_input의 생성 함수와 messages keyword, OpenAI 응답 계층 choices[0].message.content를 찾습니다.",retry:"입력 생성, API 호출, 응답 추출 세 구간으로 나눠 복원하세요."}),
+    make({id:"exam-rag04-08",topic:"RAG Inference",difficulty:"3 · 구성 요소 연결",sourceId:"exam-rag4-inference",prompt:"query·search_results·topk로 근거를 검색하고 Reader로 답한 뒤 답과 근거를 함께 반환하는 세 줄을 작성하세요.",answer:cells["exam-rag4-inference"],problem_context:`def inference(self, query, search_results, topk):
+    retrieved_results = self.????.????(query, search_results, topk)
+    answer = self.????.????(query, retrieved_results)
+    return ????, ????`,explanation:"Retriever가 만든 retrieved_results가 Reader의 두 번째 입력이 됩니다. answer와 evidence를 tuple로 반환하면 평가 시 검색과 생성을 분리해 점검할 수 있습니다.",tensor_flow:"query+web results → top-k evidence → answer → (answer,evidence)",code_signal:"__init__의 self.retriever/self.reader와 두 클래스의 공개 메서드가 호출 대상을 결정합니다.",retry:"첫 줄 출력이 둘째 줄 입력으로 이어지는지, return 순서가 사용처와 맞는지 확인하세요."})
+  ];
+  chapter.mcq = [
+    {id:"exam-rag04-m1",source_question_id:"exam-rag04-01",topic:"HTML Field",prompt:"웹 검색 결과에서 parser에 전달할 값은?",answer_index:3,explanation:"전체 HTML은 page_result에 있습니다.",choices:[{text:"item['query']",why:"사용자 질문입니다."},{text:"page['page_name']",why:"제목뿐입니다."},{text:"page['page_snippet']",why:"검색 요약만 포함합니다."},{text:"page['page_result']",why:"정제할 전체 HTML 본문입니다."},{text:"item['answer']",why:"평가 정답입니다."}]},
+    {id:"exam-rag04-m2",source_question_id:"exam-rag04-04",topic:"Cosine shape",prompt:"all_embeddings [N,D], query_embedding [D]에서 chunk별 norm 설정은?",answer_index:1,explanation:"각 행이 한 chunk vector이므로 axis=1입니다.",choices:[{text:"np.linalg.norm(all_embeddings, axis=0)",why:"embedding 차원별 norm [D]을 만듭니다."},{text:"np.linalg.norm(all_embeddings, axis=1)",why:"chunk마다 하나의 norm [N]을 만듭니다."},{text:"np.linalg.norm(all_embeddings)",why:"전체 행렬을 하나의 scalar로 만듭니다."},{text:"np.linalg.norm(query_embedding, axis=1)",why:"1차원 query에 axis=1은 없습니다."},{text:"all_embeddings.sum(axis=1)",why:"L2 norm이 아닙니다."}]},
+    {id:"exam-rag04-m3",source_question_id:"exam-rag04-05",topic:"LlamaIndex 실행 순서",prompt:"LlamaIndex 검색 흐름으로 올바른 것은?",answer_index:4,explanation:"문서 index 생성, retriever 변환, query 검색, node content 추출 순서입니다.",choices:[{text:"retrieve→from_documents→as_retriever",why:"객체 생성 전 검색합니다."},{text:"as_retriever→Document→retrieve",why:"index가 없습니다."},{text:"Document→retrieve→from_documents",why:"검색 순서가 앞섭니다."},{text:"from_documents→query_engine→complete",why:"이 구현은 검색 전용 retriever를 사용합니다."},{text:"from_documents→as_retriever→retrieve→get_content",why:"검색 전용 전체 흐름이 맞습니다."}]},
+    {id:"exam-rag04-m4",source_question_id:"exam-rag04-06",topic:"Message roles",prompt:"역할과 content가 올바르게 연결된 것은?",answer_index:0,explanation:"규칙은 system, 근거와 질문은 user입니다.",choices:[{text:"system: system_prompt / user: user_message",why:"역할에 맞게 연결했습니다."},{text:"system: user_message / user: system_prompt",why:"규칙과 요청이 뒤바뀝니다."},{text:"assistant: system_prompt / system: user_message",why:"답변 역할을 입력 규칙에 사용했습니다."},{text:"user: references / user: query only",why:"system 규칙이 빠졌습니다."},{text:"system: answer / user: ground_truth",why:"정답 누출이며 생성 입력 구조가 아닙니다."}]},
+    {id:"exam-rag04-m5",source_question_id:"exam-rag04-08",topic:"RAG 반환",prompt:"검색 실패와 생성 실패를 따로 검사할 수 있는 반환은?",answer_index:2,explanation:"답변과 근거를 함께 반환해야 원인을 분리할 수 있습니다.",choices:[{text:"return answer",why:"검색 근거를 확인할 수 없습니다."},{text:"return retrieved_results",why:"최종 답변이 없습니다."},{text:"return answer, retrieved_results",why:"생성 결과와 검색 근거를 함께 제공합니다."},{text:"return query, topk",why:"실행 결과가 아닙니다."},{text:"return reader, retriever",why:"구성 객체일 뿐 결과가 아닙니다."}]}
+  ];
+  chapter.questionCount = chapter.subjective.length;
+  chapter.exam_design = {version:2,style:"웹 근거→검색→LLM 파이프라인 구현형",difficulty:["Library 연결","벡터 계산","독립 RAG 구성"],excluded:["API 키","데이터 경로","모델명 단독 암기","샘플 반복 index"]};
+})();
+
+(() => {
+  "use strict";
+  const course = window.LLM_COURSE;
   const chapter = course.chapters.find((item) => item.file === "1. Data_preprocessing.ipynb");
   if (!chapter) return;
 
