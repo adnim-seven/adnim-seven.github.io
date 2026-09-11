@@ -130,6 +130,142 @@ index.????(id, delete_from_docstore=True)`,explanation:"set_content는 Document 
 (() => {
   "use strict";
   const course = window.LLM_COURSE;
+  const chapter = course.chapters.find((item) => item.file === "4_RAG_framework_evaluation_with_MCP.ipynb");
+  if (!chapter) return;
+
+  chapter.notebook_goal = "RAG 답변을 의미 기반으로 평가하고 MCP 도구를 비동기 Agent에 연결해 KG 검색부터 최종 응답까지 실행한다.";
+  chapter.summary = "LLM Judge와 CRAG score로 정확성·누락·환각을 평가하고, MCP client·tool spec·FunctionAgent·Context를 연결한 async RAG를 구현합니다.";
+  chapter.capability = "평가 응답을 안전하게 점수화하고 MCP 도구 검색·Agent 실행·이벤트 처리·Reader 생성을 비동기 흐름으로 구성할 수 있다.";
+  chapter.overview = {
+    title: "RAG 평가와 MCP Tool Calling의 전체 흐름",
+    subtitle: "답변 품질을 수치로 검증한 뒤 외부 KG 도구를 Agent에 연결해 시간 조건까지 포함한 근거를 검색한다.",
+    steps: [
+      {label:"LLM Judge",code:"question + ground truth + prediction",flow:"texts → Accuracy JSON"},
+      {label:"CRAG Score",code:"exact + 0.5×acceptable − hallucination",flow:"cases → scalar score"},
+      {label:"MCP Discovery",code:"client → tool spec → await tool list",flow:"server → tools"},
+      {label:"Agent 실행",code:"FunctionAgent.run → stream_events → await handler",flow:"question → tool calls → response"},
+      {label:"Async RAG",code:"await retrieve → Reader → result dict",flow:"query/time → evidence + answer"}
+    ],
+    rules: [
+      "Judge의 JSON Accuracy는 boolean true와 문자열 'true'를 모두 허용하되 파싱 실패는 -1로 처리한다.",
+      "정확 일치, 의미상 일치, 모름, 환각을 겹치지 않게 분류한 뒤 CRAG score를 계산한다.",
+      "MCP tool 목록 조회와 Agent 실행은 네트워크 작업이므로 await가 필요하다.",
+      "FunctionAgent를 만든 뒤 같은 Agent로 Context를 생성해야 대화·도구 상태가 유지된다.",
+      "handler는 이벤트 stream을 먼저 순회한 뒤 await하여 최종 응답을 얻는다."
+    ]
+  };
+  chapter.key_points = [
+    {title:"Semantic Evaluation",purpose:"문자열이 달라도 의미가 맞는 답을 LLM Judge로 판정합니다.",code:"evaluation_result = generate_answer(context, INSTRUCTIONS)\neval_res = parse_response(evaluation_result)",flow:"question/gold/prediction → JSON → 1 or -1",watch:"Judge가 만든 JSON도 신뢰하지 말고 파싱 실패를 처리합니다."},
+    {title:"CRAG Score",purpose:"정답 보상과 환각 패널티를 하나의 점수로 결합합니다.",code:"hallucinate = total - exact - acceptable - miss\nscore = exact + 0.5*acceptable - hallucinate",flow:"four counters → scalar",watch:"I don't know는 miss이며 hallucination에서 제외합니다."},
+    {title:"MCP Agent",purpose:"외부 서버가 공개한 tools를 LlamaIndex Agent가 선택·호출할 수 있게 합니다.",code:"client = BasicMCPClient(server)\nspec = McpToolSpec(client=client)\ntools = await spec.to_tool_list_async()",flow:"MCP server → tool metadata → FunctionAgent",watch:"client 자체가 Agent tool 목록은 아닙니다."},
+    {title:"Async Inference",purpose:"시간 조건이 포함된 query로 MCP를 조회하고 Reader 결과와 근거를 함께 반환합니다.",code:"retrieved = await self.retrieve(...)\nanswer = self.generate_response(...)\nreturn {'retrieved_results': retrieved, 'answer': answer}",flow:"query/time → MCP result → answer dict",watch:"async 함수 호출에서 await를 빠뜨리면 coroutine 객체가 전달됩니다."}
+  ];
+  chapter.theory_guide = [
+    {title:"Judge parsing",concept:"외부 LLM 출력은 schema를 지시해도 형식이 달라질 수 있으므로 타입과 key를 확인해 보수적으로 판정합니다.",flow:"response str → lowercase → json.loads → Accuracy check",code_signal:"boolean과 string 두 조건이 or로 묶입니다.",exam_clue:"파싱 실패나 False는 성공으로 간주하지 않습니다."},
+    {title:"MCP",concept:"Model Context Protocol은 외부 서버의 도구와 자원을 공통 규격으로 모델에 제공하는 연결 방식입니다.",flow:"server → BasicMCPClient → McpToolSpec → Agent tools",code_signal:"to_tool_list_async와 fetch_resources는 await와 함께 사용됩니다.",exam_clue:"Client, ToolSpec, Agent의 역할을 순서대로 구분하세요."},
+    {title:"Async handler",concept:"Agent run은 즉시 최종 문자열이 아니라 진행 이벤트와 최종 결과를 제공하는 handler를 반환합니다.",flow:"run → async event stream → await handler → response",code_signal:"async for와 await가 같은 handler에 사용됩니다.",exam_clue:"stream_events 결과 자체를 최종 응답으로 반환하지 않습니다."},
+    {title:"Evidence-preserving RAG",concept:"최종 답과 검색 결과를 함께 보존하면 평가 실패가 retrieval인지 generation인지 추적할 수 있습니다.",flow:"MCP result → Reader → {retrieved_results, answer}",code_signal:"inference return dictionary의 두 key를 확인합니다.",exam_clue:"Reader에는 coroutine이 아니라 await가 끝난 실제 문자열을 전달합니다."}
+  ];
+
+  const cells = {
+    "exam-rag6-parse": `response = response.lower()
+model_resp = json.loads(response)
+if "accuracy" in model_resp and (model_resp["accuracy"] is True or (isinstance(model_resp["accuracy"], str) and model_resp["accuracy"].lower() == "true")):
+    answer = 1
+return answer`,
+    "exam-rag6-eval": `evaluation_result = generate_answer(user_prompt=context_template, system_prompt=INSTRUCTIONS)
+eval_res = parse_response(evaluation_result)
+return eval_res`,
+    "exam-rag6-combine": `retrieved_results = self.retriever.retrieve(query, search_results, topk)
+kg_results = self.kg_query_engine.query(query)
+combined_results = [kg_results]
+combined_results.extend(retrieved_results)
+return combined_results`,
+    "exam-rag6-score": `n_hallucinate = len(finance_test_dataset_ids) - n_correct_exact - n_correct - n_miss
+CRAG_score = n_correct_exact + 0.5 * n_correct - n_hallucinate`,
+    "exam-rag6-tools": `mcp_client = BasicMCPClient(external_mcp_server)
+mcp_tool = McpToolSpec(client=mcp_client)
+tools = await mcp_tool.to_tool_list_async()`,
+    "exam-rag6-agent": `self.agent = FunctionAgent(
+    tools=tools,
+    llm=self.llm,
+    system_prompt=SYSTEM_PROMPT,
+)
+self.agent_context = Context(self.agent)`,
+    "exam-rag6-handler": `handler = self.agent.run(question, ctx=self.agent_context)
+async for event in handler.stream_events():
+    if verbose and type(event) == ToolCall:
+        print(event.tool_name, event.tool_kwargs)
+response = await handler`,
+    "exam-rag6-inference": `retrieved_results = await self.retrieve(query, query_time, search_results, topk)
+answer = self.generate_response(query, query_time, retrieved_results)
+return {
+    "retrieved_results": retrieved_results,
+    "answer": answer
+}`
+  };
+  Object.entries(cells).forEach(([id, source]) => { course.cells[id] = {source}; });
+  const base = {subject:"RAG",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:false,source_type:"원본 YOUR CODE HERE 셀 기반"};
+  const make = (data) => ({...base,accepted_answers:[data.answer],...data});
+  chapter.subjective = [
+    make({id:"exam-rag06-01",topic:"Judge 응답 파싱",difficulty:"3 · 안전한 판정",sourceId:"exam-rag6-parse",prompt:"Judge JSON을 파싱하고 Accuracy가 boolean 또는 문자열 true일 때만 성공값을 반환하는 핵심 코드를 작성하세요.",answer:cells["exam-rag6-parse"],problem_context:`answer = -1
+response = response.????()
+model_resp = json.????(response)
+if "accuracy" in model_resp and (
+    model_resp["accuracy"] is ???? or
+    (isinstance(model_resp["accuracy"], ????) and model_resp["accuracy"].lower() == "true")
+):
+    answer = ????
+return ????`,explanation:"대소문자 차이를 제거한 후 JSON dict로 바꿉니다. Accuracy는 실제 boolean True 또는 문자열 true일 수 있어 둘을 허용하고 성공값 1을 설정합니다.",tensor_flow:"Judge response str → dict → validated flag → integer score",code_signal:"샘플 출력의 'Accuracy': 'True'와 함수 기본 answer=-1이 허용 타입과 성공값을 알려줍니다.",retry:"문자열 정규화, JSON 변환, key·type 검사, 반환 순서를 점검하세요."}),
+    make({id:"exam-rag06-02",topic:"CRAG 의미 평가",difficulty:"2 · 함수 연결",sourceId:"exam-rag6-eval",prompt:"평가 context를 Judge 규칙과 함께 LLM에 보내고 파싱 결과를 반환하는 세 줄을 작성하세요.",answer:cells["exam-rag6-eval"],problem_context:`evaluation_result = ????(
+    user_prompt=context_template,
+    system_prompt=????
+)
+eval_res = ????(evaluation_result)
+return ????`,explanation:"평가 기준 INSTRUCTIONS는 system prompt, 질문·정답·예측을 합친 context_template은 user prompt입니다. 원시 LLM 문자열은 parse_response를 거쳐 정수 판정값이 됩니다.",tensor_flow:"evaluation context → LLM JSON str → parser → 1/-1",code_signal:"generate_answer의 parameter 이름과 직전에 정의된 INSTRUCTIONS/parse_response가 직접 대응합니다.",retry:"평가 생성과 평가 파싱을 한 함수로 혼동하지 마세요."}),
+    make({id:"exam-rag06-03",topic:"KG·Web 근거 결합",difficulty:"3 · 검색 통합",sourceId:"exam-rag6-combine",prompt:"웹 top-k와 KG 결과를 조회해 하나의 근거 목록으로 합치고 반환하는 다섯 줄을 작성하세요.",answer:cells["exam-rag6-combine"],problem_context:`retrieved_results = self.????.????(query, search_results, topk)
+kg_results = self.????.????(query)
+combined_results = [????]
+combined_results.????(retrieved_results)
+return ????`,explanation:"웹 retriever는 list를, KG engine은 하나의 결과를 반환하므로 먼저 [kg_results]로 목록을 만든 뒤 extend로 웹 근거의 각 항목을 추가합니다.",tensor_flow:"web list + KG result → combined list",code_signal:"append가 아니라 extend를 써야 retrieved_results 목록이 중첩되지 않습니다.",retry:"단일 KG 결과를 list로 만들고 웹 list를 펼쳐 붙이는 두 단계를 구분하세요."}),
+    make({id:"exam-rag06-04",topic:"CRAG Score",difficulty:"3 · 평가 계산",sourceId:"exam-rag6-score",prompt:"전체 평가 수에서 정확·의미정답·모름을 제외해 환각 수를 구하고 CRAG 점수를 계산하는 두 줄을 작성하세요.",answer:cells["exam-rag6-score"],problem_context:`n_hallucinate = ???? - ???? - ???? - ????
+CRAG_score = ???? + 0.5 * ???? - ????`,explanation:"모든 사례는 exact, acceptable, miss, hallucinate 중 하나입니다. exact는 1점, 의미 정답은 0.5점, hallucination은 -1점이며 miss는 점수 0입니다.",tensor_flow:"category counts → hallucination count → scalar score",code_signal:"위 반복문의 세 counter와 finance_test_dataset_ids 길이가 전체 분할식을 결정합니다.",retry:"전체=네 범주 합을 먼저 쓰고 점수 가중치를 적용하세요."}),
+    make({id:"exam-rag06-05",topic:"MCP Tool Discovery",difficulty:"2 · 비동기 연결",sourceId:"exam-rag6-tools",prompt:"외부 MCP 서버 client와 tool spec을 만들고 비동기로 Agent용 tool 목록을 조회하는 세 줄을 작성하세요.",answer:cells["exam-rag6-tools"],problem_context:`mcp_client = ????(external_mcp_server)
+mcp_tool = ????(client=????)
+tools = ???? mcp_tool.????()`,explanation:"BasicMCPClient가 서버 통신을 담당하고 McpToolSpec이 도구 metadata를 LlamaIndex 형식으로 변환합니다. 목록 조회는 네트워크 작업이라 await합니다.",tensor_flow:"server URI → MCP client → tool spec → list[tools]",code_signal:"import된 두 클래스와 async 메서드 suffix, 이후 for tool in tools가 단서입니다.",retry:"Client→Spec→await 목록의 세 객체 변화를 적으세요."}),
+    make({id:"exam-rag06-06",topic:"FunctionAgent 초기화",difficulty:"3 · 의존성 구성",sourceId:"exam-rag6-agent",prompt:"발견된 tools·LLM·system prompt로 FunctionAgent를 만들고 같은 Agent의 Context를 저장하는 코드를 작성하세요.",answer:cells["exam-rag6-agent"],problem_context:`self.agent = ????(
+    tools=????,
+    llm=????,
+    system_prompt=????,
+)
+self.agent_context = ????(????)`,explanation:"FunctionAgent는 사용 가능한 tools와 판단할 LLM, tool 사용 규칙을 받습니다. Context(self.agent)는 이후 run에서 대화와 workflow 상태를 유지합니다.",tensor_flow:"tools + LLM + rules → Agent → Context",code_signal:"클래스 field self.agent/self.agent_context의 타입 annotation과 import가 생성자를 알려줍니다.",retry:"Agent 구성 요소와 Context가 감싸는 대상이 같은 Agent인지 확인하세요."}),
+    make({id:"exam-rag06-07",topic:"Agent Handler 실행",difficulty:"3 · Async 흐름",sourceId:"exam-rag6-handler",prompt:"Context와 함께 Agent를 실행하고 tool call 이벤트를 순회한 뒤 최종 응답을 얻는 핵심 코드를 작성하세요.",answer:cells["exam-rag6-handler"],problem_context:`handler = self.agent.????(question, ctx=????)
+???? for event in handler.????():
+    if verbose and type(event) == ???? :
+        print(event.tool_name, event.tool_kwargs)
+response = ???? handler`,explanation:"run은 handler를 반환합니다. async for로 진행 이벤트를 관찰할 수 있고 모든 처리가 끝난 최종 값은 await handler로 얻습니다.",tensor_flow:"question + Context → handler → events → final response",code_signal:"함수가 async def이고 stream_events가 비동기 iterator이므로 async for와 await가 필요합니다.",retry:"이벤트 관찰과 최종 결과 대기를 별개의 단계로 쓰세요."}),
+    make({id:"exam-rag06-08",topic:"MCP RAG Inference",difficulty:"3 · 전체 연결",sourceId:"exam-rag6-inference",prompt:"MCP 검색을 기다린 뒤 시간 조건과 근거를 Reader에 전달하고 근거·답을 dictionary로 반환하는 코드를 작성하세요.",answer:cells["exam-rag6-inference"],problem_context:`async def inference(self, query, search_results, query_time, topk):
+    retrieved_results = ???? self.????(query, query_time, search_results, topk)
+    answer = self.????(query, query_time, retrieved_results)
+    return {
+        "retrieved_results": ????,
+        "answer": ????
+    }`,explanation:"retrieve는 async이므로 await로 실제 MCP 결과를 받은 뒤 동기 generate_response에 전달합니다. 두 결과를 이름 있는 dictionary로 반환해 평가와 디버깅에 사용합니다.",tensor_flow:"query/time → await MCP evidence → Reader answer → result dict",code_signal:"retrieve 정의의 async와 inference 사용처의 result['retrieved_results']/['answer']가 구문을 결정합니다.",retry:"coroutine과 실제 결과를 구분하고 return key에 올바른 변수를 연결하세요."})
+  ];
+  chapter.mcq = [
+    {id:"exam-rag06-m1",source_question_id:"exam-rag06-01",topic:"Accuracy 타입",prompt:"Judge의 성공 응답으로 허용할 조합은?",answer_index:2,explanation:"boolean True와 대소문자를 무시한 문자열 true를 허용합니다.",choices:[{text:"값이 존재하는 모든 문자열",why:"'False'도 truthy라 오판합니다."},{text:"model_resp['accuracy'] == 1만",why:"Judge schema는 boolean/문자열입니다."},{text:"is True 또는 문자열을 lower한 값이 'true'",why:"두 가능한 형식을 안전하게 처리합니다."},{text:"'accuracy' key가 있으면 항상 성공",why:"False 값도 성공 처리합니다."},{text:"response에 'true'가 포함되면 성공",why:"JSON 구조 밖 문구도 오인할 수 있습니다."}]},
+    {id:"exam-rag06-m2",source_question_id:"exam-rag06-04",topic:"평가 범주",prompt:"'I don’t know' 응답은 CRAG 계산에서 어디에 속하는가?",answer_index:1,explanation:"miss로 세며 hallucination에서 제외되고 점수 기여는 0입니다.",choices:[{text:"exact correct",why:"정답을 제공하지 않았습니다."},{text:"miss",why:"모름 응답은 누락 범주입니다."},{text:"acceptable correct",why:"의미상 정답이 아닙니다."},{text:"hallucination",why:"틀린 정보를 생성한 것이 아닙니다."},{text:"평가 대상 제외",why:"전체 사례 수에는 포함됩니다."}]},
+    {id:"exam-rag06-m3",source_question_id:"exam-rag06-05",topic:"MCP 객체 역할",prompt:"MCP 서버 tools를 Agent용 목록으로 바꾸는 흐름은?",answer_index:4,explanation:"Client를 ToolSpec에 연결하고 비동기 목록 변환을 호출합니다.",choices:[{text:"FunctionAgent(server_url)",why:"Agent가 서버에 직접 연결하지 않습니다."},{text:"McpToolSpec(FunctionAgent)",why:"입력 객체 역할이 틀립니다."},{text:"BasicMCPClient.to_agent()",why:"해당 변환 메서드가 아닙니다."},{text:"fetch_resources()만 호출",why:"resource 목록은 Agent tool 목록과 다릅니다."},{text:"BasicMCPClient → McpToolSpec → await to_tool_list_async()",why:"올바른 연결 순서입니다."}]},
+    {id:"exam-rag06-m4",source_question_id:"exam-rag06-07",topic:"Async Agent",prompt:"Agent handler에서 최종 응답을 얻는 코드는?",answer_index:0,explanation:"이벤트 순회 후 handler 자체를 await합니다.",choices:[{text:"response = await handler",why:"workflow 완료 결과를 기다립니다."},{text:"response = handler.stream_events()",why:"이벤트 iterator일 뿐 최종 응답이 아닙니다."},{text:"response = await event",why:"개별 이벤트가 최종 결과가 아닙니다."},{text:"response = handler.run()",why:"handler에 다시 run하지 않습니다."},{text:"response = str(handler)",why:"객체 표현만 얻습니다."}]},
+    {id:"exam-rag06-m5",source_question_id:"exam-rag06-08",topic:"Async RAG",prompt:"MCP retrieve 결과를 Reader에 넘기기 전에 필요한 것은?",answer_index:3,explanation:"async retrieve를 await해 실제 evidence를 받아야 합니다.",choices:[{text:"str(self.retrieve(...))",why:"coroutine 표현 문자열이 됩니다."},{text:"self.retrieve(...).result()",why:"이 비동기 흐름의 사용법이 아닙니다."},{text:"async for self.retrieve(...)만",why:"retrieve는 async iterator가 아니라 coroutine입니다."},{text:"retrieved_results = await self.retrieve(...) ",why:"실제 MCP 결과가 준비될 때까지 기다립니다."},{text:"self.generate_response(...) 먼저",why:"근거가 아직 없습니다."}]}
+  ];
+  chapter.questionCount = chapter.subjective.length;
+  chapter.exam_design = {version:2,style:"RAG 평가·MCP Async 구현형",difficulty:["평가 파싱","도구 연결","비동기 전체 흐름"],excluded:["API 키","서버 URI","interaction ID","모델명 단독 암기"]};
+})();
+
+(() => {
+  "use strict";
+  const course = window.LLM_COURSE;
   const chapter = course.chapters.find((item) => item.file === "3. Task_2.ipynb");
   if (!chapter) return;
 
