@@ -153,6 +153,7 @@
     return chapter().subjective.find((q) => q.id === id);
   }
   function sourceContext(question) {
+    if (question.problem_context) return question.problem_context;
     if (!question) return "????";
     const source = course.cells[question.sourceId]?.source || "";
     const answer = question.answer;
@@ -220,7 +221,8 @@
     hintUsed = true;
     const answer = item.answer.trim();
     const shape = answer.includes("(") ? "함수·메서드 호출 또는 생성자" : answer.includes("[") ? "인덱싱·슬라이싱" : answer.includes("=") ? "대입문" : "코드 표현식";
-    feedback($("#subFeedback"), `힌트: ${shape}\n첫 문자: ${answer.slice(0, 1)} · 약 ${answer.length}자`, "neutral");
+    const clue = item.code_signal ? `\n코드 단서: ${item.code_signal}` : "";
+    feedback($("#subFeedback"), `힌트: ${shape}\n첫 문자: ${answer.slice(0, 1)} · 약 ${answer.length}자${clue}`, "neutral");
   }
   function submitSubjective() {
     const item = currentSubjective(); if (!item) return;
@@ -229,7 +231,8 @@
     recordAttempt(item.id, "subjective", correct, confidence("subConfidence"), hintUsed, correct ? "" : $("#errorCategory").value);
     const status = state.questions[item.id].status;
     const statusText = { mastered: "숙달", learned: "주관식 1회 성공", recognition: "5지선다 확인", wrong: "오답 재시험" }[status];
-    feedback($("#subFeedback"), `${correct ? "정답입니다." : "오답입니다."}\n현재 상태: ${statusText}\n\n정답\n${item.answer}`, correct ? "correct" : "wrong");
+    const detail = [item.explanation && `\n왜 이렇게 쓰나\n${item.explanation}`, item.tensor_flow && `\nTensor 흐름\n${item.tensor_flow}`, item.retry && `\n바로 재도전\n${item.retry}`].filter(Boolean).join("\n");
+    feedback($("#subFeedback"), `${correct ? "정답입니다." : "오답입니다."}\n현재 상태: ${statusText}\n\n정답\n${item.answer}${detail}`, correct ? "correct" : "wrong");
     saveState();
   }
   function nextSubjective() {
