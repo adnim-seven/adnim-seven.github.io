@@ -75,12 +75,13 @@
     mcqIndex = 0;
     subjectivePool = chapter().subjective.slice();
     subjectiveIndex = 0;
-    $("#chapterPath").textContent = `${course.subject || "Vision"} › ${chapter().file}`;
+    $("#chapterPath").textContent = `4. Vision › ${chapter().file}`;
     $("#chapterTitle").textContent = `${chapter().number} · ${chapter().title}`;
     $("#notebookGoal").textContent = `목표 · ${chapter().notebook_goal || chapter().summary}`;
     $("#capability").textContent = chapter().capability;
     $("#summary").textContent = chapter().summary;
     renderNav();
+    renderOverview();
     renderStudy();
     renderTheoryGuide();
     renderFullCode();
@@ -88,6 +89,13 @@
     renderSubjective();
     renderStats();
     renderResults();
+  }
+
+  function renderOverview() {
+    const data = chapter().overview || {};
+    const steps = data.steps || chapter().key_points.map((point) => ({label:point.title,code:point.code.split("\n")[0],flow:point.flow}));
+    const rules = data.rules || chapter().key_points.map((point) => point.watch);
+    $("#notebookOverview").innerHTML = `<figcaption><span>NOTEBOOK AT A GLANCE</span><h2>${esc(data.title || chapter().title)}</h2><p>${esc(data.subtitle || chapter().capability)}</p></figcaption><div class="overview-flow">${steps.map((step,index)=>`<article class="overview-step"><span class="overview-step-no">${String(index+1).padStart(2,"0")}</span><h3>${esc(step.label)}</h3><code>${esc(step.code)}</code><p>${esc(step.flow)}</p></article>${index<steps.length-1?'<span class="overview-arrow" aria-hidden="true">→</span>':""}`).join("")}</div><div class="overview-rules"><strong>시험장에서 복원할 규칙</strong><ul>${rules.map((rule)=>`<li>${esc(rule)}</li>`).join("")}</ul></div>`;
   }
 
   function renderStudy() {
@@ -154,6 +162,7 @@
   }
   function sourceContext(question) {
     if (!question) return "????";
+    if (question.problem_context) return question.problem_context;
     const source = course.cells[question.sourceId]?.source || "";
     const answer = question.answer;
     let position = -1, start = 0;
@@ -165,7 +174,8 @@
     if (position < 0) return `${question.prompt}\n????`;
     const line = source.slice(0, position).split("\n").length - 1;
     const lines = source.split("\n");
-    const first = Math.max(0, line - 4), last = Math.min(lines.length, line + 5);
+    const answerLineCount = answer.split("\n").length;
+    const first = Math.max(0, line - 4), last = Math.min(lines.length, line + answerLineCount + 4);
     return lines.slice(first, last).join("\n").replace(answer, "????");
   }
 
@@ -219,8 +229,9 @@
     const item = currentSubjective(); if (!item) return;
     hintUsed = true;
     const answer = item.answer.trim();
-    const shape = answer.includes("(") ? "함수·메서드 호출 또는 생성자" : answer.includes("[") ? "인덱싱·슬라이싱" : answer.includes("=") ? "대입문" : "코드 표현식";
-    feedback($("#subFeedback"), `힌트: ${shape}\n첫 문자: ${answer.slice(0, 1)} · 약 ${answer.length}자`, "neutral");
+    const lineCount = answer.split("\n").length;
+    const shape = lineCount > 1 ? `${lineCount}줄 구현 블록` : answer.includes("(") ? "함수·메서드 호출 또는 생성자" : answer.includes("[") ? "인덱싱·슬라이싱" : answer.includes("=") ? "대입문" : "코드 표현식";
+    feedback($("#subFeedback"), `힌트: ${shape}\n전후 Tensor shape와 다음 연산이 요구하는 입력을 확인하세요.`, "neutral");
   }
   function submitSubjective() {
     const item = currentSubjective(); if (!item) return;
@@ -229,7 +240,11 @@
     recordAttempt(item.id, "subjective", correct, confidence("subConfidence"), hintUsed, correct ? "" : $("#errorCategory").value);
     const status = state.questions[item.id].status;
     const statusText = { mastered: "숙달", learned: "주관식 1회 성공", recognition: "5지선다 확인", wrong: "오답 재시험" }[status];
-    feedback($("#subFeedback"), `${correct ? "정답입니다." : "오답입니다."}\n현재 상태: ${statusText}\n\n정답\n${item.answer}`, correct ? "correct" : "wrong");
+    const explanation = item.explanation ? `\n\n왜 이 코드인가\n${item.explanation}` : "";
+    const tensorFlow = item.tensor_flow ? `\n\nTensor 흐름\n${item.tensor_flow}` : "";
+    const codeSignal = item.code_signal ? `\n\n문맥에서 찾을 신호\n${item.code_signal}` : "";
+    const retry = item.retry ? `\n\n다시 풀기\n${item.retry}` : "";
+    feedback($("#subFeedback"), `${correct ? "정답입니다." : "오답입니다."}\n현재 상태: ${statusText}\n\n정답\n${item.answer}${explanation}${tensorFlow}${codeSignal}${retry}`, correct ? "correct" : "wrong");
     saveState();
   }
   function nextSubjective() {
