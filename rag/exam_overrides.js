@@ -772,3 +772,74 @@ ret_passages_short = retriever_short.????(question)`,explanation:"similarity_top
   chapter.questionCount = chapter.subjective.length;
   chapter.exam_design = {version:2,style:"원본 YOUR CODE HERE 기반 파이프라인 구현형",difficulty:["객체 연결","검색 설정","Custom·Refine 흐름"],excluded:["API 키","이메일·User-Agent 문자열","질문 문장 암기","설치 명령"]};
 })();
+
+(() => {
+  "use strict";
+  const course = window.LLM_COURSE;
+  if (!course || course.chapters.some((item) => item.id === "rag-final-review")) return;
+  const clone = (value) => JSON.parse(JSON.stringify(value));
+  const allSubjective = course.chapters.flatMap((chapter) => chapter.subjective || []);
+  const allMcq = course.chapters.flatMap((chapter) => chapter.mcq || []);
+  const subjectivePlan = [
+    ["exam-rag01-01", "rag-final-s01"],
+    ["exam-rag01-05", "rag-final-s02"],
+    ["exam-rag02-04", "rag-final-s03"],
+    ["exam-rag03-06", "rag-final-s04"],
+    ["exam-rag04-04", "rag-final-s05"],
+    ["exam-rag04-06", "rag-final-s06"],
+    ["exam-rag05-08", "rag-final-s07"],
+    ["exam-rag06-08", "rag-final-s08"]
+  ];
+  const mcqPlan = [
+    ["exam-rag01-m1", "rag-final-m01", "rag-final-s01"],
+    ["exam-rag01-m4", "rag-final-m02", "rag-final-s02"],
+    ["exam-rag02-m3", "rag-final-m03", "rag-final-s03"],
+    ["exam-rag03-m5", "rag-final-m04", "rag-final-s04"],
+    ["exam-rag04-m2", "rag-final-m05", "rag-final-s05"],
+    ["exam-rag04-m4", "rag-final-m06", "rag-final-s06"],
+    ["exam-rag05-m5", "rag-final-m07", "rag-final-s07"],
+    ["exam-rag06-m5", "rag-final-m08", "rag-final-s08"]
+  ];
+  const subjective = subjectivePlan.map(([sourceId, newId], index) => {
+    const source = allSubjective.find((item) => item.id === sourceId);
+    if (!source) throw new Error(`RAG review source missing: ${sourceId}`);
+    return {...clone(source),id:newId,chapterId:"rag-final-review",chapterNumber:"FINAL",chapterTitle:"RAG 종합 리뷰·혼합 모의고사",file:"RAG_FINAL_REVIEW",topic:`${index + 1}. ${source.topic}`,source_question_id:sourceId,source_type:`${source.file} 핵심 구현 혼합문제`};
+  });
+  const mcq = mcqPlan.map(([sourceId, newId, linkedId]) => {
+    const source = allMcq.find((item) => item.id === sourceId);
+    if (!source) throw new Error(`RAG review MCQ missing: ${sourceId}`);
+    return {...clone(source),id:newId,source_question_id:linkedId};
+  });
+  course.chapters.push({
+    id:"rag-final-review",number:"FINAL",title:"RAG 종합 리뷰·혼합 모의고사",file:"RAG_FINAL_REVIEW",subject:"RAG",questionCount:subjective.length,
+    summary:"6개 노트북의 문서 전처리, vector 검색, prompt 구성, KG routing, 평가, MCP 비동기 실행을 하나의 파이프라인으로 다시 연결합니다.",
+    capability:"처음 보는 RAG 코드의 전후 객체와 자료 흐름만 보고 적절한 library 호출·검색 방식·생성·평가 코드를 선택하고 복원할 수 있다.",
+    notebook_goal:"RAG 전 범위의 대표 구현을 혼합해 검색·생성·평가·도구 호출 중 필요한 단계를 스스로 판별하고 구현한다.",
+    overview:{title:"RAG 전체 코드 흐름 한 장 요약",subtitle:"원문을 근거로 바꾸고 질문에 맞는 근거를 선택해 LLM에 전달한 뒤 답과 검색 품질을 평가한다.",steps:[
+      {label:"수집·정제",code:"files/HTML → Documents/chunks",flow:"source → clean evidence"},
+      {label:"Index·검색",code:"embedding/cosine or VectorStoreIndex",flow:"query → top-k chunks"},
+      {label:"Routing",code:"Web vs KG vs MCP",flow:"query type → tool"},
+      {label:"생성",code:"system + context + query → LLM",flow:"evidence → answer"},
+      {label:"평가",code:"exact/semantic/miss/hallucination",flow:"answer + gold → score"}
+    ],rules:[
+      "Reader 출력이 아니라 검색 근거가 필요한 단계에서는 as_retriever/retrieve를 사용한다.",
+      "HTML→text→chunk→embedding→top-k 순서를 건너뛰면 검색 대상의 의미가 깨진다.",
+      "system에는 규칙, user에는 근거와 질문을 넣고 context 길이를 제한한다.",
+      "분기별 근거를 같은 list 계약으로 맞추면 하나의 Reader를 재사용할 수 있다.",
+      "비동기 MCP 호출은 await하고 답과 retrieved_results를 함께 보존한다."
+    ]},
+    key_points:[
+      {title:"Evidence preparation",purpose:"파일과 HTML을 검색 가능한 작은 텍스트 근거로 바꿉니다.",code:"Reader/load → parse → split",flow:"source → Documents/chunks",watch:"schema와 문장 경계를 보존합니다."},
+      {title:"Retrieval",purpose:"질문과 가장 가까운 근거를 embedding similarity로 선택합니다.",code:"embed/index → retrieve(top-k)",flow:"query → evidence list",watch:"top-k와 chunk size의 역할을 구분합니다."},
+      {title:"Generation & Routing",purpose:"질문 성격에 맞는 Web·KG·MCP 근거를 공통 prompt에 넣습니다.",code:"route → combined_results → Reader",flow:"evidence → messages → answer",watch:"근거 타입을 list로 통일합니다."},
+      {title:"Evaluation",purpose:"정확·의미정답·누락·환각을 분리해 개선 지점을 찾습니다.",code:"Judge parse → CRAG score",flow:"prediction + gold → category/score",watch:"파싱 실패를 성공으로 처리하지 않습니다."}
+    ],
+    theory_guide:[
+      {title:"시험 풀이 순서",concept:"먼저 현재 빈칸이 전처리·검색·routing·생성·평가 중 어디인지 판별합니다.",flow:"stage → expected input/output → API",code_signal:"왼쪽 변수명과 다음 줄에서 요구하는 타입을 확인합니다.",exam_clue:"함수명이 기억나지 않아도 객체 역할과 자료 타입으로 후보를 줄입니다."},
+      {title:"검색과 생성 구분",concept:"Retriever는 근거를 반환하고 QueryEngine/Reader는 답을 생성합니다.",flow:"retrieve → chunks; query/generate → answer",code_signal:"결과 변수명이 nodes/results인지 response/answer인지 봅니다.",exam_clue:"근거 검증이 필요하면 answer만 반환하지 않습니다."},
+      {title:"동기와 비동기",concept:"로컬 변환은 동기지만 MCP 네트워크 도구 발견과 Agent 실행은 비동기입니다.",flow:"await discovery/run/retrieve → concrete result",code_signal:"async def, to_tool_list_async, stream_events가 단서입니다.",exam_clue:"await 누락 시 실제 근거가 아닌 coroutine이 다음 함수에 전달됩니다."}
+    ],
+    full_code_cells:[],mcq,subjective,
+    exam_design:{version:2,style:"과목 종합 혼합 모의고사",difficulty:["API 판별","자료 흐름","통합 구현"],excluded:["URL·경로·API 키 암기","고정 질문 문자열"]}
+  });
+})();
