@@ -245,6 +245,87 @@ print(input_embeddings.shape)`,
 (() => {
   "use strict";
   const course=window.LLM_COURSE;
+  const chapter=course.chapters.find((item)=>item.file==="Chapter_6_Excercise_Finetuning_Classification_LoRA.ipynb");
+  if(!chapter)return;
+  chapter.notebook_goal="기존 Linear 가중치는 고정하고 저랭크 A·B 행렬의 변화량만 학습하도록 LoRA를 구현하고 모델에 재귀적으로 주입한다.";
+  chapter.overview={title:"고정된 Linear에 LoRA 변화량을 더하는 과정",subtitle:"큰 W는 그대로 두고 작은 A·B만 학습하여 분류 task에 적응한다.",steps:[
+    {label:"저랭크 행렬",code:"A [in,r], B [r,out]",flow:"학습량: in·r+r·out"},
+    {label:"LoRA 변화량",code:"(alpha/rank) * (x @ A @ B)",flow:"[...,in]→[...,out]"},
+    {label:"기존 출력 결합",code:"linear(x) + lora(x)",flow:"base + delta"},
+    {label:"모델 주입",code:"Linear → LinearWithLoRA",flow:"named_children 재귀 교체"},
+    {label:"선택 학습",code:"base freeze; LoRA trainable",flow:"A·B만 optimizer 갱신"}
+  ],rules:["A는 in_dim→rank, B는 rank→out_dim이므로 x@A@B가 기존 Linear 출력 shape과 같다.","B를 0으로 초기화하면 학습 시작 시 LoRA 변화량이 0이다.","alpha/rank는 adapter 변화량의 크기를 조절한다.","기존 Parameter 동결 후 새 LoRA Parameter를 생성해야 LoRA만 학습된다."]};
+  const cells={
+    "exam-ch6b-ab":`self.A = nn.Parameter(torch.empty(in_dim, rank))
+self.B = nn.Parameter(torch.zeros(rank, out_dim))`,
+    "exam-ch6b-delta":"x = (self.alpha / self.rank) * (x @ self.A @ self.B)",
+    "exam-ch6b-wrapper":"return self.linear(x) + self.lora(x)",
+    "exam-ch6b-replace":`if isinstance(module, torch.nn.Linear):
+    setattr(model, name, LinearWithLoRA(module, rank, alpha))
+else:
+    replace_linear_with_lora(module, rank, alpha)`,
+    "exam-ch6b-enable":`for param in model.parameters():
+    param.requires_grad = False
+replace_linear_with_lora(model, rank=LORA_RANK, alpha=LORA_ALPHA)`
+  };
+  Object.entries(cells).forEach(([id,source])=>{course.cells[id]={source};});
+  const base={subject:"LLM",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,isSourceBlank:true,source_type:"원본 노트북 실제 빈칸"};
+  const make=(data)=>({...base,occurrence:0,accepted_answers:[data.answer],...data});
+  chapter.subjective=[
+    make({id:"exam-llm06b-01",topic:"LoRA A·B shape",difficulty:"2 · 차원 구성",sourceId:"exam-ch6b-ab",prompt:"x@A@B가 기존 Linear와 같은 출력 차원을 갖도록 A와 B 생성문의 빈칸을 완성하세요.",answer:cells["exam-ch6b-ab"],
+      problem_context:`class LoRALayer(nn.Module):
+    def __init__(self, in_dim, out_dim, rank, alpha):
+        super().__init__()
+        # TODO: A는 (in_dim, rank)입니다.
+        self.A = nn.Parameter(torch.empty(in_dim, ????))
+        nn.init.kaiming_uniform_(self.A, a=math.sqrt(5))
+        # TODO: B는 (rank, out_dim)입니다.
+        self.B = nn.Parameter(torch.zeros(????, out_dim))`,
+      explanation:"x의 마지막 in_dim과 A의 첫 축이 소거되고 rank를 거쳐 B의 out_dim이 남습니다. 이 구조가 큰 dense 변화량을 저랭크 곱으로 표현합니다.",tensor_flow:"x […,in] @ A [in,r] @ B [r,out] → […,out]",code_signal:"주석에 A와 B의 목표 shape이 명시되고 두 행렬의 연결 축은 rank입니다.",retry:"행렬곱에서 인접한 안쪽 차원을 표시하고 다시 채우세요."}),
+    make({id:"exam-llm06b-02",topic:"LoRA forward",difficulty:"3 · 계산식",sourceId:"exam-ch6b-delta",prompt:"alpha/rank scaling과 A→B 순서의 저랭크 변화량을 계산하는 완성된 줄을 작성하세요.",answer:cells["exam-ch6b-delta"],
+      problem_context:`def forward(self, x):
+    # TODO: alpha/rank 스케일과 A, B 행렬곱 순서를 맞추세요.
+    x = (self.???? / self.rank) * (x @ self.???? @ self.????)
+    return x`,
+      explanation:"x는 먼저 in→rank인 A와 곱하고 이어 rank→out인 B와 곱합니다. alpha/rank가 adapter 출력 크기를 rank 변화에 대해 조절합니다.",tensor_flow:"[…,in]→x@A […,r]→@B […,out]→scale",code_signal:"생성자에서 저장한 alpha·rank와 A/B shape이 곱셈 순서를 결정합니다.",retry:"중간 결과 shape […,rank]가 되는 순서를 먼저 고르세요."}),
+    make({id:"exam-llm06b-03",topic:"Base와 LoRA 결합",difficulty:"1 · 잔차 합산",sourceId:"exam-ch6b-wrapper",prompt:"기존 Linear 출력에 같은 입력의 LoRA 변화량을 더하는 return 문을 완성하세요.",answer:cells["exam-ch6b-wrapper"],
+      problem_context:`class LinearWithLoRA(nn.Module):
+    def forward(self, x):
+        # TODO: 기존 출력에 LoRA 잔차 출력을 더하세요.
+        return self.linear(x) + self.????(x)`,
+      explanation:"LoRA는 기존 출력을 대체하지 않고 ΔW에 해당하는 adapter 출력을 더합니다. 두 항의 shape이 같아 원소별 합이 가능합니다.",tensor_flow:"linear(x) […,out] + lora(x) […,out] → […,out]",code_signal:"속성은 self.linear와 self.lora 두 개이고 첫 항이 이미 기존 출력입니다.",retry:"기존 경로와 변화량 경로를 각각 한 항으로 적으세요."}),
+    make({id:"exam-llm06b-04",topic:"Linear 재귀 교체",difficulty:"3 · 모델 변환",sourceId:"exam-ch6b-replace",prompt:"현재 자식이 Linear면 wrapper로 교체하고, 아니면 내부 자식을 계속 탐색하는 완성 코드를 작성하세요.",answer:cells["exam-ch6b-replace"],
+      problem_context:`for name, module in model.named_children():
+    # TODO: 교체 대상 layer type을 채우세요.
+    if isinstance(module, torch.nn.????):
+        setattr(model, name, LinearWithLoRA(module, rank, alpha))
+    else:
+        replace_linear_with_lora(module, rank, alpha)`,
+      explanation:"named_children은 한 단계만 반환하므로 container 내부까지 처리하려면 Linear가 아닌 자식에 재귀 호출해야 합니다. setattr은 원래 속성 이름을 wrapper로 교체합니다.",tensor_flow:"module tree 순회; Tensor 연산 전 구조 변환",code_signal:"wrapper 생성자가 기존 linear를 받으며 TODO 주석이 교체 대상을 Linear로 제한합니다.",retry:"현재 노드 처리와 하위 노드 탐색의 두 분기를 구분하세요."}),
+    make({id:"exam-llm06b-05",topic:"LoRA만 학습 설정",difficulty:"2 · 실행 순서",sourceId:"exam-ch6b-enable",prompt:"기존 모델 전체를 동결한 뒤 LoRA wrapper를 주입하는 완성된 코드를 작성하세요.",answer:cells["exam-ch6b-enable"],
+      problem_context:`# 1. 기존 Parameter 전체 동결
+for param in model.parameters():
+    param.requires_grad = ????
+
+# 2. 새 LoRA Parameter를 가진 wrapper 주입
+# TODO: Linear 교체 helper를 호출하세요.
+????(model, rank=LORA_RANK, alpha=LORA_ALPHA)`,
+      explanation:"먼저 기존 Parameter를 False로 동결하고 그 뒤 wrapper를 생성하면 새 A·B Parameter는 기본 True 상태로 남습니다. 순서를 바꾸면 LoRA까지 함께 동결됩니다.",tensor_flow:"base Parameters trainable→frozen; 새 A·B trainable",code_signal:"주석의 전체 동결과 앞에서 정의한 replace_linear_with_lora 함수명이 답입니다.",retry:"어떤 Parameter가 어느 시점에 생성되는지 시간 순서로 확인하세요."})
+  ];
+  chapter.mcq=[
+    {id:"exam-llm06b-m1",source_question_id:"exam-llm06b-01",topic:"LoRA shape",prompt:"x […,in]에서 […,out] 변화량을 만드는 A,B shape은?",answer_index:1,explanation:"연결되는 내부 차원은 rank입니다.",choices:[{text:"A[r,in], B[out,r]",why:"x와 A의 첫 곱이 맞지 않습니다."},{text:"A[in,r], B[r,out]",why:"x@A@B가 […,out]이 됩니다."},{text:"A[in,out], B[out,in]",why:"저랭크 구조가 아니고 최종 in이 남습니다."},{text:"A[r,r], B[r,out]",why:"x의 in과 A가 연결되지 않습니다."},{text:"A[in,r], B[out,r]",why:"A 결과 r과 B 첫 축 out이 맞지 않습니다."}]},
+    {id:"exam-llm06b-m2",source_question_id:"exam-llm06b-02",topic:"LoRA scaling",prompt:"LoRA 변화량의 올바른 식은?",answer_index:3,explanation:"A→B 순서와 alpha/rank scaling을 사용합니다.",choices:[{text:"x@B@A",why:"행렬 차원과 순서가 반대입니다."},{text:"alpha*(x@A@B)",why:"rank 정규화가 없습니다."},{text:"rank/alpha*(x@A@B)",why:"scale 비율이 뒤집혔습니다."},{text:"alpha/rank*(x@A@B)",why:"원본 식과 일치합니다."},{text:"x+A+B",why:"shape도 다르고 저랭크 행렬곱이 아닙니다."}]},
+    {id:"exam-llm06b-m3",source_question_id:"exam-llm06b-03",topic:"Adapter 결합",prompt:"LinearWithLoRA의 출력은?",answer_index:0,explanation:"기존 출력에 adapter 변화량을 잔차로 더합니다.",choices:[{text:"linear(x)+lora(x)",why:"base와 변화량을 올바르게 결합합니다."},{text:"lora(linear(x))",why:"직렬 적용이 아닙니다."},{text:"linear(lora(x))",why:"LoRA 출력 차원이 linear 입력과 다를 수 있습니다."},{text:"lora(x)",why:"사전학습 base 출력을 버립니다."},{text:"linear(x)*lora(x)",why:"LoRA는 곱셈 gate가 아닙니다."}]},
+    {id:"exam-llm06b-m4",source_question_id:"exam-llm06b-04",topic:"모델 재귀",prompt:"Linear가 아닌 container 자식에서 필요한 동작은?",answer_index:4,explanation:"내부 Linear를 찾도록 같은 함수를 재귀 호출합니다.",choices:[{text:"삭제",why:"하위 layer를 잃습니다."},{text:"Linear로 강제 교체",why:"container 구조를 깨뜨립니다."},{text:"건너뛰기",why:"내부 Linear가 변환되지 않습니다."},{text:"forward 실행",why:"구조 변환 단계입니다."},{text:"replace_linear_with_lora(module, rank, alpha)",why:"자식 내부를 계속 탐색합니다."}]},
+    {id:"exam-llm06b-m5",source_question_id:"exam-llm06b-05",topic:"동결 순서",prompt:"LoRA A·B만 trainable로 남기는 순서는?",answer_index:2,explanation:"기존 것을 먼저 동결하고 새 adapter를 만듭니다.",choices:[{text:"주입→전체 동결",why:"새 LoRA도 동결됩니다."},{text:"전체 동결만",why:"학습할 새 Parameter가 없습니다."},{text:"전체 동결→LoRA 주입",why:"새 A·B는 기본 trainable입니다."},{text:"eval→LoRA 주입",why:"eval은 Parameter 동결이 아닙니다."},{text:"zero_grad→LoRA 주입",why:"gradient 초기화는 동결 설정이 아닙니다."}]}
+  ];
+  chapter.questionCount=chapter.subjective.length;
+  chapter.exam_design={version:3,style:"원본 TODO·???? 골격 보존형",difficulty:["잔차 호출","행렬 shape·scale","재귀 모델 변환"],excluded:["다운로드 URL","모델 경로","고정 hyperparameter 암기"]};
+})();
+
+(() => {
+  "use strict";
+  const course=window.LLM_COURSE;
   const chapter=course.chapters.find((item)=>item.file==="Chapter_6_Excercise_Finetuning_Classification.ipynb");
   if(!chapter)return;
   chapter.notebook_goal="사전학습 GPT를 고정하고 분류 head와 마지막 block만 미세조정하여 문장 단위 이진 분류기를 구현한다.";
