@@ -130,6 +130,120 @@ index.????(id, delete_from_docstore=True)`,explanation:"set_content는 Document 
 (() => {
   "use strict";
   const course = window.LLM_COURSE;
+  const chapter = course.chapters.find((item) => item.file === "1. Data_preprocessing.ipynb");
+  if (!chapter) return;
+
+  chapter.notebook_goal = "압축 JSONL 평가 데이터를 안전하게 읽고 검색 결과 HTML을 정제·문장 분할하여 RAG가 사용할 근거 chunk로 변환한다.";
+  chapter.summary = "CRAG의 압축 JSONL을 레코드 목록으로 구성하고 query·answer·search_results schema를 확인한 뒤 HTML 본문을 문장 단위 chunk로 바꿉니다.";
+  chapter.capability = "압축 데이터 로딩부터 예외 처리, 필드 선택, HTML 정제, 문장 offset slicing까지 전처리 파이프라인을 구현할 수 있다.";
+  chapter.overview = {
+    title: "압축 CRAG 데이터가 검색 근거 Chunk가 되는 과정",
+    subtitle: "한 줄씩 파싱한 평가 레코드에서 웹 검색 HTML을 꺼내 모델 입력에 적합한 일반 텍스트 조각으로 바꾼다.",
+    steps: [
+      {label:"압축 읽기",code:"bz2.open(path, 'rt')",flow:".jsonl.bz2 → text lines"},
+      {label:"JSON 파싱",code:"json.loads(line.strip())",flow:"line → dict"},
+      {label:"Dataset",code:"dataset.append(data)",flow:"dicts → list[dict]"},
+      {label:"HTML 정제",code:"BeautifulSoup(html, 'lxml').get_text(...) ",flow:"page_result → plain text"},
+      {label:"문장 Chunk",code:"offsets → text[start:end][:4000]",flow:"text → evidence chunks"}
+    ],
+    rules: [
+      "JSONL은 파일 전체가 하나의 JSON이 아니라 각 줄이 독립 레코드이므로 줄별 loads가 필요하다.",
+      "bz2를 text mode로 열어야 json.loads에 문자열을 바로 전달할 수 있다.",
+      "파싱 실패 레코드는 JSONDecodeError로 처리해 전체 전처리가 중단되지 않게 한다.",
+      "검색 근거 본문은 search_results 각 항목의 page_result에 있으며 HTML 태그를 제거해야 한다.",
+      "문장 함수가 반환한 start/end offset으로 원문을 slice해야 문장 경계가 보존된다."
+    ]
+  };
+  chapter.key_points = [
+    {title:"BZ2 JSONL 로딩",purpose:"압축 파일을 풀어 쓰지 않고 줄 단위로 레코드를 읽습니다.",code:"with bz2.open(file_path, 'rt') as file:\n    for line in file:\n        data = json.loads(line.strip())",flow:"compressed bytes → text line → dict",watch:"open 모드는 'rt', JSON 변환은 loads입니다."},
+    {title:"Schema 선택",purpose:"질문·정답·검색 결과를 각 평가 목적에 맞게 꺼냅니다.",code:"query = item['query']\nanswer = item['answer']\nresults = item['search_results']",flow:"record dict → task fields",watch:"검색 결과는 문자열 하나가 아니라 page dictionary 목록입니다."},
+    {title:"HTML 정제",purpose:"웹 페이지 HTML에서 사람이 읽을 수 있는 본문 텍스트만 추출합니다.",code:"soup = BeautifulSoup(page['page_result'], features='lxml')\ntext = soup.get_text(' ', strip=True)",flow:"HTML string → parsed tree → plain text",watch:"page_snippet이 아니라 전체 page_result를 사용합니다."},
+    {title:"문장 경계 Chunk",purpose:"문장 offset으로 텍스트를 자르고 지나치게 긴 근거를 제한합니다.",code:"_, offsets = text_to_sentences_and_offsets(text)\nfor start, end in offsets:\n    chunk = text[start:end][:4000]",flow:"text → offsets → chunks",watch:"offset 자체가 아니라 offset으로 slice한 문자열을 저장합니다."}
+  ];
+  chapter.theory_guide = [
+    {title:"JSONL",concept:"JSON Lines는 한 줄마다 독립적인 JSON 객체를 저장하는 형식입니다. 큰 파일을 전체 메모리에 올리지 않고 순차 처리할 수 있습니다.",flow:"line → strip → json.loads → dict",code_signal:"for line in file 안에서 loads와 append가 반복됩니다.",exam_clue:"json.load(file)이 아니라 json.loads(line)입니다."},
+    {title:"압축 Text Mode",concept:"BZ2는 압축 형식이고 'rt'는 압축 해제 결과를 문자열로 읽는 모드입니다.",flow:"compressed file → decompressed str iterator",code_signal:"확장자 .bz2와 import bz2가 보이면 bz2.open을 사용합니다.",exam_clue:"바이너리 'rb'이면 별도 decode가 필요하므로 이 실습에서는 'rt'입니다."},
+    {title:"HTML Parsing",concept:"BeautifulSoup은 HTML 구조를 해석하고 get_text는 태그를 제외한 본문을 만듭니다.",flow:"page_result HTML → soup → normalized text",code_signal:"features='lxml', get_text(' ', strip=True)가 연속됩니다.",exam_clue:"검색 snippet이 아닌 page_result를 parser에 전달합니다."},
+    {title:"Offset slicing",concept:"Offset은 각 문장의 시작·끝 문자 위치입니다. 원문을 그 범위로 잘라 문장 경계를 유지합니다.",flow:"text → [(start,end)] → text[start:end]",code_signal:"for start, end in offsets 다음 줄의 slice를 확인합니다.",exam_clue:"4000 제한은 offset 계산 전이 아니라 추출된 문장 chunk 뒤에 적용됩니다."}
+  ];
+
+  const cells = {
+    "exam-rag3-load": `dataset = []
+with bz2.open(file_path, 'rt') as file:
+    for line in file:
+        try:
+            data = json.loads(line.strip())
+            dataset.append(data)
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON: {e}")`,
+    "exam-rag3-domain": `unique_domains = {}
+for item in dataset:
+    if 'domain' in item:
+        domain_value = item['domain']
+        if domain_value not in unique_domains:
+            unique_domains[domain_value] = item`,
+    "exam-rag3-fields": `question = example_item['query']
+answer = example_item['answer']`,
+    "exam-rag3-results": `for page in example_data['search_results']:
+    print(len(page['page_name']))
+    print(len(page['page_snippet']))
+    print(len(page['page_result']))`,
+    "exam-rag3-html": `soup = BeautifulSoup(html_text["page_result"], features="lxml")
+text = soup.get_text(" ", strip=True)`,
+    "exam-rag3-chunk": `_, offsets = text_to_sentences_and_offsets(text)
+for start, end in offsets:
+    chunk = text[start:end][:4000]
+    all_chunks.append(chunk)`
+  };
+  Object.entries(cells).forEach(([id, source]) => { course.cells[id] = {source}; });
+  const base = {subject:"RAG",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:false,source_type:"원본 YOUR CODE HERE 셀 기반"};
+  const make = (data) => ({...base,accepted_answers:[data.answer],...data});
+  chapter.subjective = [
+    make({id:"exam-rag03-01",topic:"BZ2 JSONL Dataset",difficulty:"3 · 전체 전처리",sourceId:"exam-rag3-load",prompt:"압축 JSONL을 text mode로 열어 각 줄을 파싱하고, 오류 행은 건너뛰며 dataset에 저장하는 전체 블록을 작성하세요.",answer:cells["exam-rag3-load"],problem_context:`dataset = []
+with ????.open(file_path, '????') as file:
+    for line in file:
+        try:
+            data = ????.loads(line.????())
+            dataset.????(data)
+        except ????.JSONDecodeError as e:
+            print(f"Error decoding JSON: {e}")`,explanation:"bz2.open(...,'rt')이 압축을 해제한 문자열 줄을 제공합니다. strip 후 json.loads로 dict를 만들고 append합니다. JSONDecodeError만 잡아 손상된 한 줄 때문에 전체 작업이 멈추지 않게 합니다.",tensor_flow:".jsonl.bz2 → iterator[str] → dict → list[dict]",code_signal:"파일 확장자와 import bz2/json, dataset 초기값 [], 줄 반복 구조가 각 API를 지시합니다.",retry:"열기·파싱·저장·예외 처리 네 단계를 한 줄씩 적고 다시 구현하세요."}),
+    make({id:"exam-rag03-02",topic:"Domain 대표 레코드",difficulty:"2 · Dictionary 구성",sourceId:"exam-rag3-domain",prompt:"각 domain에서 처음 만난 레코드 하나만 unique_domains에 저장하는 블록을 작성하세요.",answer:cells["exam-rag3-domain"],problem_context:`unique_domains = {}
+for item in dataset:
+    if 'domain' in item:
+        domain_value = item[????]
+        if domain_value not in unique_domains:
+            unique_domains[????] = ????`,explanation:"domain 값을 key로 사용하고 전체 item을 value로 저장하면 뒤에서 해당 domain의 query와 answer를 함께 꺼낼 수 있습니다. 이미 있는 key는 덮어쓰지 않습니다.",tensor_flow:"list[record] → dict[domain, representative record]",code_signal:"뒤에서 unique_domains[wanted_domain]['query']를 쓰므로 value는 domain 문자열이 아닌 item 전체여야 합니다.",retry:"dictionary의 key와 value가 무엇인지 먼저 말로 적으세요."}),
+    make({id:"exam-rag03-03",topic:"평가 Query·Answer",difficulty:"1 · Schema 접근",sourceId:"exam-rag3-fields",prompt:"대표 레코드에서 모델 입력 질문과 정답 비교값을 꺼내는 두 줄을 작성하세요.",answer:cells["exam-rag3-fields"],problem_context:`for domain, example_item in unique_domains.items():
+    # TODO: 평가 입력과 정답 field를 선택하세요.
+    question = example_item[????]
+    answer = example_item[????]`,explanation:"query는 모델에 줄 질문이고 answer는 평가 기준입니다. 두 field를 분리해야 모델 응답과 ground truth를 비교할 수 있습니다.",tensor_flow:"record dict → query str + answer str",code_signal:"출력 문구 Example question/answer와 CRAG schema의 field 이름이 일치합니다.",retry:"입력과 평가 기준 중 어느 것이 query이고 answer인지 구분하세요."}),
+    make({id:"exam-rag03-04",topic:"검색 결과 Schema",difficulty:"2 · 중첩 자료 접근",sourceId:"exam-rag3-results",prompt:"각 search result를 순회하며 제목·요약·전체 HTML 필드 길이를 확인하는 블록을 작성하세요.",answer:cells["exam-rag3-results"],problem_context:`for page in example_data[????]:
+    print(len(page[????]))      # 제목
+    print(len(page[????]))      # 검색 요약
+    print(len(page[????]))      # 전체 HTML`,explanation:"search_results는 page dict 목록이며 page_name은 제목, page_snippet은 검색 요약, page_result는 전체 HTML 본문입니다.",tensor_flow:"record['search_results'] → page dict → three strings",code_signal:"주석의 제목/요약/전체 HTML과 field의 name/snippet/result가 직접 대응합니다.",retry:"바깥 목록 field와 안쪽 page field 세 개를 계층으로 그리세요."}),
+    make({id:"exam-rag03-05",topic:"HTML 본문 정제",difficulty:"2 · Library 활용",sourceId:"exam-rag3-html",prompt:"page_result HTML을 lxml parser로 해석하고 공백으로 구분된 본문 텍스트를 추출하는 두 줄을 작성하세요.",answer:cells["exam-rag3-html"],problem_context:`for html_text in example_data['search_results']:
+    soup = ????(html_text[????], features=????)
+    text = soup.????(" ", strip=True)`,explanation:"BeautifulSoup에 전체 HTML인 page_result와 lxml parser를 전달합니다. get_text는 태그를 제거하고 문자열 사이를 공백으로 연결하며 양끝 공백을 제거합니다.",tensor_flow:"HTML str → BeautifulSoup tree → clean text str",code_signal:"import된 BeautifulSoup, page schema, features와 strip keyword가 답을 제한합니다.",retry:"parser 생성과 text 추출을 서로 다른 객체의 호출로 구분하세요."}),
+    make({id:"exam-rag03-06",topic:"문장 Offset Chunk",difficulty:"3 · 연결 구현",sourceId:"exam-rag3-chunk",prompt:"본문의 문장 offset을 얻고 각 문장을 최대 4000자로 잘라 all_chunks에 저장하는 블록을 작성하세요.",answer:cells["exam-rag3-chunk"],problem_context:`# TODO: 문장 경계를 보존한 근거 chunk를 구성하세요.
+????, offsets = ????(text)
+for start, end in offsets:
+    chunk = text[????:????][:????]
+    all_chunks.????(chunk)`,explanation:"함수의 첫 반환값은 여기서 쓰지 않아 _로 받고 offsets만 사용합니다. 각 start:end 범위가 한 문장이며 그 결과를 4000자로 제한해 저장합니다.",tensor_flow:"clean text → sentence offsets → bounded chunk strings → list[str]",code_signal:"for start,end와 all_chunks=[]가 slice와 append를 요구하고 함수명이 import돼 있습니다.",retry:"함수 반환, 반복 unpack, slice, 길이 제한, 저장 순서를 확인하세요."})
+  ];
+  chapter.mcq = [
+    {id:"exam-rag03-m1",source_question_id:"exam-rag03-01",topic:"JSONL 파싱",prompt:"압축 JSONL을 레코드 단위로 처리하는 올바른 방법은?",answer_index:2,explanation:"text mode 줄 반복 후 각 line에 json.loads를 적용합니다.",choices:[{text:"json.load(bz2.open(path, 'rb'))",why:"파일 전체가 하나의 JSON 객체라는 전제가 틀립니다."},{text:"json.loads(file_path)",why:"경로 문자열을 JSON으로 해석합니다."},{text:"with bz2.open(path, 'rt') as f: for line in f: json.loads(line.strip())",why:"압축 해제와 줄별 JSON 파싱이 맞습니다."},{text:"bz2.loads(json.load(path))",why:"호출 순서와 API가 틀립니다."},{text:"open(path).readlines()",why:"bz2 압축을 처리하지 않고 JSON 변환도 없습니다."}]},
+    {id:"exam-rag03-m2",source_question_id:"exam-rag03-02",topic:"대표값 저장",prompt:"domain별 첫 레코드를 유지하는 올바른 대입은?",answer_index:1,explanation:"domain을 key, item 전체를 value로 저장합니다.",choices:[{text:"unique_domains[item] = domain",why:"dict인 item은 key로 쓸 수 없고 역할도 반대입니다."},{text:"unique_domains[domain_value] = item",why:"domain으로 대표 레코드를 조회할 수 있습니다."},{text:"unique_domains['domain'] = domain_value",why:"모든 항목이 같은 key를 덮어씁니다."},{text:"unique_domains.append(item)",why:"dictionary에는 append가 없습니다."},{text:"unique_domains[domain_value] = item['query']",why:"answer 등 다른 field를 잃습니다."}]},
+    {id:"exam-rag03-m3",source_question_id:"exam-rag03-04",topic:"검색 본문 Field",prompt:"RAG chunk로 정제할 전체 웹 페이지 HTML은 어느 field인가?",answer_index:4,explanation:"page_result가 전체 HTML 본문입니다.",choices:[{text:"query",why:"사용자 질문입니다."},{text:"answer",why:"정답 값입니다."},{text:"page_name",why:"페이지 제목입니다."},{text:"page_snippet",why:"검색 결과의 짧은 요약입니다."},{text:"page_result",why:"parser에 전달할 전체 HTML입니다."}]},
+    {id:"exam-rag03-m4",source_question_id:"exam-rag03-05",topic:"HTML 정제",prompt:"HTML 태그를 제거한 본문을 만드는 올바른 흐름은?",answer_index:0,explanation:"BeautifulSoup으로 parse한 뒤 get_text를 호출합니다.",choices:[{text:"BeautifulSoup(html, features='lxml').get_text(' ', strip=True)",why:"구조 해석과 본문 추출이 맞습니다."},{text:"json.loads(html)",why:"HTML은 JSON이 아닙니다."},{text:"html.strip_tags()",why:"문자열의 표준 메서드가 아닙니다."},{text:"BeautifulSoup.get_text(html)",why:"parser 인스턴스를 만들지 않았습니다."},{text:"text_to_sentences_and_offsets(html)",why:"HTML 태그 제거 전 문장 분할을 시도합니다."}]},
+    {id:"exam-rag03-m5",source_question_id:"exam-rag03-06",topic:"문장 Chunk",prompt:"offset (start,end)에서 실제 문장 문자열을 얻는 코드는?",answer_index:3,explanation:"원문 text를 start:end로 slice합니다.",choices:[{text:"offsets[start:end]",why:"offset 목록 자체를 자릅니다."},{text:"text[offsets]",why:"offset list는 문자열 index가 될 수 없습니다."},{text:"text[start+end]",why:"한 문자 위치만 선택합니다."},{text:"text[start:end]",why:"시작 포함, 끝 제외 범위의 문장을 얻습니다."},{text:"text.split(start, end)",why:"split 인자는 구분 문자열이며 offset 범위가 아닙니다."}]}
+  ];
+  chapter.questionCount = chapter.subjective.length;
+  chapter.exam_design = {version:2,style:"원본 전처리 파이프라인 구현형",difficulty:["Schema 접근","Library 연결","전체 반복·예외 처리"],excluded:["API 키","서버 URL","파일 경로","샘플 index 숫자"]};
+})();
+
+(() => {
+  "use strict";
+  const course = window.LLM_COURSE;
   const chapter = course.chapters.find((item) => item.file === "2. RAG.ipynb");
   if (!chapter) return;
 
