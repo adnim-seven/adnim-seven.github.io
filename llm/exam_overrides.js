@@ -244,6 +244,40 @@ print(input_embeddings.shape)`,
 
 (() => {
   "use strict";
+  const course=window.LLM_COURSE, chapter=course.chapters.find(x=>x.file==="Chapter_7_Exercise_Follow_Instructions.ipynb"); if(!chapter)return;
+  chapter.notebook_goal="가변 길이 instruction-response token을 next-token 학습 batch로 만들고 padding target을 loss에서 제외한다.";
+  chapter.overview={title:"Instruction 데이터가 SFT 학습 Tensor가 되는 과정",subtitle:"프롬프트와 응답을 합쳐 토큰화하고, 이동된 target에서 실제 종료 토큰 뒤 padding만 마스킹한다.",steps:[{label:"Prompt 구성",code:"instruction + input + response",flow:"entry→full_text"},{label:"Tokenize",code:"tokenizer.encode(full_text)",flow:"str→list[int]"},{label:"길이 맞춤",code:"EOS 추가→batch max까지 pad",flow:"가변 T→동일 T"},{label:"Next-token pair",code:"inputs=padded[:-1]; targets=padded[1:]",flow:"[T+1]→[T],[T]"},{label:"Loss mask",code:"targets[indices[1:]]=-100",flow:"첫 EOS 유지, 이후 pad 무시"}],rules:["입력과 target은 한 칸 이동하되 길이가 같다.","첫 pad_token_id는 실제 EOS 정답이므로 유지한다.","두 번째 이후 padding target만 ignore_index로 바꾼다.","stack 전에 모든 sample 길이를 같게 만든다."]};
+  const cells={"exam-ch7-endpad":`new_item += [pad_token_id]
+padded = new_item + [pad_token_id] * (batch_max_length - len(new_item))`,"exam-ch7-shift":`inputs = torch.tensor(padded[:-1])
+targets = torch.tensor(padded[1:])`,"exam-ch7-mask":`if indices.numel() > 1:
+    targets[indices[1:]] = ignore_index`}; Object.entries(cells).forEach(([id,source])=>course.cells[id]={source});
+  const b={subject:"LLM",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,isSourceBlank:true,source_type:"원본 노트북 실제 빈칸"},m=d=>({...b,occurrence:0,accepted_answers:[d.answer],...d});
+  chapter.subjective=[
+    m({id:"exam-llm07-01",topic:"EOS·Padding",difficulty:"2 · 배치 구성",sourceId:"exam-ch7-endpad",prompt:"각 sample 끝에 구분 token을 추가하고 batch 최대 길이까지 같은 token으로 채우는 두 줄을 완성하세요.",answer:cells["exam-ch7-endpad"],problem_context:`new_item = item.copy()
+# TODO: 시퀀스 끝 구분 token을 추가하세요.
+new_item += [????]
+# TODO: batch 최대 길이까지 padding하세요.
+padded = new_item + [????] * (batch_max_length - len(new_item))`,explanation:"pad_token_id는 GPT-2 EOS 역할도 하므로 먼저 실제 종료 token 하나를 추가하고, 나머지 부족한 길이도 같은 ID로 채웁니다.",tensor_flow:"list[int] 길이 L→L+1→batch_max_length",code_signal:"함수 인자 pad_token_id와 두 주석이 같은 값을 요구합니다.",retry:"실제 종료 표시 1개와 길이 맞춤용 반복을 구분하세요."}),
+    m({id:"exam-llm07-02",topic:"Next-token 입력·Target",difficulty:"2 · 슬라이싱",sourceId:"exam-ch7-shift",prompt:"padded sequence에서 같은 길이의 input과 한 칸 뒤 target을 만드는 두 줄을 완성하세요.",answer:cells["exam-ch7-shift"],problem_context:`# TODO: inputs=padded[:-1], targets=padded[1:] 구조를 만드세요.
+inputs = torch.tensor(padded[:????])
+targets = torch.tensor(padded[????:])`,explanation:"input은 마지막 token을 제외하고 target은 첫 token을 제외해 각 위치의 다음 token이 정답이 됩니다.",tensor_flow:"padded [T+1]→inputs [T], targets [T]",code_signal:"'마지막 제외/첫 번째 제외'와 next-token 설명이 -1과 1을 결정합니다.",retry:"두 slice의 실제 index를 나란히 적으세요."}),
+    m({id:"exam-llm07-03",topic:"Padding Loss Mask",difficulty:"3 · 조건부 마스킹",sourceId:"exam-ch7-mask",prompt:"첫 EOS target은 유지하고 그 뒤 padding 위치만 ignore_index로 바꾸는 완성 코드를 작성하세요.",answer:cells["exam-ch7-mask"],problem_context:`mask = targets == pad_token_id
+indices = torch.nonzero(mask).squeeze()
+# TODO: 첫 padding/EOS는 유지하고 이후 위치만 loss에서 제외하세요.
+if indices.numel() > 1:
+    targets[indices[????:]] = ignore_index`,explanation:"첫 pad_token_id는 모델이 문장 종료를 예측해야 하는 실제 target입니다. 그 뒤 길이 맞춤용 pad만 -100으로 바꿔 Cross Entropy에서 제외합니다.",tensor_flow:"targets [T]→padding index→두 번째 이후 값 -100",code_signal:"'첫 번째는 유지'하므로 indices slice 시작은 1입니다.",retry:"indices[0]과 indices[1:]의 의미를 구분하세요."})
+  ];
+  chapter.mcq=[
+    {id:"exam-llm07-m1",source_question_id:"exam-llm07-01",topic:"EOS 추가",prompt:"sample 끝에 추가할 값은?",answer_index:2,explanation:"함수 인자로 받은 pad_token_id가 EOS와 padding 역할을 겸합니다.",choices:[{text:"ignore_index",why:"loss 제외용 값입니다."},{text:"0",why:"지정된 token ID가 아닙니다."},{text:"pad_token_id",why:"종료와 padding에 사용합니다."},{text:"len(item)",why:"길이지 token ID가 아닙니다."},{text:"batch_max_length",why:"목표 길이입니다."}]},
+    {id:"exam-llm07-m2",source_question_id:"exam-llm07-02",topic:"Next-token shift",prompt:"올바른 input/target slice는?",answer_index:0,explanation:"target이 한 칸 오른쪽입니다.",choices:[{text:"[:-1], [1:]",why:"길이가 같고 한 칸 이동합니다."},{text:"[1:],[:-1]",why:"방향이 반대입니다."},{text:"[:-1],[:-1]",why:"같은 token입니다."},{text:"[1:],[1:]",why:"같은 token입니다."},{text:"[:],[1:]",why:"길이가 다릅니다."}]},
+    {id:"exam-llm07-m3",source_question_id:"exam-llm07-03",topic:"Mask 시작",prompt:"첫 EOS 뒤 padding만 선택하는 slice는?",answer_index:3,explanation:"index 0은 유지하고 1부터 선택합니다.",choices:[{text:"indices[:]",why:"EOS도 가립니다."},{text:"indices[:-1]",why:"마지막만 남깁니다."},{text:"indices[0:]",why:"전부 선택합니다."},{text:"indices[1:]",why:"두 번째 이후만 선택합니다."},{text:"indices[-1:]",why:"마지막 하나만 선택합니다."}]},
+    {id:"exam-llm07-m4",source_question_id:"exam-llm07-03",topic:"ignore_index",prompt:"padding target을 -100으로 바꾸는 이유는?",answer_index:1,explanation:"Cross Entropy가 해당 위치를 loss에서 제외합니다.",choices:[{text:"tokenizer가 decode하도록",why:"decode와 무관합니다."},{text:"loss 계산에서 무시하도록",why:"ignore_index의 목적입니다."},{text:"길이를 줄이도록",why:"shape은 유지됩니다."},{text:"EOS 확률을 높이도록",why:"직접 확률을 조절하지 않습니다."},{text:"GPU로 이동하도록",why:"device와 무관합니다."}]},
+    {id:"exam-llm07-m5",source_question_id:"exam-llm07-01",topic:"Batch stack",prompt:"torch.stack 전에 필요한 조건은?",answer_index:4,explanation:"모든 Tensor shape이 같아야 합니다.",choices:[{text:"모두 다른 dtype",why:"dtype도 같아야 합니다."},{text:"모두 빈 Tensor",why:"학습 정보가 없습니다."},{text:"정렬된 label",why:"instruction token batch 조건이 아닙니다."},{text:"gradient 계산",why:"배치 구성 전 조건이 아닙니다."},{text:"동일한 sequence 길이",why:"stack할 각 Tensor shape이 같아집니다."}]}
+  ]; chapter.questionCount=3; chapter.exam_design={version:3,style:"원본 TODO·???? 골격 보존형",difficulty:["token 값","next-token slice","loss mask"],excluded:["URL·경로","저장 파일명"]};
+})();
+
+(() => {
+  "use strict";
   const course=window.LLM_COURSE;
   const chapter=course.chapters.find((item)=>item.file==="Chapter_6_Excercise_Finetuning_Classification_LoRA.ipynb");
   if(!chapter)return;
