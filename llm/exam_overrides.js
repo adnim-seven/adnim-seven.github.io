@@ -245,6 +245,107 @@ print(input_embeddings.shape)`,
 (() => {
   "use strict";
   const course=window.LLM_COURSE;
+  const chapter=course.chapters.find((item)=>item.file==="Chapter_6_Excercise_Finetuning_Classification.ipynb");
+  if(!chapter)return;
+  chapter.notebook_goal="사전학습 GPT를 고정하고 분류 head와 마지막 block만 미세조정하여 문장 단위 이진 분류기를 구현한다.";
+  chapter.overview={title:"사전학습 GPT가 Spam 분류기가 되는 과정",subtitle:"문장을 같은 길이의 token Tensor로 만들고, 마지막 token 표현을 2-class logits로 변환해 선택된 파라미터만 학습한다.",steps:[
+    {label:"Dataset",code:"truncate → pad → (input_ids, label)",flow:"text → [T] int64, scalar label"},
+    {label:"GPT 표현",code:"model(input_batch)[:, -1, :]",flow:"[B,T] → [B,T,C] → [B,C]"},
+    {label:"기본 모델 동결",code:"param.requires_grad = False",flow:"pretrained weights 고정"},
+    {label:"분류 Head",code:"Linear(emb_dim, num_classes)",flow:"[B,D] → [B,2]"},
+    {label:"부분 미세조정",code:"last block + final_norm + out_head",flow:"선택 Parameter만 gradient 갱신"}
+  ],rules:["validation/test는 train_dataset.max_length를 공유해 입력 shape을 일관되게 유지한다.","시퀀스 분류는 마지막 token 위치의 logits만 사용한다.","전체 동결 뒤 새 out_head와 마지막 block·final norm만 학습한다.","Cross Entropy는 [B,C] logits와 [B] class ID label을 받는다."]};
+  const cells={
+    "exam-ch6a-dataset":`self.encoded_texts = [
+    encoded_text[:self.max_length]
+    for encoded_text in self.encoded_texts
+]
+self.encoded_texts = [
+    encoded_text + [pad_token_id] * (self.max_length - len(encoded_text))
+    for encoded_text in self.encoded_texts
+]
+label = self.data.iloc[index]["Label"]`,
+    "exam-ch6a-last":"logits = model(input_batch)[:, -1, :]",
+    "exam-ch6a-freeze":`for param in model.parameters():
+    param.requires_grad = False`,
+    "exam-ch6a-head":`model.out_head = torch.nn.Linear(
+    in_features=BASE_CONFIG["emb_dim"], out_features=num_classes
+)`,
+    "exam-ch6a-unfreeze":`for param in model.trf_blocks[-1].parameters():
+    param.requires_grad = True
+for param in model.final_norm.parameters():
+    param.requires_grad = True`
+  };
+  Object.entries(cells).forEach(([id,source])=>{course.cells[id]={source};});
+  const base={subject:"LLM",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,isSourceBlank:true,source_type:"원본 노트북 실제 빈칸"};
+  const make=(data)=>({...base,occurrence:0,accepted_answers:[data.answer],...data});
+  chapter.subjective=[
+    make({id:"exam-llm06a-01",topic:"분류 Dataset 구성",difficulty:"3 · 데이터 연결",sourceId:"exam-ch6a-dataset",prompt:"원본 TODO의 최대 길이, padding ID, label 컬럼을 채운 완성 코드를 작성하세요.",answer:cells["exam-ch6a-dataset"],
+      problem_context:`if max_length is not None:
+    self.max_length = max_length
+    # TODO: 시퀀스를 설정된 최대 길이로 자르세요.
+    self.encoded_texts = [
+        encoded_text[:????]
+        for encoded_text in self.encoded_texts
+    ]
+
+# TODO: 전달된 padding token ID로 길이를 맞추세요.
+self.encoded_texts = [
+    encoded_text + [????] * (self.max_length - len(encoded_text))
+    for encoded_text in self.encoded_texts
+]
+
+def __getitem__(self, index):
+    encoded = self.encoded_texts[index]
+    # TODO: 정답 컬럼에서 label을 가져오세요.
+    label = self.data.iloc[index]["????"]`,
+      explanation:"truncation과 padding은 모두 self.max_length를 기준으로 하며, padding 값은 생성자 인자 pad_token_id를 사용합니다. 정답은 CSV의 Label 컬럼에서 같은 index로 가져옵니다.",tensor_flow:"text→list[int]→고정 길이 [T] int64; Label→scalar int64",code_signal:"함수 인자 max_length·pad_token_id와 CSV 생성 시 지정한 Label 컬럼명이 답을 제한합니다.",retry:"길이를 결정하는 값, 채우는 값, 정답이 있는 열을 각각 구분해 다시 작성하세요."}),
+    make({id:"exam-llm06a-02",topic:"마지막 token 분류",difficulty:"2 · Tensor 인덱싱",sourceId:"exam-ch6a-last",prompt:"GPT 출력에서 문장 분류에 사용할 마지막 token 위치만 선택하는 완성된 줄을 작성하세요.",answer:cells["exam-ch6a-last"],
+      problem_context:`input_batch, target_batch = input_batch.to(device), target_batch.to(device)
+# TODO: 시퀀스의 마지막 token 출력만 분류에 사용하세요.
+# model 출력: [batch, seq_len, num_classes]
+logits = model(input_batch)[:, ????, :]
+loss = torch.nn.functional.cross_entropy(logits, target_batch)`,
+      explanation:"batch와 class 축은 유지하고 sequence 축에서 -1을 선택해 [B,C]를 만듭니다. 전체 [B,T,C]를 target [B]와 바로 비교할 수 없습니다.",tensor_flow:"[B,T]→model [B,T,C]→slice [B,C]→CE with [B]",code_signal:"가운데 축이 seq_len이고 '마지막' Python index는 -1입니다.",retry:"B,T,C 세 축 중 제거할 축과 남길 축을 먼저 표시하세요."}),
+    make({id:"exam-llm06a-03",topic:"사전학습 가중치 동결",difficulty:"1 · 학습 설정",sourceId:"exam-ch6a-freeze",prompt:"모델 전체 Parameter를 optimizer 갱신 대상에서 제외하는 완성된 두 줄을 작성하세요.",answer:cells["exam-ch6a-freeze"],
+      problem_context:`# 모든 사전학습 파라미터를 먼저 고정합니다.
+# TODO: 학습에서 제외할 requires_grad 값을 채우세요.
+for param in model.parameters():
+    param.requires_grad = ????`,
+      explanation:"requires_grad=False이면 backward가 해당 Parameter의 gradient를 만들지 않습니다. eval()은 dropout 동작을 바꿀 뿐 Parameter를 동결하지 않습니다.",tensor_flow:"Parameter.requires_grad True→False; Tensor shape 변화 없음",code_signal:"주석의 '고정'과 '학습에서 제외'가 False를 의미합니다.",retry:"모델 모드와 gradient 허용 설정의 차이를 확인하세요."}),
+    make({id:"exam-llm06a-04",topic:"분류 Head 교체",difficulty:"2 · Layer 구성",sourceId:"exam-ch6a-head",prompt:"embedding 표현을 햄/스팸 두 class logits로 바꾸는 완성된 out_head 코드를 작성하세요.",answer:cells["exam-ch6a-head"],accepted_answers:[cells["exam-ch6a-head"],`model.out_head = torch.nn.Linear(in_features=BASE_CONFIG["emb_dim"], out_features=num_classes)`],
+      problem_context:`num_classes = 2
+# TODO: 기존 vocab 출력층을 이진 분류층으로 교체하세요.
+model.out_head = torch.nn.Linear(
+    in_features=BASE_CONFIG["emb_dim"],
+    out_features=????
+)`,
+      explanation:"입력은 GPT hidden 크기 emb_dim이고 출력은 token vocabulary가 아니라 분류 label 수 num_classes입니다. 새 Linear는 기본적으로 학습 가능합니다.",tensor_flow:"hidden [B,D]→classification logits [B,2]",code_signal:"바로 위 num_classes=2와 out_features 빈칸이 연결됩니다.",retry:"출력 한 칸이 단어 후보인지 class 후보인지 구분하세요."}),
+    make({id:"exam-llm06a-05",topic:"선택적 Unfreeze",difficulty:"3 · 부분 미세조정",sourceId:"exam-ch6a-unfreeze",prompt:"마지막 Transformer block과 final_norm만 다시 학습 가능하게 만드는 완성 코드를 작성하세요.",answer:cells["exam-ch6a-unfreeze"],
+      problem_context:`# 전체 동결 뒤 마지막 block과 final norm만 잠금 해제합니다.
+# TODO: 마지막 block 인덱스와 학습 허용 값을 채우세요.
+for param in model.trf_blocks[????].parameters():
+    param.requires_grad = ????
+
+# TODO: final norm을 학습 가능하게 하세요.
+for param in model.final_norm.parameters():
+    param.requires_grad = ????`,
+      explanation:"Python의 -1은 마지막 block을 선택하고 requires_grad=True가 gradient 계산을 다시 허용합니다. 이렇게 하면 전체 모델보다 적은 Parameter만 task에 적응합니다.",tensor_flow:"last block·final_norm Parameter: frozen→trainable",code_signal:"'마지막'은 -1, '잠금 해제/학습 가능'은 True입니다.",retry:"대상 범위와 Boolean 값을 따로 확인한 뒤 세 빈칸을 다시 채우세요."})
+  ];
+  chapter.mcq=[
+    {id:"exam-llm06a-m1",source_question_id:"exam-llm06a-01",topic:"Padding",prompt:"길이 T로 padding하는 올바른 식은?",answer_index:1,explanation:"현재 길이와 목표 길이의 차이만큼 pad ID를 붙입니다.",choices:[{text:"encoded+[T]*pad_token_id",why:"길이와 값의 역할이 바뀌었습니다."},{text:"encoded+[pad_token_id]*(T-len(encoded))",why:"부족한 개수만큼 올바른 ID를 붙입니다."},{text:"encoded+[0]*T",why:"원본 길이를 고려하지 않고 pad ID도 무시합니다."},{text:"encoded[:pad_token_id]",why:"padding이 아니라 slicing입니다."},{text:"[pad_token_id]+encoded",why:"앞에 하나만 붙입니다."}]},
+    {id:"exam-llm06a-m2",source_question_id:"exam-llm06a-02",topic:"분류 위치",prompt:"[B,T,C]에서 문장별 [B,C] logits을 얻는 코드는?",answer_index:3,explanation:"시간축 마지막 위치를 선택합니다.",choices:[{text:"logits[-1,:,:]",why:"마지막 batch만 선택합니다."},{text:"logits[:,:,-1]",why:"마지막 class만 선택합니다."},{text:"logits.mean(dim=-1)",why:"class 축을 없앱니다."},{text:"logits[:,-1,:]",why:"각 batch의 마지막 token을 선택합니다."},{text:"logits[:,0,:]",why:"첫 token을 선택합니다."}]},
+    {id:"exam-llm06a-m3",source_question_id:"exam-llm06a-03",topic:"Freeze",prompt:"Parameter를 동결하는 설정은?",answer_index:0,explanation:"gradient 생성을 끕니다.",choices:[{text:"param.requires_grad=False",why:"학습 gradient 대상에서 제외합니다."},{text:"model.eval()",why:"모듈 동작 모드만 바꿉니다."},{text:"param.grad=0",why:"현재 gradient 값만 바꿉니다."},{text:"optimizer.zero_grad()",why:"배치 gradient를 초기화할 뿐 다음 gradient는 생성됩니다."},{text:"torch.no_grad()",why:"해당 문맥의 연산 기록만 잠시 끕니다."}]},
+    {id:"exam-llm06a-m4",source_question_id:"exam-llm06a-04",topic:"Head 출력",prompt:"햄/스팸 분류 head의 out_features는?",answer_index:4,explanation:"후보 class가 두 개이므로 num_classes입니다.",choices:[{text:"vocab_size",why:"언어모델 token 예측 크기입니다."},{text:"context_length",why:"입력 길이입니다."},{text:"emb_dim",why:"head 입력 차원입니다."},{text:"batch_size",why:"데이터 묶음 크기입니다."},{text:"num_classes",why:"분류 후보 수입니다."}]},
+    {id:"exam-llm06a-m5",source_question_id:"exam-llm06a-05",topic:"부분 미세조정",prompt:"전체 동결 후 마지막 block만 선택하는 index는?",answer_index:2,explanation:"Python sequence의 마지막 원소는 -1입니다.",choices:[{text:"0",why:"첫 block입니다."},{text:"1",why:"두 번째 block입니다."},{text:"-1",why:"마지막 block입니다."},{text:"n_layers",why:"범위를 벗어납니다."},{text:"None",why:"유효한 block index가 아닙니다."}]}
+  ];
+  chapter.questionCount=chapter.subjective.length;
+  chapter.exam_design={version:3,style:"원본 TODO·???? 골격 보존형",difficulty:["단일 설정","Tensor 인덱싱","데이터·부분 미세조정 연결"],excluded:["URL·경로","다운로드 주소","고정 파일명 암기"]};
+})();
+
+(() => {
+  "use strict";
+  const course=window.LLM_COURSE;
   const chapter=course.chapters.find((item)=>item.file==="Chapter_5_Excercise_Pretraining.ipynb");
   if(!chapter)return;
   chapter.notebook_goal="다음 토큰 Cross Entropy loss를 계산하고, gradient 학습 루프와 autoregressive 생성을 구현한다.";
