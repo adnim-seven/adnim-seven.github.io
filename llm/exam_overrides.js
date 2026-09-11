@@ -242,6 +242,142 @@ print(input_embeddings.shape)`,
   };
 })();
 
+window.buildLLMReview = () => {
+  "use strict";
+  const course = window.LLM_COURSE;
+  if (!course || course.chapters.some((item) => item.id === "llm-final-review")) return;
+
+  const subjectivePlan = [
+    ["exam-llm02-03", "llm-final-s01"],
+    ["exam-llm03-05", "llm-final-s02"],
+    ["exam-llm04-06", "llm-final-s03"],
+    ["exam-llm05-03", "llm-final-s04"],
+    ["exam-llm06a-05", "llm-final-s05"],
+    ["exam-llm06b-04", "llm-final-s06"],
+    ["exam-llm07-03", "llm-final-s07"],
+    ["exam-llm07d-03", "llm-final-s08"]
+  ];
+  const mcqPlan = [
+    ["exam-llm02-m2", "llm-final-m01", "llm-final-s01"],
+    ["exam-llm03-m4", "llm-final-m02", "llm-final-s02"],
+    ["exam-llm04-m4", "llm-final-m03", "llm-final-s03"],
+    ["exam-llm05-m2", "llm-final-m04", "llm-final-s04"],
+    ["exam-llm06a-m5", "llm-final-m05", "llm-final-s05"],
+    ["exam-llm06b-m4", "llm-final-m06", "llm-final-s06"],
+    ["exam-llm07-m4", "llm-final-m07", "llm-final-s07"],
+    ["exam-llm07d-m4", "llm-final-m08", "llm-final-s08"]
+  ];
+  const allSubjective = course.chapters.flatMap((chapter) => chapter.subjective || []);
+  const allMcq = course.chapters.flatMap((chapter) => chapter.mcq || []);
+  const clone = (value) => JSON.parse(JSON.stringify(value));
+
+  const subjective = subjectivePlan.map(([sourceId, newId], index) => {
+    const source = allSubjective.find((item) => item.id === sourceId);
+    if (!source) throw new Error(`LLM review source missing: ${sourceId}`);
+    return {
+      ...clone(source), id: newId, chapterId: "llm-final-review", chapterNumber: "FINAL",
+      chapterTitle: "LLM 종합 리뷰·혼합 모의고사", file: "LLM_FINAL_REVIEW",
+      topic: `${index + 1}. ${source.topic}`, source_question_id: sourceId,
+      source_type: `${source.file} 핵심 구현 혼합문제`
+    };
+  });
+  const mcq = mcqPlan.map(([sourceId, newId, linkedSubjective]) => {
+    const source = allMcq.find((item) => item.id === sourceId);
+    if (!source) throw new Error(`LLM review MCQ source missing: ${sourceId}`);
+    return {...clone(source), id: newId, source_question_id: linkedSubjective};
+  });
+
+  course.chapters.push({
+    id: "llm-final-review", number: "FINAL", title: "LLM 종합 리뷰·혼합 모의고사",
+    file: "LLM_FINAL_REVIEW", subject: "LLM", questionCount: subjective.length,
+    summary: "8개 노트북의 구현 흐름을 데이터→Attention→GPT→학습→분류·LoRA→SFT·DPO 순서로 다시 연결합니다.",
+    capability: "노트북 이름이나 단편 암기에 의존하지 않고 전후 코드와 Tensor shape를 근거로 핵심 구현을 복원할 수 있다.",
+    notebook_goal: "LLM 전 범위의 대표 구현을 5지선다로 판별한 뒤 같은 개념을 주관식 코드로 독립 복원한다.",
+    overview: {
+      title: "LLM 전체 코드 흐름 한 장 요약",
+      subtitle: "데이터를 다음 토큰 target으로 구성하고 Transformer로 logits를 만든 뒤 목적에 맞는 loss로 학습한다.",
+      steps: [
+        {label:"데이터",code:"text → token IDs → shifted input/target",flow:"str → [B,T] int64"},
+        {label:"표현·문맥",code:"Embedding → causal attention → FFN",flow:"[B,T] → [B,T,D]"},
+        {label:"출력",code:"out_head(final_norm(x))",flow:"[B,T,D] → [B,T,V/C]"},
+        {label:"학습",code:"zero_grad → forward/loss → backward → step",flow:"loss scalar → parameter update"},
+        {label:"목적별 조정",code:"classification / LoRA / SFT / DPO",flow:"head·adapter·target·preference 변경"}
+      ],
+      rules: [
+        "빈칸 앞뒤 변수명과 주석을 먼저 읽고, 각 줄의 입력·출력 shape를 적는다.",
+        "다음 토큰 학습은 input과 target이 한 칸 이동하며 logits와 labels도 같은 원리로 정렬한다.",
+        "Attention은 Q·K로 확률을 만들고 V를 가중합한다. 미래 token은 softmax 전에 차단한다.",
+        "학습 대상이 바뀌면 출력 head, requires_grad, target masking, loss의 의미가 함께 바뀐다.",
+        "객관식 정답을 본 직후가 아니라 주관식에서 답을 가린 채 완성해야 회상 성공으로 판단한다."
+      ]
+    },
+    key_points: [
+      {title:"데이터 구성",purpose:"입력과 정답을 의도에 맞게 한 칸 이동하고 batch로 묶는다.",code:"inputs = tokens[:-1]\ntargets = tokens[1:]",flow:"[T+1] → 두 개의 [T]",watch:"입력과 target 길이가 같아야 합니다."},
+      {title:"Tensor 흐름",purpose:"각 layer가 보존하거나 바꾸는 축을 추적한다.",code:"[B,T] → [B,T,D] → [B,T,V]",flow:"ID → embedding → logits",watch:"Linear는 보통 마지막 축만 바꿉니다."},
+      {title:"학습 연결",purpose:"loss gradient가 실제 학습 대상으로 흐르게 설정한다.",code:"loss.backward()\noptimizer.step()",flow:"loss → grad → weights",watch:"freeze/unfreeze와 optimizer 대상이 일치해야 합니다."},
+      {title:"목적별 loss",purpose:"SFT는 정답 token, DPO는 chosen/rejected 상대 선호를 학습한다.",code:"cross_entropy / -logsigmoid(beta * margin)",flow:"logits·labels 또는 log-ratios → scalar",watch:"DPO의 chosen-rejected 뺄셈 방향을 유지합니다."}
+    ],
+    theory_guide: [
+      {title:"풀이 순서",body:"① 주석의 동사 확인 ② 정의된 변수·레이어 찾기 ③ shape 계산 ④ 최소 빈칸 복원 ⑤ 다음 줄과 연결 검증"},
+      {title:"난이도 기준",body:"단일 함수명보다 여러 줄의 연결, Tensor 축 정렬, 학습 대상과 loss 연결을 우선 평가합니다."},
+      {title:"오답 복습",body:"오답이면 정답을 베끼지 말고 code_signal과 tensor_flow만 보고 같은 문제를 즉시 다시 작성합니다."}
+    ],
+    full_code_cells: [], mcq, subjective,
+    exam_design: {version:2,style:"과목 종합 혼합 모의고사",difficulty:["개념 판별","Tensor 흐름","연결 구현"],excluded:["URL·경로 암기","무문맥 함수 전체 암기"]}
+  });
+};
+
+(() => {
+  "use strict";
+  const course=window.LLM_COURSE,chapter=course.chapters.find(x=>x.file==="Chapter_7_Exercise_Follow_Instructions_dpo.ipynb");if(!chapter)return;
+  chapter.notebook_goal="chosen·rejected 응답의 policy/reference 로그확률 차이를 계산해 선호 응답의 상대 확률을 높이는 DPO loss를 구현한다.";
+  chapter.overview={title:"Preference 쌍이 DPO Loss가 되는 과정",subtitle:"같은 prompt의 chosen과 rejected를 policy와 고정 reference가 각각 평가하고 상대 선호도 개선량을 학습한다.",steps:[{label:"Preference 데이터",code:"prompt + chosen / rejected",flow:"한 prompt→두 token sequence"},{label:"Token log-prob",code:"shift→log_softmax→gather→mask mean",flow:"[B,T,V]→[B]"},{label:"Policy 비율",code:"logp(chosen)-logp(rejected)",flow:"policy preference"},{label:"Reference 비율",code:"ref_chosen-ref_rejected",flow:"고정 기준 preference"},{label:"DPO Loss",code:"-logsigmoid(beta*(policy-reference))",flow:"margin→scalar loss"}],rules:["label은 한 칸 앞당기고 logits는 마지막 시점을 제외해 next-token 위치를 맞춘다.","정답 token 확률은 raw logits가 아니라 log_softmax 결과에서 gather한다.","chosen-rejected 순서를 policy와 reference에서 동일하게 유지한다.","reference는 no_grad로 고정하고 policy만 optimizer가 갱신한다."]};
+  const cells={"exam-dpo-data":`chosen_full_tokens = tokenizer.encode(f"{prompt}\\n\\n### Response:\\n{chosen_response}")
+rejected_full_tokens = tokenizer.encode(f"{prompt}\\n\\n### Response:\\n{rejected_response}")`,"exam-dpo-logprob":`labels = labels[:, 1:].clone()
+logits = logits[:, :-1, :]
+selected_log_probs = torch.gather(
+    input=log_probs,
+    dim=-1,
+    index=labels.unsqueeze(-1)
+).squeeze(-1)`,"exam-dpo-loss":`model_logratios = model_chosen_logprobs - model_rejected_logprobs
+reference_logratios = reference_chosen_logprobs - reference_rejected_logprobs
+logits = model_logratios - reference_logratios
+losses = -F.logsigmoid(beta * logits)`};Object.entries(cells).forEach(([id,source])=>course.cells[id]={source});
+  const b={subject:"LLM",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,isSourceBlank:true,source_type:"원본 노트북 실제 빈칸"},m=d=>({...b,occurrence:0,accepted_answers:[d.answer],...d});
+  chapter.subjective=[
+    m({id:"exam-llm07d-01",topic:"Chosen·Rejected 데이터",difficulty:"1 · 변수 대응",sourceId:"exam-dpo-data",prompt:"같은 prompt 뒤에 선호 응답과 비선호 응답을 각각 붙여 token화하는 두 줄을 완성하세요.",answer:cells["exam-dpo-data"],problem_context:`prompt = format_input(entry)
+rejected_response = entry["rejected"]
+chosen_response = entry["chosen"]
+# TODO: 각 preference 응답 변수를 올바른 sequence에 연결하세요.
+chosen_full_tokens = tokenizer.encode(f"{prompt}\\n\\n### Response:\\n{????}")
+rejected_full_tokens = tokenizer.encode(f"{prompt}\\n\\n### Response:\\n{????}")`,explanation:"두 sequence는 prompt가 같고 Response 부분만 다릅니다. chosen sequence에는 chosen_response, rejected sequence에는 rejected_response를 넣어야 preference 방향이 보존됩니다.",tensor_flow:"entry strings→chosen/rejected list[int]",code_signal:"왼쪽 변수명 chosen_full_tokens/rejected_full_tokens가 바로 위 응답 변수와 일대일 대응합니다.",retry:"두 줄에서 prompt는 동일하고 달라지는 한 변수만 표시하세요."}),
+    m({id:"exam-llm07d-02",topic:"정답 Token Log-probability",difficulty:"3 · Tensor 정렬",sourceId:"exam-dpo-logprob",prompt:"next-token 위치를 맞춘 labels·logits와 정답 ID의 log-probability를 수집하는 완성 코드를 작성하세요.",answer:cells["exam-dpo-logprob"],problem_context:`# TODO: labels는 첫 token 제외, logits는 마지막 시점 제외
+labels = labels[:, ????:].clone()
+logits = logits[:, :????, :]
+log_probs = F.log_softmax(logits, dim=-1)
+# TODO: 정답 token 위치를 log_probs에서 선택
+selected_log_probs = torch.gather(
+    input=????,
+    dim=-1,
+    index=labels.unsqueeze(-1)
+).squeeze(-1)`,explanation:"시점 t의 logits는 t+1 label을 예측하므로 labels[:,1:]와 logits[:,:-1]을 맞춥니다. gather는 각 위치의 전체 vocab log-prob 중 실제 label ID 한 값을 선택합니다.",tensor_flow:"logits [B,T,V]→[B,T-1,V]; labels [B,T]→[B,T-1]; gather→[B,T-1]",code_signal:"'labels 한 칸 앞/마지막 logits 제외'와 raw logits가 아닌 log_probs라는 힌트가 세 빈칸을 결정합니다.",retry:"작은 [A,B,C]→[B,C] 예제로 예측과 label 위치를 맞춘 뒤 다시 쓰세요."}),
+    m({id:"exam-llm07d-03",topic:"DPO Loss",difficulty:"3 · 선호도 계산",sourceId:"exam-dpo-loss",prompt:"policy와 reference의 chosen-rejected log-ratio 차이에 beta를 적용한 DPO loss 네 줄을 완성하세요.",answer:cells["exam-dpo-loss"],problem_context:`# TODO: policy와 reference 모두 chosen - rejected 순서
+model_logratios = ???? - model_rejected_logprobs
+reference_logratios = ???? - reference_rejected_logprobs
+# TODO: policy 개선량
+logits = model_logratios - ????
+# TODO: beta-scaled preference loss
+losses = -F.????(beta * logits)`,explanation:"각 모델의 chosen-rejected log-ratio가 선호 강도입니다. policy 비율에서 reference 비율을 뺀 margin이 클수록 좋은데, -logsigmoid는 이를 최소화하도록 policy를 학습시킵니다.",tensor_flow:"네 log-prob [B]→두 ratio [B]→margin [B]→loss [B]→mean scalar",code_signal:"함수 인자 이름과 주석의 chosen-rejected, policy-reference 순서가 변수 위치를 결정합니다.",retry:"먼저 두 ratio를 같은 방향으로 쓴 뒤 policy에서 reference를 빼세요."})
+  ];
+  chapter.mcq=[
+    {id:"exam-llm07d-m1",source_question_id:"exam-llm07d-01",topic:"Preference 대응",prompt:"chosen sequence에 붙일 값은?",answer_index:1,explanation:"선호 응답 변수를 연결합니다.",choices:[{text:"rejected_response",why:"선호 방향이 뒤집힙니다."},{text:"chosen_response",why:"chosen 데이터와 일치합니다."},{text:"prompt_tokens",why:"응답이 없습니다."},{text:"entry['input']",why:"추가 입력일 뿐 응답이 아닙니다."},{text:"pad_token_id",why:"padding 값입니다."}]},
+    {id:"exam-llm07d-m2",source_question_id:"exam-llm07d-02",topic:"Autoregressive shift",prompt:"올바른 labels/logits 정렬은?",answer_index:3,explanation:"label은 첫 위치를, logits는 마지막 위치를 제외합니다.",choices:[{text:"labels[:,:-1], logits[:,1:]",why:"예측 방향이 반대입니다."},{text:"labels[:,1:], logits[:,1:]",why:"logits의 첫 예측을 버립니다."},{text:"labels[:,:-1], logits[:,:-1]",why:"같은 시점 label을 비교합니다."},{text:"labels[:,1:], logits[:,:-1]",why:"next-token 위치가 맞습니다."},{text:"labels, logits",why:"한 칸 이동이 없습니다."}]},
+    {id:"exam-llm07d-m3",source_question_id:"exam-llm07d-02",topic:"Gather 입력",prompt:"정답 token 값을 선택할 gather input은?",answer_index:4,explanation:"정규화된 로그확률에서 선택합니다.",choices:[{text:"labels",why:"index로 사용될 대상입니다."},{text:"selection_mask",why:"유효 위치 표시입니다."},{text:"raw tokens",why:"확률 Tensor가 아닙니다."},{text:"logits",why:"로그확률이 아닙니다."},{text:"log_probs",why:"정답 ID의 log-probability를 선택합니다."}]},
+    {id:"exam-llm07d-m4",source_question_id:"exam-llm07d-03",topic:"DPO margin",prompt:"policy의 reference 대비 개선량은?",answer_index:0,explanation:"policy ratio에서 reference ratio를 뺍니다.",choices:[{text:"model_logratios-reference_logratios",why:"올바른 개선 margin입니다."},{text:"reference-model",why:"방향이 반대입니다."},{text:"model+reference",why:"상대 개선을 측정하지 않습니다."},{text:"chosen+rejected",why:"선호 차이가 아닙니다."},{text:"chosen/reference",why:"로그 공간의 차이 구조가 아닙니다."}]},
+    {id:"exam-llm07d-m5",source_question_id:"exam-llm07d-03",topic:"Reference 모델",prompt:"reference log-prob 계산에서 필요한 설정은?",answer_index:2,explanation:"기준 모델은 고정해야 합니다.",choices:[{text:"optimizer.step()",why:"reference가 갱신됩니다."},{text:"reference.train()",why:"학습 모드가 필요하지 않습니다."},{text:"torch.no_grad()",why:"gradient 기록 없이 고정 평가합니다."},{text:"loss.backward()",why:"reference gradient를 계산합니다."},{text:"requires_grad=True",why:"고정 기준 목적과 반대입니다."}]}
+  ];chapter.questionCount=3;chapter.exam_design={version:3,style:"원본 TODO·???? 골격 보존형",difficulty:["응답 대응","log-prob Tensor 정렬","DPO ratio 계산"],excluded:["URL·경로","파일 저장명"]};
+})();
+
 (() => {
   "use strict";
   const course=window.LLM_COURSE, chapter=course.chapters.find(x=>x.file==="Chapter_7_Exercise_Follow_Instructions.ipynb"); if(!chapter)return;
@@ -1024,3 +1160,6 @@ print(context_vecs.shape)`,
     excluded: ["함수 전체 가리기", "URL·경로 암기", "문맥 없는 단편 암기"]
   };
 })();
+
+window.buildLLMReview();
+delete window.buildLLMReview;
