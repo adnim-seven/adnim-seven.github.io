@@ -1,0 +1,17 @@
+.past-exam-button {
+  background: #fff7e6;
+  color: #9b6100;
+  border: 1px solid #efc56d;
+  border-radius: 8px;
+  padding: 9px 13px;
+  font: 800 .82rem inherit;
+  cursor: pointer;
+}
+
+.past-exam-button:hover { background: #fff0cb; }
+
+.past-exam-badge {
+  background: #fff3d8 !important;
+  color: #9b6100 !important;
+  border: 1px solid #efc56d;
+}

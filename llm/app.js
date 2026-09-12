@@ -65,7 +65,8 @@
   function renderNav() {
     $("#chapterNav").innerHTML = course.chapters.map((item, index) => {
       const c = counts(item.subjective.map((q) => q.id));
-      return `<button class="chapter-button ${index === chapterIndex ? "active" : ""}" data-index="${index}" type="button"><span class="chapter-number">${esc(item.number)}</span><span><strong>${esc(item.title)}</strong><small>주관식 ${item.subjective.length} · 오답 ${c.wrong}</small></span></button>`;
+      const pastCount = item.subjective.filter((q) => q.isPastExam).length;
+      return `<button class="chapter-button ${index === chapterIndex ? "active" : ""}" data-index="${index}" type="button"><span class="chapter-number">${esc(item.number)}</span><span><strong>${esc(item.title)}</strong><small>주관식 ${item.subjective.length} · 기출 ${pastCount} · 오답 ${c.wrong}</small></span></button>`;
     }).join("");
     $$(".chapter-button").forEach((button) => button.addEventListener("click", () => selectChapter(Number(button.dataset.index))));
   }
@@ -186,6 +187,9 @@
   }
   function sourceContext(question) {
     if (!question) return "????";
+    // 문제는 답만 떼어 보이지 않고, 답이 실제로 속한 함수·클래스 전체를 우선 보여준다.
+    // scope_context에는 정답 위치만 ????로 바꾼 원본 구조가 들어간다.
+    if (question.scope_context) return question.scope_context;
     if (question.problem_context) return question.problem_context;
     const source = course.cells[question.sourceId]?.source || "";
     const answer = question.answer;
@@ -209,7 +213,7 @@
     $("#mcqPosition").textContent = `5지선다 ${mcqIndex + 1} / ${chapter().mcq.length}`;
     $("#mcqSource").textContent = "원본 노트북 빈칸 기반";
     $("#mcqTopic").textContent = item.topic;
-    $("#mcqCode").textContent = sourceContext(source);
+    $("#mcqCode").textContent = source?.mcq_context || sourceContext(source);
     $("#mcqPrompt").textContent = item.prompt;
     $("#mcqChoices").innerHTML = item.choices.map((choice, index) => `<label class="choice"><input type="radio" name="mcqChoice" value="${index}"><span><strong>${index + 1}.</strong> <code>${esc(choice.text)}</code></span></label>`).join("");
     feedback($("#mcqFeedback"), "빈칸에 들어갈 코드를 고른 뒤 제출하세요. 제출 후 각 보기의 오류를 확인할 수 있습니다.");
@@ -243,7 +247,8 @@
       feedback($("#subFeedback"), "현재 조건에 해당하는 문제가 없습니다."); return;
     }
     $("#subPosition").textContent = `주관식 ${subjectiveIndex + 1} / ${subjectivePool.length}`;
-    $("#subSource").textContent = item.isSourceBlank ? "실제 강의 빈칸" : "원본 코드 기반";
+    $("#subSource").textContent = item.isPastExam ? "실제 기출 · 전체 구현 복원" : item.scope_context ? "기출 유형 · 전체 구현 복원" : item.isSourceBlank ? "실제 강의 빈칸" : "원본 코드 기반";
+    $("#subSource").classList.toggle("past-exam-badge", Boolean(item.isPastExam));
     $("#subTopic").textContent = item.topic;
     $("#subContext").textContent = sourceContext(item);
     $("#subPrompt").textContent = item.prompt;
@@ -287,6 +292,11 @@
     subjectiveIndex = 0;
     switchPanel("subjectivePanel"); renderSubjective();
   }
+  function pastExamTest() {
+    subjectivePool = chapter().subjective.filter((q) => q.isPastExam);
+    subjectiveIndex = 0;
+    switchPanel("subjectivePanel"); renderSubjective();
+  }
 
   function renderStats() {
     const ids = chapter().subjective.map((q) => q.id);
@@ -326,6 +336,7 @@
   $("#nextSubjective").addEventListener("click", nextSubjective);
   $("#retryWrong").addEventListener("click", retryWrong);
   $("#randomTest").addEventListener("click", randomTest);
+  $("#pastExamTest").addEventListener("click", pastExamTest);
   $("#collapseCode").addEventListener("click", () => {
     const cells = $$("#fullCodeCells details");
     const shouldOpen = cells.length > 0 && cells.every((cell) => !cell.open);

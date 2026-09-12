@@ -889,16 +889,36 @@ self.out_head = nn.Linear(cfg["emb_dim"], cfg["????"], bias=False)`,
       explanation:"토큰 lookup 행 수와 출력 후보 수는 vocab_size이고, 위치 lookup 행 수는 최대 context_length입니다.",tensor_flow:"token [B,T]→[B,T,D], position [T]→[T,D], head [B,T,D]→[B,T,V]",code_signal:"단어 ID/단어 후보는 vocab_size, 허용 위치 수는 context_length입니다.",retry:"각 레이어의 행 개수가 무엇을 세는지 적고 다시 작성하세요."}),
     make({id:"exam-llm04-06",topic:"GPT forward 흐름",difficulty:"3 · 연결 구현",sourceId:"exam-ch4-forward",
       prompt:"Embedding 결합, Transformer block 통과, logits 계산의 완성된 세 줄을 작성하세요.",answer:cells["exam-ch4-forward"],
-      problem_context:`tok_embeds = self.tok_emb(in_idx)
-pos_embeds = self.pos_emb(torch.arange(seq_len, device=in_idx.device))
-# TODO: 토큰 의미와 위치 정보 합산
-x = tok_embeds + ????
-x = self.drop_emb(x)
-# TODO: Transformer blocks 통과
-x = self.????(x)
-x = self.final_norm(x)
-# TODO: vocab logits 계산
-logits = self.????(x)`,
+      problem_context:`class GPTModel(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.tok_emb = nn.Embedding(cfg["vocab_size"], cfg["emb_dim"])
+        self.pos_emb = nn.Embedding(cfg["context_length"], cfg["emb_dim"])
+        self.drop_emb = nn.Dropout(cfg["drop_rate"])
+        self.trf_blocks = nn.Sequential(
+            *[TransformerBlock(cfg) for _ in range(cfg["n_layers"])]
+        )
+        self.final_norm = LayerNorm(cfg["emb_dim"])
+        self.out_head = nn.Linear(cfg["emb_dim"], cfg["vocab_size"], bias=False)
+
+    def forward(self, in_idx):
+        # in_idx: token ID batch [B,T]
+        batch_size, seq_len = in_idx.shape
+
+        # 토큰·위치 임베딩 생성
+        tok_embeds = self.tok_emb(in_idx)
+        pos_embeds = self.pos_emb(torch.arange(seq_len, device=in_idx.device))
+        # TODO: 토큰 의미와 위치 정보 합산
+        x = tok_embeds + ????
+        x = self.drop_emb(x)
+
+        # TODO: Transformer blocks 통과
+        x = self.????(x)
+        x = self.final_norm(x)
+        # TODO: vocab logits 계산
+        logits = self.????(x)
+
+        return logits`,
       explanation:"토큰과 위치를 더해 [B,T,D]를 만든 뒤 모든 block과 final norm을 거쳐 out_head로 vocab 차원의 logits를 냅니다.",tensor_flow:"[B,T] → [B,T,D] → [B,T,D] → [B,T,V]",code_signal:"오른쪽에 이미 정의된 pos_embeds, trf_blocks, out_head를 forward 순서대로 연결합니다.",retry:"각 줄 뒤 shape D가 언제 V로 바뀌는지 표시하세요."}),
     make({id:"exam-llm04-07",topic:"추론 모드",difficulty:"1 · 컨텍스트",sourceId:"exam-ch4-nograd",
       prompt:"텍스트 생성 중 gradient 기록 없이 모델을 실행하는 두 줄을 작성하세요.",answer:cells["exam-ch4-nograd"],
