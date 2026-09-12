@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="full_code.css">
   <link rel="stylesheet" href="mobile.css">
   <link rel="stylesheet" href="past_exam.css">
+  <link rel="stylesheet" href="notebook_full_exam.css">
 </head>
 <body>
   <header class="topbar">
@@ -24,6 +25,7 @@
         <button id="retryWrong" class="danger-button" type="button">현재 노트북 오답 재시험</button>
         <button id="randomTest" class="quiet-button" type="button">랜덤 주관식 10문제</button>
         <button id="pastExamTest" class="past-exam-button" type="button">현재 노트북 실제 기출</button>
+        <button id="fullNotebookTest" class="quiet-button" type="button">현재 노트북 전체 시험</button>
       </div>
     </aside>
 
@@ -40,7 +42,8 @@
         <button class="mode-tab" data-panel="fullCodePanel" type="button">2. 전체 코드</button>
         <button class="mode-tab" data-panel="mcqPanel" type="button">3. 코드 5지선다</button>
         <button class="mode-tab" data-panel="subjectivePanel" type="button">4. 주관식 시험</button>
-        <button class="mode-tab" data-panel="resultsPanel" type="button">5. 결과·오답</button>
+        <button class="mode-tab" data-panel="notebookExamPanel" type="button">5. 전체 노트북 시험</button>
+        <button class="mode-tab" data-panel="resultsPanel" type="button">6. 결과·오답</button>
       </div>
 
       <section id="studyPanel" class="panel active" aria-labelledby="chapterTitle">
@@ -93,6 +96,10 @@
         <div id="subFeedback" class="feedback neutral" aria-live="polite">자료를 보지 않고 작성하세요. 힌트를 사용한 정답은 숙달 횟수에 포함되지 않습니다.</div>
       </section>
 
+      <section id="notebookExamPanel" class="panel">
+        <div id="notebookExamContent"></div>
+      </section>
+
       <section id="resultsPanel" class="panel">
         <div class="results-head"><div><span>학습 결과</span><h2>주관식 독립 회상 기준</h2></div><button id="resetProgress" class="text-button" type="button">기록 초기화</button></div>
         <p class="results-note">5지선다 정답은 개념 확인 단계입니다. 힌트 없이 주관식을 두 번 맞히면 숙달로 표시됩니다.</p>
@@ -105,6 +112,7 @@
   <script src="course_data.js"></script>
   <script src="exam_overrides.js"></script>
   <script src="subjective_scope.js"></script>
+  <script src="notebook_full_exam.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

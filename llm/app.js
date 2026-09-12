@@ -14,6 +14,7 @@
   const chapter = () => course.chapters[chapterIndex];
   const currentMcq = () => chapter().mcq[mcqIndex];
   const currentSubjective = () => subjectivePool[subjectiveIndex];
+  const currentNotebookExam = () => window.NOTEBOOK_FULL_EXAMS?.[chapter().id];
 
   function loadState() {
     try { return JSON.parse(localStorage.getItem(storageKey)) || { questions: {} }; }
@@ -81,6 +82,11 @@
     $("#notebookGoal").textContent = `목표 · ${chapter().notebook_goal || chapter().summary}`;
     $("#capability").textContent = chapter().capability;
     $("#summary").textContent = chapter().summary;
+    const fullNotebookButton = $("#fullNotebookTest");
+    const hasFullNotebookExam = Boolean(currentNotebookExam());
+    fullNotebookButton.disabled = !hasFullNotebookExam;
+    fullNotebookButton.title = hasFullNotebookExam ? "원본 코드 전체를 보며 빈칸을 채웁니다." : "현재는 Chapter 6 전체 시험만 준비되어 있습니다.";
+    fullNotebookButton.classList.toggle("is-disabled", !hasFullNotebookExam);
     renderNav();
     renderOverview();
     renderStudy();
@@ -88,6 +94,7 @@
     renderFullCode();
     renderMcq();
     renderSubjective();
+    renderNotebookExam();
     renderStats();
     renderResults();
   }
@@ -298,6 +305,46 @@
     switchPanel("subjectivePanel"); renderSubjective();
   }
 
+  function renderNotebookExam() {
+    const root = $("#notebookExamContent");
+    const exam = currentNotebookExam();
+    if (!exam) {
+      root.innerHTML = '<div class="notebook-exam-empty"><strong>이 노트북의 전체 시험은 아직 준비 중입니다.</strong><p>현재는 Chapter 6 분류·LoRA 노트북 전체 시험을 먼저 제공합니다.</p></div>';
+      return;
+    }
+    root.innerHTML = `
+      <div class="notebook-exam-head"><span>FULL NOTEBOOK IMPLEMENTATION EXAM</span><h2>${esc(exam.title)}</h2><p>${esc(exam.file)}</p></div>
+      <div class="notebook-exam-summary">${esc(exam.instruction)} · 코드 셀 ${exam.cells.length}개 · 구현 빈칸 ${exam.blanks.length}개</div>
+      <div class="notebook-exam-cells">
+        ${exam.cells.map((cell, index) => `<details class="notebook-exam-cell" ${index === 0 ? "open" : ""}><summary>코드 셀 ${cell.cell_number}</summary><pre class="code-box problem-code"><code>${esc(cell.source)}</code></pre></details>`).join("")}
+      </div>
+      <section class="notebook-exam-answers">
+        <h3>빈칸 답안 제출</h3><p>각 답은 코드의 <code>[빈칸 번호]</code>와 대응합니다. 대입문 전체가 아니라 <strong>= 오른쪽 코드</strong>만 작성하세요.</p>
+        ${exam.blanks.map((blank) => `<div class="full-blank"><label for="${esc(blank.id)}">빈칸 ${String(blank.number).padStart(2, "0")}</label><small>${esc(blank.prompt)}</small><textarea id="${esc(blank.id)}" class="answer-input" data-full-blank="${esc(blank.id)}" spellcheck="false" placeholder="오른쪽 코드 또는 표현식"></textarea></div>`).join("")}
+        <div class="question-controls"><fieldset class="confidence"><legend>확신도</legend><label><input name="fullConfidence" type="radio" value="확실">확실</label><label><input name="fullConfidence" type="radio" value="애매" checked>애매</label><label><input name="fullConfidence" type="radio" value="추측">추측</label></fieldset><div><button id="submitNotebookExam" class="primary-button" type="button">전체 시험 제출</button></div></div>
+        <div id="notebookExamFeedback" class="feedback neutral notebook-exam-feedback" aria-live="polite">전체 코드의 전후 흐름을 단서로 답안을 작성하세요.</div>
+      </section>`;
+    $("#submitNotebookExam").addEventListener("click", submitNotebookExam);
+  }
+
+  function submitNotebookExam() {
+    const exam = currentNotebookExam();
+    if (!exam) return;
+    const level = confidence("fullConfidence");
+    const results = exam.blanks.map((blank) => {
+      const submitted = document.querySelector(`[data-full-blank="${blank.id}"]`)?.value || "";
+      const correct = scoreAnswer(submitted, [blank.answer]);
+      recordAttempt(`full-${exam.chapterId}-${blank.id}`, "full-notebook", correct, level, false, correct ? "" : "전체 노트북 구현");
+      return { blank, correct };
+    });
+    const correctCount = results.filter((item) => item.correct).length;
+    const details = results.map(({ blank, correct }) => correct
+      ? `빈칸 ${String(blank.number).padStart(2, "0")}: 정답`
+      : `빈칸 ${String(blank.number).padStart(2, "0")}: 오답\n정답 = ${blank.answer}`).join("\n\n");
+    feedback($("#notebookExamFeedback"), `${correctCount}/${results.length}개 정답\n\n${details}`, correctCount === results.length ? "correct" : "wrong");
+    saveState();
+  }
+
   function renderStats() {
     const ids = chapter().subjective.map((q) => q.id);
     const c = counts(ids);
@@ -337,6 +384,11 @@
   $("#retryWrong").addEventListener("click", retryWrong);
   $("#randomTest").addEventListener("click", randomTest);
   $("#pastExamTest").addEventListener("click", pastExamTest);
+  $("#fullNotebookTest").addEventListener("click", () => {
+    if (!currentNotebookExam()) return;
+    switchPanel("notebookExamPanel");
+    renderNotebookExam();
+  });
   $("#collapseCode").addEventListener("click", () => {
     const cells = $$("#fullCodeCells details");
     const shouldOpen = cells.length > 0 && cells.every((cell) => !cell.open);
