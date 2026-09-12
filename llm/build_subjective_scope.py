@@ -153,26 +153,41 @@ for chapter in data['course']['chapters']:
             unmatched.append(q['id'])
             continue
         _, key, source, chosen = min(candidates, key=lambda x:x[0])
-        spans = sorted(set((n.lineno-1,n.end_lineno) for n in chosen))
-        spans = [s for s in spans if not any(t != s and t[0] <= s[0] and t[1] >= s[1] for t in spans)]
+        selected = sorted(set(chosen), key=lambda n: (n.lineno, n.end_lineno))
+        selected = [n for n in selected if not any(t is not n and t.lineno <= n.lineno and t.end_lineno >= n.end_lineno for t in selected)]
         lines = source.splitlines()
-        answer_blocks = []
-        for a,b in spans:
+        span_infos = []
+        for node in selected:
+            a, b = node.lineno - 1, node.end_lineno
             block = lines[a:b]
             indent = len(block[0])-len(block[0].lstrip())
-            answer_blocks.append(ast.unparse(ast.parse('\n'.join(line[indent:] for line in block))))
+            original = ast.unparse(node)
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                answer = ast.unparse(node.value)
+                placeholder = ' ' * indent + ast.unparse(node.targets[0]) + ' = ????'
+            elif isinstance(node, ast.AnnAssign) and node.value is not None:
+                answer = ast.unparse(node.value)
+                placeholder = ' ' * indent + ast.unparse(node.target) + ' = ????'
+            elif isinstance(node, ast.Return) and node.value is not None:
+                answer = ast.unparse(node.value)
+                placeholder = ' ' * indent + 'return ????'
+            else:
+                answer = original
+                placeholder = ' ' * indent + '????'
+            span_infos.append((a, b, answer, original, placeholder))
         masked = list(lines)
-        for a,b in reversed(spans):
+        for a,b,answer,original,placeholder in reversed(span_infos):
             indent = re.match(r'\s*', lines[a]).group()
             comments = [indent+token.string for token in tokenize.generate_tokens(io.StringIO('\n'.join(lines[a:b])).readline) if token.type==tokenize.COMMENT]
-            masked[a:b] = comments + [indent+'????']
+            masked[a:b] = comments + [placeholder]
+        answer_blocks = [info[2] for info in span_infos]
         answer = '\n'.join(answer_blocks)
         restored=[]
-        blocks=iter(answer_blocks)
+        originals=iter(info[3] for info in span_infos)
         for line in masked:
-            if line.strip()=='????':
+            if '????' in line:
                 indentation=line[:len(line)-len(line.lstrip())]
-                restored.extend(indentation+part for part in next(blocks).splitlines())
+                restored.extend(indentation+part for part in next(originals).splitlines())
             else:
                 restored.append(line)
         assert ast.dump(ast.parse('\n'.join(restored))) == ast.dump(ast.parse(source)), q['id']
@@ -180,7 +195,7 @@ for chapter in data['course']['chapters']:
             accepted_answers=[answer], scope_source=key, isSourceBlank=False,
             previous_answer=old_answer,
             answer_blocks=answer_blocks,
-            prompt=(('주석에 제시된 학습률·감쇠를 사용해 AdamW를 구성하세요.' if q['id']=='exam-llm05-06' else '마지막 token 위치의 분류 점수와 target으로 loss를 계산하세요.' if q['id']=='exam-llm06a-02' else q['prompt'])+'\n???? 위치의 완성된 코드 줄(들)을 위에서 아래 순서대로 작성하세요. 대입문·return·호출문 전체를 포함하세요.'),
+            prompt=(('주석에 제시된 학습률·감쇠를 사용해 AdamW를 구성하세요.' if q['id']=='exam-llm05-06' else '마지막 token 위치의 분류 점수와 target으로 loss를 계산하세요.' if q['id']=='exam-llm06a-02' else q['prompt'])+'\n코드의 `????` 자리에 들어갈 오른쪽 코드 또는 표현식을 위에서 아래 순서대로 작성하세요.'),
             source_type='기출 유형 확장 · 전체 구현 복원')
 
 past_ids = [
