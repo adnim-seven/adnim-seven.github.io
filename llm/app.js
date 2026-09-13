@@ -109,6 +109,10 @@
     $("#notebookGoal").textContent = `목표 · ${chapter().notebook_goal || chapter().summary}`;
     $("#capability").textContent = chapter().capability;
     $("#summary").textContent = chapter().summary;
+    const fullNotebookButton = $("#fullNotebookTest");
+    fullNotebookButton.disabled = false;
+    fullNotebookButton.title = "전체 코드 문맥 안에서 답안을 바로 작성하고 빈칸별로 채점합니다.";
+    fullNotebookButton.classList.remove("is-disabled");
     renderNav();
     renderOverview();
     renderStudy();
@@ -471,6 +475,15 @@
   $("#showHint").addEventListener("click", showHint);
   $("#submitSubjective").addEventListener("click", submitSubjective);
   $("#nextSubjective").addEventListener("click", nextSubjective);
+  $("#retryWrong").addEventListener("click", retryWrong);
+  $("#randomTest").addEventListener("click", randomTest);
+  $("#pastExamTest").addEventListener("click", pastExamTest);
+  $("#fullNotebookTest").addEventListener("click", () => {
+    switchPanel("notebookExamPanel");
+    renderNotebookExam();
+  });
+  $$("[data-inline-side-view]").forEach((button) => button.addEventListener("click", () => { inlineView = button.dataset.inlineSideView; renderNotebookExam(); }));
+  $("#inlineSideFirst").addEventListener("click", () => focusInlineBlank(0));
   $("#collapseCode").addEventListener("click", () => {
     const cells = $$("#fullCodeCells details");
     const shouldOpen = cells.length > 0 && cells.every((cell) => !cell.open);
