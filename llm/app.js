@@ -343,7 +343,7 @@
       }));
       return;
     }
-    const input = (blank) => `<span class="inline-answer-wrap"><textarea class="inline-answer-input" data-inline-answer="${esc(blank.id)}" rows="1" spellcheck="false" placeholder="코드 입력"></textarea><span id="inline-feedback-${esc(blank.id)}" class="inline-answer-feedback" aria-live="polite"></span></span>`;
+    const input = (blank) => `<textarea class="inline-answer-input" data-inline-answer="${esc(blank.id)}" rows="1" spellcheck="false" placeholder="코드 입력"></textarea>`;
     const shownCells = inlineView === "notebook" ? exam.cells : exam.cells.filter((cell) => cell.type === "code");
     const cells = shownCells.map((cell) => {
       if (cell.type !== "code") {
@@ -386,12 +386,10 @@
     if (!answer.trim()) return;
     const correct = scoreAnswer(answer, [blank.answer]);
     recordAttempt(inlineKey(blankId), "subjective", correct, "애매", false, correct ? "" : "인라인 구현");
-    const target = $(`#inline-feedback-${blankId}`);
     const input = document.querySelector(`[data-inline-answer="${blankId}"]`);
     input?.classList.toggle("correct", correct);
     input?.classList.toggle("wrong", !correct);
-    target.className = `inline-answer-feedback ${correct ? "correct" : "wrong"}`;
-    target.textContent = correct ? "정답입니다." : `오답입니다. 정답: ${blank.answer}`;
+    showInlineToast(correct ? "정답입니다." : `오답입니다. 정답: ${blank.answer}`, correct);
     updateInlineStatus();
     saveState();
   }
@@ -403,6 +401,16 @@
     const answered = exam.blanks.filter((blank) => document.querySelector(`[data-inline-answer="${blank.id}"]`)?.value.trim()).length;
     const correct = exam.blanks.filter((blank) => scoreAnswer(document.querySelector(`[data-inline-answer="${blank.id}"]`)?.value || "", [blank.answer])).length;
     status.textContent = `문제 ${inlineBlankIndex + 1}/${exam.blanks.length} · 작성 ${answered}개 · 현재 정답 ${correct}개`;
+  }
+
+  function showInlineToast(message, correct) {
+    let toast = $("#inlineExamToast");
+    if (!toast) { toast = document.createElement("div"); toast.id = "inlineExamToast"; toast.className = "inline-exam-toast"; document.body.append(toast); }
+    toast.className = `inline-exam-toast ${correct ? "correct" : "wrong"}`;
+    toast.textContent = message;
+    clearTimeout(showInlineToast.timer);
+    showInlineToast.timer = setTimeout(() => toast.classList.remove("show"), 3000);
+    requestAnimationFrame(() => toast.classList.add("show"));
   }
 
   function focusInlineBlank(index) {

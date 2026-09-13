@@ -14,6 +14,7 @@
 .inline-answer-wrap{display:inline-flex;flex-direction:column;vertical-align:middle;width:min(360px,95%)}
 .inline-answer-wrap .inline-answer-input{width:100%}.inline-answer-wrap .inline-answer-feedback{width:100%;margin-top:4px;padding:4px 7px;border-radius:5px;font:700 .76rem/1.4 "Malgun Gothic","Segoe UI",sans-serif}
 .inline-answer-wrap .inline-answer-feedback.correct{background:#eaf8f0;color:var(--green)}.inline-answer-wrap .inline-answer-feedback.wrong{background:#fff0f1;color:var(--red)}
+.inline-exam-toast{position:fixed;z-index:60;right:20px;bottom:84px;max-width:min(520px,calc(100% - 40px));padding:11px 14px;border-radius:9px;box-shadow:0 8px 24px rgba(20,38,65,.2);font-weight:800;opacity:0;transform:translateY(10px);pointer-events:none;transition:.18s}.inline-exam-toast.show{opacity:1;transform:translateY(0)}.inline-exam-toast.correct{background:#eaf8f0;color:var(--green);border:1px solid #a9dcbf}.inline-exam-toast.wrong{background:#fff0f1;color:var(--red);border:1px solid #efbcc2}
 @media(max-width:1500px){.inline-fixed-bar{left:320px;right:22px}}
 @media(max-width:1050px){.inline-fixed-bar{left:18px;right:18px}}
 @media(max-width:650px){.inline-markdown-source{padding:11px;font-size:.82rem}.inline-fixed-bar{right:9px;bottom:8px;left:9px}.inline-fixed-inner{align-items:flex-start;flex-direction:column;gap:6px}.inline-fixed-inner>div{width:100%}.inline-fixed-inner button{flex:1;padding:8px 7px;font-size:.76rem}.inline-code-cells{padding-bottom:122px}.inline-exam-choices{grid-template-columns:1fr}}
