@@ -335,7 +335,12 @@
     const root = $("#notebookExamContent");
     const exam = currentInlineExam();
     if (!exam) {
-      root.innerHTML = '<div class="notebook-exam-empty"><strong>이 챕터의 인라인 시험을 불러오지 못했습니다.</strong><p>페이지를 새로고침한 뒤 다시 시도하세요.</p></div>';
+      const choices = course.chapters.map((item, index) => ({ item, index })).filter(({ item }) => window.LLM_INLINE_EXAMS?.[item.file]);
+      root.innerHTML = `<div class="inline-exam-head"><span>INLINE IMPLEMENTATION EXAM</span><h2>노트북별 인라인 시험 선택</h2><p>종합 리뷰에는 독립된 원본 노트북이 없으므로, 아래에서 실습 노트북을 선택하세요.</p></div><div class="inline-exam-choices">${choices.map(({ item, index }) => `<button class="quiet-button" data-inline-chapter="${index}" type="button">${esc(item.number)} · ${esc(item.title)}</button>`).join("")}</div>`;
+      root.querySelectorAll("[data-inline-chapter]").forEach((button) => button.addEventListener("click", () => {
+        selectChapter(Number(button.dataset.inlineChapter));
+        switchPanel("notebookExamPanel");
+      }));
       return;
     }
     const input = (blank) => `<span class="inline-answer-wrap"><textarea class="inline-answer-input" data-inline-answer="${esc(blank.id)}" rows="1" spellcheck="false" placeholder="코드 입력"></textarea><span id="inline-feedback-${esc(blank.id)}" class="inline-answer-feedback" aria-live="polite"></span></span>`;
