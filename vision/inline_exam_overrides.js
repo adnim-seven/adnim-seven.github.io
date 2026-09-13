@@ -111,3 +111,29 @@ window.INLINE_EXAM_OVERRIDES = {
     ],
   },
 };
+
+/* 공식 출제범위의 직접 타깃: ResNet·ViT·U-Net 구조, transform, 학습 연결 */
+(() => {
+  const priority = {
+    "01_ResNet18_CIFAR10.ipynb": new Set([
+      "blank-random-crop", "blank-normalize", "blank-cifar-stem",
+      "vision-random-flip", "vision-to-tensor", "vision-train-forward", "vision-train-loss", "vision-train-backward", "vision-train-step", "vision-accuracy-argmax"
+    ]),
+    "02_ViT_CIFAR10.ipynb": new Set([
+      "blank-vit-qkv", "blank-vit-scores", "blank-vit-weighted-sum",
+      "vision-vit-residual-attn", "vision-vit-residual-ff", "vision-vit-train-logprob", "vision-vit-train-loss", "vision-vit-train-step"
+    ]),
+    "04_Unet.ipynb": new Set([
+      "blank-unet-up", "blank-unet-skip", "blank-unet-loss",
+      "vision-unet-img-channel", "vision-unet-mask-channel", "vision-unet-pad", "vision-unet-output", "vision-unet-sigmoid", "vision-unet-threshold"
+    ])
+  };
+  Object.entries(priority).forEach(([file, ids]) => {
+    (window.INLINE_EXAM_MAP?.[file]?.blanks || []).forEach((blank) => {
+      if (ids.has(blank.id) && !blank.label.startsWith("★")) blank.label = `★ 유력 · ${blank.label}`;
+    });
+    (window.INLINE_EXAM_OVERRIDES?.[file]?.blanks || []).forEach((blank) => {
+      if (ids.has(blank.id) && !blank.label.startsWith("★")) blank.label = `★ 유력 · ${blank.label}`;
+    });
+  });
+})();
