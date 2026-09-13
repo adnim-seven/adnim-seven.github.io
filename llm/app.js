@@ -314,12 +314,8 @@
   function renderNotebookExam() {
     const root = $("#notebookExamContent");
     root.innerHTML = `
-      <div class="notebook-exam-head"><span>INLINE IMPLEMENTATION EXAM</span><h2>${esc(chapter().title)} · 인라인 시험</h2><p>${esc(chapter().file)}</p></div>
-      <div class="notebook-exam-summary">전체 코드 문맥에서 필요한 위치에 답을 직접 작성하고, 각 빈칸 바로 아래에서 정답·오답을 확인합니다.</div>
-      <section class="notebook-exam-answers">
-        <h3>시험 방식</h3><p>코드 셀을 분리하지 않고 원본 흐름 안에 답안을 입력합니다. 별표 복습과 오답 횟수도 빈칸별로 누적됩니다.</p>
-        <div class="question-controls"><div><a class="primary-button" href="${inlineExamUrl()}">인라인 시험 시작</a><a class="quiet-button" href="inline-subjective/">모든 인라인 시험 보기</a></div></div>
-      </section>`;
+      <div class="inline-exam-head"><span>INLINE IMPLEMENTATION EXAM</span><h2>${esc(chapter().title)} · 인라인 시험</h2><p>기존 학습 탭 안에서 전체 코드 문맥과 빈칸별 채점을 그대로 제공합니다.</p></div>
+      <iframe class="inline-exam-frame" title="${esc(chapter().file)} 인라인 시험" src="${inlineExamUrl()}"></iframe>`;
   }
 
   function submitNotebookExam() {
