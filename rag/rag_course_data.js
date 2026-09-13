@@ -270,6 +270,7 @@
       summary:"텍스트 파일이 Document와 Node로 분할되어 embedding index에 저장되고, 질문은 관련 Node 검색과 LLM 응답 합성을 거쳐 답변이 됩니다.",
       notebook_goal:"LlamaIndex의 문서 로딩부터 VectorStoreIndex, QueryEngine, 검색·합성, 문서 CRUD까지 RAG의 전체 흐름을 구현한다.",
       learning_goals:["문서 로드와 VectorStoreIndex 생성","Document를 Node로 분할하고 embedding으로 저장","Retriever와 Query Engine의 역할 구분","Index 문서 Insert·Update·Delete","Custom Query Engine에 Retriever·LLM·Prompt 연결"],
+      custom_engine_focus:{purpose:"검색기·합성기·LLM·Prompt를 하나의 Custom Query Engine으로 연결합니다.",code:"query_engine = OurCustomQueryEngine(\n    retriever=retriever,\n    response_synthesizer=synthesizer,\n    llm=llm,\n    qa_prompt=simple_qa_prompt,\n)\nresponse = query_engine.query(question)",flow:"retriever가 Node를 검색 → prompt가 context와 질문을 조립 → llm이 답변 생성 → query()가 response 반환",exam:"`=` 뒤 생성식 전체 또는 `( )` 안 네 keyword 인자 전체를 빈칸으로 낼 수 있습니다."},
       key_points:[
         {title:"Load와 Index",purpose:"폴더의 파일을 Document로 읽고 embedding 기반 검색 index를 만듭니다.",code:'SimpleDirectoryReader("data").load_data()\nVectorStoreIndex.from_documents(documents)',flow:"files → Documents → Nodes → embeddings → index",watch:"API key 문자열은 코드에 저장하지 말고 환경변수를 사용합니다."},
         {title:"Chunking",purpose:"긴 문서를 검색 가능한 작은 Node로 나누되 문맥 단절을 줄이기 위해 overlap을 둡니다.",code:"SentenceSplitter(chunk_size=200, chunk_overlap=50)",flow:"Document → overlapping Nodes",watch:"transformations에 splitter 목록을 전달해야 index 생성에 반영됩니다."},
