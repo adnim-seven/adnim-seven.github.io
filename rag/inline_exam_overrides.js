@@ -29,7 +29,7 @@ window.INLINE_EXAM_OVERRIDES = {
     ],
     blanks: [
       {id: "rag-nodes-dict", label: "Index의 Node ID 사전 확인", answer: "node_id = index.index_struct.nodes_dict"},
-      {id: "rag-chunk-nodes", label: "Document → Node 청킹", answer: "nodes = parser.get_nodes_from_documents(documents)"},
+      {id: "rag-chunk-nodes", label: "Document → Node 청킹", instruction: "설정한 SentenceSplitter로 documents를 검색 단위(Node) 목록으로 나누세요.", answer: "nodes = parser.get_nodes_from_documents(documents)"},
       {id: "rag-index-transform", label: "Splitter를 적용한 Index 생성", answer: "index = VectorStoreIndex.from_documents(documents=documents, transformations=[text_splitter])"},
       {id: "rag-query-run", label: "Query Engine 실행", answer: "response = query_engine.query(\"What is the first programs the author tried writing?\")"},
       {id: "rag-as-retriever", label: "Index에서 Retriever 생성", answer: "retriever = index.as_retriever()"},
