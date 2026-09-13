@@ -113,6 +113,38 @@
   ];
   const customA = fill(customP,{7:'        nodes = self.retriever.retrieve(query_str)',8:'        context_str = "\\n\\n".join([n.node.get_content() for n in nodes])',9:'        response = self.llm.complete(',10:'            self.qa_prompt.format(context_str=context_str, query_str=query_str)'});
 
+  // 원본 Notebook Cell 83: 같은 구조를 두 난이도(= 뒤 전체 / 괄호 안 인자)로 연습한다.
+  const customSetupRhsP = [
+    'llm = OpenAI(model="gpt-3.5-turbo")',
+    '',
+    '# 검색기·합성기·LLM·질문용 Prompt를 주입해 Custom Query Engine을 만듭니다.',
+    'query_engine = ????',
+    '',
+    'response = query_engine.query("What did the author do growing up?")',
+    'print(str(response))',
+  ];
+  const customSetupRhsA = [
+    'llm = OpenAI(model="gpt-3.5-turbo")',
+    '',
+    '# 검색기·합성기·LLM·질문용 Prompt를 주입해 Custom Query Engine을 만듭니다.',
+    'query_engine = OurCustomQueryEngine(\n    retriever=retriever,\n    response_synthesizer=synthesizer,\n    llm=llm,\n    qa_prompt=simple_qa_prompt,\n)',
+    '',
+    'response = query_engine.query("What did the author do growing up?")',
+    'print(str(response))',
+  ];
+  const customSetupArgsP = [
+    'llm = OpenAI(model="gpt-3.5-turbo")',
+    '',
+    '# 각 인자는 앞에서 만든 객체를 역할에 맞게 연결합니다.',
+    'query_engine = OurCustomQueryEngine(',
+    '    retriever=????,',
+    '    response_synthesizer=????,',
+    '    llm=????,',
+    '    qa_prompt=????,',
+    ')',
+  ];
+  const customSetupArgsA = fill(customSetupArgsP,{4:'    retriever=retriever,',5:'    response_synthesizer=synthesizer,',6:'    llm=llm,',7:'    qa_prompt=simple_qa_prompt,'});
+
   const answerP = ["### YOUR CODE HERE ###","def generate_answer(question):","    messages = [","        {\"role\": \"system\", \"content\": \"You are a helpful assistant.\"},","        {\"role\": \"user\", \"content\": question},","    ]","    response = openai.chat.completions.????(","        model=\"gpt-3.5-turbo\", messages=????,","    )","    return response.choices[0].message.????"];
   const answerA = fill(answerP,{6:"    response = openai.chat.completions.create(",7:'        model="gpt-3.5-turbo", messages=messages,',9:"    return response.choices[0].message.content"});
 
@@ -204,7 +236,7 @@
       "rag1-q5":{source:"parser.get_nodes_from_documents(documents)"},"rag1-q6":{source:"transformations=[text_splitter]"},"rag1-q7":{source:"index.index_struct.nodes_dict"},
       "rag1-q8":{source:"index.as_retriever()"},"rag1-q9":{source:"retriever.retrieve"},"rag1-q10":{source:"ret_context"},
       "rag1-q11":{source:'id_="new_doc_id"'},"rag1-q12":{source:"index.insert(docu)"},"rag1-q13":{source:"docu.set_content"},"rag1-q14":{source:"index.update_ref_doc"},"rag1-q15":{source:"docu.doc_id"},"rag1-q16":{source:"index.delete_ref_doc"},
-      "rag1-q17":{source:"self.response_synthesizer.synthesize(query_str, nodes)"},"rag1-q18":{source:"n.node.get_content()"},"rag1-q19":{source:"self.llm.complete"},"rag1-q20":{source:"self.qa_prompt.format"},
+      "rag1-q17":{source:"self.response_synthesizer.synthesize(query_str, nodes)"},"rag1-q18":{source:"n.node.get_content()"},"rag1-q19":{source:"self.llm.complete"},"rag1-q20":{source:"self.qa_prompt.format"},"rag1-q21":{source:customSetupRhsP.join("\\n")},"rag1-q22":{source:customSetupArgsP.join("\\n")},
       "rag2-q1":{source:"openai.chat.completions.create"},"rag2-q2":{source:"messages=messages"},"rag2-q3":{source:"response.choices[0].message.content"},
       "rag2-q4":{source:"wikipedia.set_user_agent"},"rag2-q5":{source:"WikipediaReader()"},"rag2-q6":{source:"reader.load_data(city_names, auto_suggest=False)"},
       "rag2-q7":{source:"query_engine.query(query)"},"rag2-q8":{source:"self.retrieve(query)"},"rag2-q9":{source:"self.generate_response(query, context_str)"},
@@ -250,13 +282,14 @@
         {title:"3. Retriever와 Synthesizer",concept:"Retriever는 근거를 고르고 Synthesizer는 질문과 근거를 이용해 자연어 답을 만듭니다.",flow:"query → retrieve nodes → synthesize response",code_signal:"StandardQueryEngine의 custom_query 두 줄이 역할을 분리합니다.",exam_clue:"retrieve의 입력은 query_str, synthesize의 입력은 query_str과 nodes입니다."},
         {title:"4. Prompt 기반 직접 합성",concept:"검색 Node의 content를 합친 뒤 PromptTemplate 변수에 넣고 LLM complete를 호출할 수 있습니다.",flow:"nodes → context_str → format → complete",code_signal:"get_content → join → format → complete 순서입니다.",exam_clue:"prior knowledge를 막고 싶으면 prompt에 context만 사용하라고 명시합니다."}
       ],
-      full_code_cells:[cell(12,buildP,buildA,[1,8,11,12]),cell(21,splitP,splitA,[4,8,9]),cell(49,retrieveP,retrieveA,[1,2,12]),cell(59,crudP,crudA,[1,2,5,6,11,12]),cell(75,standardP,standardA,[5,6,12]),cell(80,customP,customA,[7,8,9,10])],
+      full_code_cells:[cell(12,buildP,buildA,[1,8,11,12]),cell(21,splitP,splitA,[4,8,9]),cell(49,retrieveP,retrieveA,[1,2,12]),cell(59,crudP,crudA,[1,2,5,6,11,12]),cell(75,standardP,standardA,[5,6,12]),cell(80,customP,customA,[7,8,9,10]),cell(83,customSetupArgsP,customSetupArgsA,[4,5,6,7])],
       subjective:[
         S("rag1-q1",'SimpleDirectoryReader("data").load_data()',"문서 로딩","data 폴더의 문서를 읽는 한 줄을 쓰세요."),S("rag1-q2","VectorStoreIndex.from_documents(documents)","Index 생성","documents로 vector index를 만드는 표현을 쓰세요."),S("rag1-q3","index.as_query_engine()","Query engine","index에서 query engine을 만드는 표현을 쓰세요."),S("rag1-q4","response = query_engine.query(question)","[기출 대비] QueryEngine 질의 실행","질문 변수 question을 QueryEngine에 전달하고, 최종 응답을 response에 저장하는 한 줄을 쓰세요."),
         S("rag1-q5","parser.get_nodes_from_documents(documents)","Chunking","parser로 documents를 Node로 분할하는 호출을 쓰세요."),S("rag1-q6","transformations=[text_splitter]","Transformation","index 생성 시 splitter를 적용하는 인자를 쓰세요."),S("rag1-q7","index.index_struct.nodes_dict","Index 구조","index의 Node ID 사전을 가져오는 표현을 쓰세요."),
         S("rag1-q8","index.as_retriever()","Retriever","index에서 retriever를 만드는 표현을 쓰세요."),S("rag1-q9","retriever.retrieve","검색","관련 passage를 검색하는 메서드까지 쓰세요."),S("rag1-q10","ret_context","Prompt context","f-string의 context 자리에 들어갈 변수를 쓰세요."),
         S("rag1-q11",'id_="new_doc_id"',"Document ID","Document 생성자에서 문서 ID를 지정하세요."),S("rag1-q12","index.insert(docu)","Insert","Document를 index에 추가하는 한 줄을 쓰세요."),S("rag1-q13","docu.set_content","Update content","Document 내용을 바꾸는 메서드까지 쓰세요."),S("rag1-q14","index.update_ref_doc","Update index","변경된 참조 문서를 index에 반영하는 메서드까지 쓰세요."),S("rag1-q15","docu.doc_id","Document ID","삭제에 사용할 문서 ID 표현을 쓰세요."),S("rag1-q16","index.delete_ref_doc","Delete","참조 문서를 index에서 삭제하는 메서드까지 쓰세요."),
-        S("rag1-q17","self.response_synthesizer.synthesize(query_str, nodes)","응답 합성","검색 Node와 질문으로 response를 합성하는 호출을 쓰세요."),S("rag1-q18","n.node.get_content()","Node content","검색 결과에서 실제 Node text를 얻는 호출을 쓰세요."),S("rag1-q19","self.llm.complete","LLM 호출","완성된 prompt를 실행하는 LLM 메서드까지 쓰세요."),S("rag1-q20","self.qa_prompt.format","Prompt formatting","context와 query를 PromptTemplate에 넣는 메서드까지 쓰세요.")
+        S("rag1-q17","self.response_synthesizer.synthesize(query_str, nodes)","응답 합성","검색 Node와 질문으로 response를 합성하는 호출을 쓰세요."),S("rag1-q18","n.node.get_content()","Node content","검색 결과에서 실제 Node text를 얻는 호출을 쓰세요."),S("rag1-q19","self.llm.complete","LLM 호출","완성된 prompt를 실행하는 LLM 메서드까지 쓰세요."),S("rag1-q20","self.qa_prompt.format","Prompt formatting","context와 query를 PromptTemplate에 넣는 메서드까지 쓰세요."),
+        S("rag1-q21",customSetupRhsA[3],"[기출 대비] Custom Engine 생성 · = 뒤 전체","`query_engine =` 뒤에 들어갈 Custom Query Engine 생성식 전체를 작성하세요."),S("rag1-q22","retriever=retriever,\nresponse_synthesizer=synthesizer,\nllm=llm,\nqa_prompt=simple_qa_prompt,","[기출 대비] Custom Engine 생성 · 괄호 안 전체","`OurCustomQueryEngine( )` 괄호 안에 넣을 네 개의 keyword 인자를 순서대로 작성하세요.")
       ],
       mcq:[
         {id:"rag1-m1",source_question_id:"rag1-q2",topic:"RAG index",prompt:"documents를 검색 가능한 vector index로 만드는 표현은?",answer_index:2,explanation:"from_documents가 Document를 Node로 나누고 embedding index를 구성합니다.",choices:[{text:"SimpleDirectoryReader(documents)",why:"경로를 읽는 loader입니다."},{text:"Document.from_index(documents)",why:"해당 생성 흐름이 아닙니다."},{text:"VectorStoreIndex.from_documents(documents)",why:"정답입니다."},{text:"index.as_query_engine(documents)",why:"index 생성 이후 단계입니다."},{text:"retriever.retrieve(documents)",why:"질문 검색 단계입니다."}]},
