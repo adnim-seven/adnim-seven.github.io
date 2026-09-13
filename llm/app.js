@@ -378,6 +378,7 @@
     const exam = currentInlineExam();
     const blank = exam.blanks.find((item) => item.id === blankId);
     const answer = document.querySelector(`[data-inline-answer="${blankId}"]`)?.value || "";
+    if (!answer.trim()) return;
     const correct = scoreAnswer(answer, [blank.answer]);
     recordAttempt(inlineKey(blankId), "subjective", correct, "애매", false, correct ? "" : "인라인 구현");
     const target = $(`#inline-feedback-${blankId}`);
