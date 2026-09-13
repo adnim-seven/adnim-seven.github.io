@@ -81,6 +81,7 @@
     $("#capability").textContent = chapter().capability;
     $("#summary").textContent = chapter().summary;
     renderNav();
+    renderExamScope();
     renderOverview();
     renderStudy();
     renderTheoryGuide();
@@ -89,6 +90,16 @@
     renderSubjective();
     renderStats();
     renderResults();
+  }
+
+  function renderExamScope() {
+    const data = window.VISION_EXAM_SCOPE || { scope: [], chapters: {} };
+    const selected = data.chapters[chapter().file] || { matched: [], highlights: [] };
+    $("#examScope").innerHTML = `
+      <div class="exam-scope-heading"><span>OFFICIAL EXAM SCOPE · VISION</span><h2>시험범위 → 현재 챕터 → 핵심 코드</h2></div>
+      <div class="exam-scope-list">${data.scope.map(([title, text]) => `<article class="exam-scope-card ${selected.matched.includes(title) ? "matched" : ""}"><h3>${esc(title)}</h3><p>${esc(text)}</p><strong>${selected.matched.includes(title) ? "이 챕터 핵심" : "다른 챕터 중심"}</strong></article>`).join("")}</div>
+      <div class="chapter-highlight-head"><span>현재 챕터에서 우선 볼 코드</span><p>${selected.matched.map(esc).join(" · ")}</p></div>
+      <div class="chapter-highlight-list">${selected.highlights.map(([title, why, code], index) => `<article class="chapter-highlight"><h3>${index + 1}. ${esc(title)}</h3><p>${esc(why)}</p><pre class="code-box"><code>${esc(code)}</code></pre></article>`).join("")}</div>`;
   }
 
   function renderOverview() {

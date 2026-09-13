@@ -1,0 +1,17 @@
+.exam-scope{border:1px solid var(--line);border-radius:14px;background:#f8fbff;padding:18px;margin-bottom:18px}
+.exam-scope-heading span,.chapter-highlight-head span{font-size:.72rem;font-weight:900;letter-spacing:.07em;color:var(--blue)}
+.exam-scope-heading h2{font-size:1.16rem;margin:4px 0 14px}
+.exam-scope-list{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.exam-scope-card{border:1px solid var(--line);border-radius:9px;padding:10px;background:#fff}
+.exam-scope-card.matched{border-color:#78a7ff;background:#edf5ff}
+.exam-scope-card h3{font-size:.85rem;margin:0 0 5px}
+.exam-scope-card p{font-size:.75rem;line-height:1.45;color:var(--muted);margin:0 0 8px}
+.exam-scope-card strong{font-size:.7rem;color:#758298}.exam-scope-card.matched strong{color:#165dc5}
+.chapter-highlight-head{display:flex;gap:12px;align-items:baseline;justify-content:space-between;margin:20px 0 9px}
+.chapter-highlight-head p{margin:0;color:var(--muted);font-size:.78rem;text-align:right}
+.chapter-highlight-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.chapter-highlight{border:1px solid #bcd4ff;border-radius:10px;background:#fff;padding:12px}
+.chapter-highlight h3{font-size:.9rem;margin:0 0 5px}.chapter-highlight p{color:var(--muted);font-size:.78rem;margin:0 0 9px}
+.chapter-highlight .code-box{font-size:.73rem;padding:10px;min-height:0}
+@media(max-width:1050px){.exam-scope-list,.chapter-highlight-list{grid-template-columns:1fr 1fr}}
+@media(max-width:650px){.exam-scope{padding:13px}.exam-scope-list,.chapter-highlight-list{grid-template-columns:1fr}.chapter-highlight-head{display:block}.chapter-highlight-head p{text-align:left;margin-top:4px}}
