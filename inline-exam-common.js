@@ -3,7 +3,7 @@
   if (!course || !exams) return;
   const $ = (s) => document.querySelector(s), esc = (v) => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const canonical = (v) => String(v || "").trim().replace(/\s+/g, "").replace(/'/g, '"');
-  let view = "exam", blankIndex = 0;
+  let view = "exam", blankIndex = 0, renderTimer = null;
   const pathFile = () => ($("#chapterPath")?.textContent || "").split("›").pop().trim();
   const current = () => exams[pathFile()];
   const panel = document.createElement("section");
@@ -12,7 +12,16 @@
   const tab = document.createElement("button");
   tab.className = "mode-tab"; tab.type = "button"; tab.dataset.panel = "inlineExamPanel"; tab.textContent = "인라인 시험";
   document.querySelector(".mode-tabs").append(tab);
-  const show = () => { document.querySelectorAll(".mode-tab").forEach(b => b.classList.toggle("active", b === tab)); document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p === panel)); render(); window.scrollTo({top:0,behavior:"smooth"}); };
+  const show = () => {
+    document.querySelectorAll(".mode-tab").forEach(b => b.classList.toggle("active", b === tab));
+    document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p === panel));
+    // RAG처럼 코드 셀이 많은 노트북은 클릭 이벤트 안에서 전부 그리면 멈춘 것처럼 보인다.
+    // 탭을 먼저 연 뒤, 다음 화면 갱신에서 코드를 그린다.
+    panel.innerHTML = '<div class="inline-exam-head"><span>INLINE IMPLEMENTATION EXAM</span><h2>시험 코드를 준비하고 있습니다…</h2></div>';
+    window.scrollTo(0, 0);
+    if (renderTimer) clearTimeout(renderTimer);
+    renderTimer = setTimeout(() => { renderTimer = null; render(); }, 0);
+  };
   tab.addEventListener("click", show);
   document.querySelectorAll("#chapterNav").forEach(nav => nav.addEventListener("click", () => setTimeout(() => { if (panel.classList.contains("active")) { blankIndex=0; render(); } }, 0)));
   const check = (id) => { const exam=current(), blank=exam?.blanks.find(x=>x.id===id), input=document.querySelector(`[data-inline-answer="${id}"]`); if(!blank || !input?.value.trim()) return; const correct=canonical(input.value)===canonical(blank.answer), feedback=$("#inline-feedback-"+id); input.classList.toggle("correct",correct); input.classList.toggle("wrong",!correct); feedback.className=`inline-answer-feedback ${correct?"correct":"wrong"}`; feedback.textContent=correct?"정답입니다.":`오답입니다. 정답: ${blank.answer}`; status(); };
