@@ -11,6 +11,11 @@
   const reservedLines = Object.values(window.INLINE_EXAM_OVERRIDES || {})
     .flatMap((patch) => (patch.replacements || []).map((item) => item.from));
   const isReserved = (line) => reservedLines.some((source) => line.includes(source));
+  Object.values(window.INLINE_EXAM_OVERRIDES || {}).forEach((patch) => {
+    (patch.blanks || []).forEach((blank) => {
+      if (!blank.label.startsWith("🟠")) blank.label = `🟠 보강 · ${blank.label}`;
+    });
+  });
 
   const ruleSets = {
     // LLM: 구조ㆍ학습ㆍ데이터 구성 흐름
@@ -71,7 +76,7 @@
       cell.source = lines.join("\n");
       exam.blanks.push({
         id,
-        label: `★ 구현 ${number}: ${needle} 뒤의 핵심 호출/계산`,
+        label: `🟠 보강 · ★ 구현 ${number}: ${needle} 뒤의 핵심 호출/계산`,
         instruction: "위 코드의 목적과 앞뒤 텐서 흐름을 보고, 비어 있는 오른쪽 식 또는 호출을 완성하세요.",
         answer
       });
@@ -101,7 +106,7 @@
         cell.source = lines.join("\n");
         exam.blanks.push({
           id,
-          label: `★ 구현 ${serial}: ${line.slice(0, equal).trim()}의 계산`,
+          label: `🟠 보강 · ★ 구현 ${serial}: ${line.slice(0, equal).trim()}의 계산`,
           instruction: "이 변수의 역할과 바로 아래 코드에서 사용되는 방식을 보고, 오른쪽 구현식을 완성하세요.",
           answer
         });
@@ -110,7 +115,14 @@
     }
   };
 
+  // 원본 노트북에서 변환된 빈칸 ID를 먼저 보관한다.
+  // 이후 overrides/자동 보강으로 들어온 ID와 화면에서 구분하는 근거다.
+  window.INLINE_EXAM_ORIGINAL_IDS ||= {};
   for (const [file, exam] of Object.entries(set)) {
+    window.INLINE_EXAM_ORIGINAL_IDS[file] = exam.blanks.map((blank) => blank.id);
+    exam.blanks.forEach((blank) => {
+      if (!blank.label.startsWith("🔵")) blank.label = `🔵 원본 · ${blank.label}`;
+    });
     const wanted = ruleSets[file] || [];
     wanted.forEach((needle, index) => toBlank(exam, needle, index + 1));
     fillToSix(exam);
