@@ -20,6 +20,17 @@
   font-weight: 800;
 }
 
+.inline-wrong-summary {
+  display: grid;
+  gap: .25rem;
+  margin-top: .45rem;
+  color: #8c1d18;
+  font-size: .82rem;
+  line-height: 1.35;
+}
+
+.inline-wrong-summary strong { color: #b42318; }
+
 @media (max-width: 640px) {
   .inline-priority-badge { display: block; width: fit-content; margin: .35rem 0 0; }
 }

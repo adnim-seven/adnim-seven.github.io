@@ -1,0 +1,7 @@
+html, body, button, input, textarea, select, code, pre {
+  font-family: "Malgun Gothic", "맑은 고딕", sans-serif;
+}
+
+code, pre, textarea {
+  font-family: "Malgun Gothic", "맑은 고딕", monospace;
+}
