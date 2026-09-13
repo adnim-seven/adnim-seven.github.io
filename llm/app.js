@@ -353,8 +353,14 @@
     root.innerHTML = `<div class="inline-exam-head"><span>INLINE IMPLEMENTATION EXAM</span><h2>${esc(chapter().title)} · 인라인 시험</h2><p>${inlineView === "notebook" ? "설명 마크다운과 코드 셀을 원본 순서대로 봅니다." : "전체 코드의 빈칸에 직접 작성하고, 해당 위치 아래에서 바로 채점합니다."}</p></div><div class="inline-exam-controls"><button class="quiet-button ${inlineView === "exam" ? "active" : ""}" data-inline-view="exam" type="button">인라인 시험</button><button class="quiet-button ${inlineView === "notebook" ? "active" : ""}" data-inline-view="notebook" type="button">풀 노트북 보기</button><a class="quiet-button" href="${inlineExamUrl()}">독립 페이지로 열기</a></div><div class="inline-code-cells">${cells}</div><div class="inline-fixed-bar"><div class="inline-fixed-inner"><span id="inlineExamStatus">빈칸 ${exam.blanks.length}개 · 답안을 입력한 뒤 채점하세요.</span><div><button id="prevInline" class="quiet-button" type="button">이전 문제</button><button id="nextInline" class="quiet-button" type="button">다음 문제</button><button id="checkAllInline" class="primary-button" type="button">모든 빈칸 채점</button></div></div></div>`;
     root.querySelectorAll("[data-inline-answer]").forEach((element) => {
       const resize = () => { element.style.height = "auto"; element.style.height = `${element.scrollHeight}px`; };
-      element.addEventListener("input", () => { resize(); updateInlineStatus(); });
+      element.addEventListener("input", () => { element.classList.remove("correct", "wrong"); resize(); updateInlineStatus(); });
       element.addEventListener("focus", () => { inlineBlankIndex = exam.blanks.findIndex((blank) => blank.id === element.dataset.inlineAnswer); updateInlineStatus(); });
+      element.addEventListener("keydown", (event) => {
+        if (event.ctrlKey && event.key === "Enter") {
+          event.preventDefault();
+          checkInlineBlank(element.dataset.inlineAnswer);
+        }
+      });
       resize();
     });
     root.querySelectorAll("[data-inline-check]").forEach((button) => button.addEventListener("click", () => checkInlineBlank(button.dataset.inlineCheck)));
@@ -375,6 +381,9 @@
     const correct = scoreAnswer(answer, [blank.answer]);
     recordAttempt(inlineKey(blankId), "subjective", correct, "애매", false, correct ? "" : "인라인 구현");
     const target = $(`#inline-feedback-${blankId}`);
+    const input = document.querySelector(`[data-inline-answer="${blankId}"]`);
+    input?.classList.toggle("correct", correct);
+    input?.classList.toggle("wrong", !correct);
     target.className = `inline-answer-feedback ${correct ? "correct" : "wrong"}`;
     target.textContent = correct ? "정답입니다." : `오답입니다. 정답: ${blank.answer}`;
     updateInlineStatus();
