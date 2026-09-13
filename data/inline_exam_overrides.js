@@ -43,12 +43,21 @@ window.INLINE_EXAM_OVERRIDES = {
 };
 
 (() => {
+  const guides = {
+    "blank-ts-window": "현재 i부터 sequence_length개 과거 값을 잘라 하나의 입력 window를 만드세요. 다음 줄 label은 i+sequence_length 시점입니다.",
+    "blank-ts-rnn": "입력 [B,T,input_size]를 받도록 input_size, hidden_size, num_layers와 batch_first=True를 사용한 RNN을 선언하세요.",
+    "blank-ts-forward": "RNN의 모든 시점 출력 out을 마지막 Linear layer에 넣어 [B,T,1] 예측을 반환하세요.",
+    "blank-ngcf-message": "src user가 받을 item 이웃 메시지를 W1(dst feature)와 W2(dst·src interaction)의 합으로 만드세요.",
+    "blank-ngcf-embedding": "user와 item이 하나의 node 번호 공간을 공유하도록 (num_users + num_items)개 embedding을 생성하세요.",
+    "blank-ngcf-bpr": "positive score가 negative score보다 커지도록 -mean(logsigmoid(pos-neg)) BPR loss를 계산하세요."
+  };
   const priority = {
     "ts_practice.ipynb": new Set(["blank-ts-window", "blank-ts-rnn", "blank-ts-forward"]),
     "RecSys_GCF_practice.ipynb": new Set(["blank-ngcf-message", "blank-ngcf-embedding", "blank-ngcf-bpr"])
   };
   Object.entries(priority).forEach(([file, ids]) => {
     (window.INLINE_EXAM_MAP?.[file]?.blanks || []).forEach((blank) => {
+      if (!blank.instruction && guides[blank.id]) blank.instruction = guides[blank.id];
       if (ids.has(blank.id) && !blank.label.startsWith("★")) blank.label = `★ 유력 · ${blank.label}`;
     });
   });

@@ -122,6 +122,26 @@ window.INLINE_EXAM_OVERRIDES = {
 
 /* 공식 출제범위의 직접 타깃: ResNet·ViT·U-Net 구조, transform, 학습 연결 */
 (() => {
+  const guides = {
+    "blank-random-crop": "학습용 32×32 CIFAR 이미지를 padding=4 후 random crop하도록 transform을 작성하세요.",
+    "blank-normalize": "앞에서 정의한 CIFAR10_MEAN, CIFAR10_STD를 사용해 채널별 정규화를 적용하세요.",
+    "blank-cifar-stem": "CIFAR-10의 32×32 입력에 맞는 3→64, kernel=3, stride=1, padding=1 Conv2d stem을 선언하세요.",
+    "blank-vit-qkv": "토큰 dim을 Q·K·V 세 덩어리로 동시에 투영하도록 inner_dim*3 출력 Linear layer를 만드세요.",
+    "blank-vit-scores": "분리된 Q와 K의 head별 내적을 계산하고 self.scale을 곱해 attention score [B,H,N,N]를 만드세요.",
+    "blank-vit-weighted-sum": "attention weight [B,H,N,N]로 V [B,H,N,D]를 가중합해 token representation을 만드세요.",
+    "blank-detr-resize": "DETR 입력 transform에서 이미지의 짧은 변 기준 크기를 800으로 맞추세요.",
+    "blank-detr-normalize": "사전학습 DETR이 기대하는 ImageNet RGB mean/std 정규화를 적용하세요.",
+    "blank-detr-model": "facebookresearch/detr hub의 detr_resnet50 사전학습 모델을 불러오세요.",
+    "blank-unet-up": "bilinear=False일 때 해상도를 2배로 키우고 채널을 절반으로 줄이는 ConvTranspose2d를 만드세요.",
+    "blank-unet-skip": "skip feature x2와 upsampled feature x1을 채널 축 dim=1에서 결합하세요.",
+    "blank-unet-loss": "pixel logits와 정답 mask를 현재 criterion으로 비교해 segmentation loss를 계산하세요.",
+    "blank-ddpm-qkv": "이미지 feature map에서 Q·K·V를 동시에 만들도록 1×1 Conv2d의 출력 채널을 hidden_dim*3으로 설정하세요.",
+    "blank-ddpm-scores": "각 head의 pixel token 사이 QK dot product attention score를 einsum으로 계산하세요.",
+    "blank-ddpm-softmax": "attention score의 마지막 token 축을 확률 분포로 정규화하세요.",
+    "blank-sd-pipeline": "Stable Diffusion v1.4 pretrained pipeline을 모델 ID로 불러오세요.",
+    "blank-sd-generator": "고정 seed로 재현 가능한 CUDA generator를 만드세요.",
+    "blank-sd-image": "pipeline 호출 결과에서 첫 번째 생성 이미지를 꺼내세요."
+  };
   const priority = {
     "01_ResNet18_CIFAR10.ipynb": new Set([
       "blank-random-crop", "blank-normalize", "blank-cifar-stem",
@@ -136,6 +156,11 @@ window.INLINE_EXAM_OVERRIDES = {
       "vision-unet-img-channel", "vision-unet-mask-channel", "vision-unet-pad", "vision-unet-output", "vision-unet-sigmoid", "vision-unet-threshold"
     ])
   };
+  Object.values(window.INLINE_EXAM_MAP || {}).forEach((exam) => {
+    (exam.blanks || []).forEach((blank) => {
+      if (!blank.instruction && guides[blank.id]) blank.instruction = guides[blank.id];
+    });
+  });
   Object.entries(priority).forEach(([file, ids]) => {
     (window.INLINE_EXAM_MAP?.[file]?.blanks || []).forEach((blank) => {
       if (ids.has(blank.id) && !blank.label.startsWith("★")) blank.label = `★ 유력 · ${blank.label}`;
