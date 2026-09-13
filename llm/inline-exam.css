@@ -1,0 +1,11 @@
+.inline-exam-controls .quiet-button.active{border-color:var(--blue);background:var(--blue-soft);color:#164da9}
+.inline-markdown-cell{overflow:hidden;border:1px dashed #cdd8e7;border-radius:11px;background:#fbfcfe}
+.inline-markdown-cell .cell-title{background:#fbfcfe;border-bottom:1px dashed #d8e1ed}
+.inline-markdown-source{padding:15px;white-space:pre-wrap;color:#3f5067;font-size:.9rem}
+.inline-code-cells{padding-bottom:88px}
+.inline-fixed-bar{position:fixed;z-index:30;right:18px;bottom:12px;left:calc(50% - 750px + 298px);border:1px solid #cbd7e5;border-radius:11px;background:rgba(255,255,255,.97);box-shadow:0 6px 24px rgba(23,42,72,.16);backdrop-filter:blur(12px)}
+.inline-fixed-inner{display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:58px;padding:8px 12px}
+.inline-fixed-inner>span{font-size:.82rem;color:#526279;font-weight:700}.inline-fixed-inner>div{display:flex;gap:7px;flex-wrap:wrap}
+@media(max-width:1500px){.inline-fixed-bar{left:320px;right:22px}}
+@media(max-width:1050px){.inline-fixed-bar{left:18px;right:18px}}
+@media(max-width:650px){.inline-markdown-source{padding:11px;font-size:.82rem}.inline-fixed-bar{right:9px;bottom:8px;left:9px}.inline-fixed-inner{align-items:flex-start;flex-direction:column;gap:6px}.inline-fixed-inner>div{width:100%}.inline-fixed-inner button{flex:1;padding:8px 7px;font-size:.76rem}.inline-code-cells{padding-bottom:122px}}
