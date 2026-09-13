@@ -15,6 +15,13 @@
   const currentMcq = () => chapter().mcq[mcqIndex];
   const currentSubjective = () => subjectivePool[subjectiveIndex];
   const currentNotebookExam = () => window.NOTEBOOK_FULL_EXAMS?.[chapter().id];
+  const inlineExamByFile = {
+    "Chapter_2_Exercise_Dataset.ipynb": "inline-subjective/llm_chapter_2_subjective_test.html",
+    "Chapter_3_Excercise_Attention.ipynb": "inline-subjective/llm_chapter_3_subjective_test.html",
+    "Chapter_4_Excercise_GPT.ipynb": "inline-subjective/llm_chapter_4_subjective_test.html",
+    "Chapter_5_Excercise_Pretraining.ipynb": "inline-subjective/llm_chapter_5_subjective_test.html",
+  };
+  const inlineExamUrl = () => inlineExamByFile[chapter().file] || "inline-subjective/";
 
   function loadState() {
     try { return JSON.parse(localStorage.getItem(storageKey)) || { questions: {} }; }
@@ -83,10 +90,9 @@
     $("#capability").textContent = chapter().capability;
     $("#summary").textContent = chapter().summary;
     const fullNotebookButton = $("#fullNotebookTest");
-    const hasFullNotebookExam = Boolean(currentNotebookExam());
-    fullNotebookButton.disabled = !hasFullNotebookExam;
-    fullNotebookButton.title = hasFullNotebookExam ? "원본 코드 전체를 보며 빈칸을 채웁니다." : "현재는 Chapter 6 전체 시험만 준비되어 있습니다.";
-    fullNotebookButton.classList.toggle("is-disabled", !hasFullNotebookExam);
+    fullNotebookButton.disabled = false;
+    fullNotebookButton.title = "전체 코드 문맥 안에서 답안을 바로 작성하고 빈칸별로 채점합니다.";
+    fullNotebookButton.classList.remove("is-disabled");
     renderNav();
     renderOverview();
     renderStudy();
@@ -307,24 +313,13 @@
 
   function renderNotebookExam() {
     const root = $("#notebookExamContent");
-    const exam = currentNotebookExam();
-    if (!exam) {
-      root.innerHTML = '<div class="notebook-exam-empty"><strong>이 노트북의 전체 시험은 아직 준비 중입니다.</strong><p>현재는 Chapter 6 분류·LoRA 노트북 전체 시험을 먼저 제공합니다.</p></div>';
-      return;
-    }
     root.innerHTML = `
-      <div class="notebook-exam-head"><span>FULL NOTEBOOK IMPLEMENTATION EXAM</span><h2>${esc(exam.title)}</h2><p>${esc(exam.file)}</p></div>
-      <div class="notebook-exam-summary">${esc(exam.instruction)} · 코드 셀 ${exam.cells.length}개 · 구현 빈칸 ${exam.blanks.length}개</div>
-      <div class="notebook-exam-cells">
-        ${exam.cells.map((cell, index) => `<details class="notebook-exam-cell" ${index === 0 ? "open" : ""}><summary>코드 셀 ${cell.cell_number}</summary><pre class="code-box problem-code"><code>${esc(cell.source)}</code></pre></details>`).join("")}
-      </div>
+      <div class="notebook-exam-head"><span>INLINE IMPLEMENTATION EXAM</span><h2>${esc(chapter().title)} · 인라인 시험</h2><p>${esc(chapter().file)}</p></div>
+      <div class="notebook-exam-summary">전체 코드 문맥에서 필요한 위치에 답을 직접 작성하고, 각 빈칸 바로 아래에서 정답·오답을 확인합니다.</div>
       <section class="notebook-exam-answers">
-        <h3>빈칸 답안 제출</h3><p>각 답은 코드의 <code>[빈칸 번호]</code>와 대응합니다. 대입문 전체가 아니라 <strong>= 오른쪽 코드</strong>만 작성하세요.</p>
-        ${exam.blanks.map((blank) => `<div class="full-blank"><label for="${esc(blank.id)}">빈칸 ${String(blank.number).padStart(2, "0")}</label><small>${esc(blank.prompt)}</small><textarea id="${esc(blank.id)}" class="answer-input" data-full-blank="${esc(blank.id)}" spellcheck="false" placeholder="오른쪽 코드 또는 표현식"></textarea></div>`).join("")}
-        <div class="question-controls"><fieldset class="confidence"><legend>확신도</legend><label><input name="fullConfidence" type="radio" value="확실">확실</label><label><input name="fullConfidence" type="radio" value="애매" checked>애매</label><label><input name="fullConfidence" type="radio" value="추측">추측</label></fieldset><div><button id="submitNotebookExam" class="primary-button" type="button">전체 시험 제출</button></div></div>
-        <div id="notebookExamFeedback" class="feedback neutral notebook-exam-feedback" aria-live="polite">전체 코드의 전후 흐름을 단서로 답안을 작성하세요.</div>
+        <h3>시험 방식</h3><p>코드 셀을 분리하지 않고 원본 흐름 안에 답안을 입력합니다. 별표 복습과 오답 횟수도 빈칸별로 누적됩니다.</p>
+        <div class="question-controls"><div><a class="primary-button" href="${inlineExamUrl()}">인라인 시험 시작</a><a class="quiet-button" href="inline-subjective/">모든 인라인 시험 보기</a></div></div>
       </section>`;
-    $("#submitNotebookExam").addEventListener("click", submitNotebookExam);
   }
 
   function submitNotebookExam() {
@@ -385,7 +380,6 @@
   $("#randomTest").addEventListener("click", randomTest);
   $("#pastExamTest").addEventListener("click", pastExamTest);
   $("#fullNotebookTest").addEventListener("click", () => {
-    if (!currentNotebookExam()) return;
     switchPanel("notebookExamPanel");
     renderNotebookExam();
   });
