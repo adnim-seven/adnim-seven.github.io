@@ -72,8 +72,19 @@
   function switchPanel(panelId) {
     $$(".mode-tab").forEach((button) => button.classList.toggle("active", button.dataset.panel === panelId));
     $$(".panel").forEach((panel) => panel.classList.toggle("active", panel.id === panelId));
+    syncInlineSidebar();
     if (panelId === "resultsPanel") renderResults();
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function syncInlineSidebar() {
+    const nav = $("#inlineSidebarNav");
+    if (!nav) return;
+    const active = $("#notebookExamPanel")?.classList.contains("active");
+    nav.hidden = !active;
+    if (active) {
+      nav.querySelectorAll("[data-inline-side-view]").forEach((button) => button.classList.toggle("active", button.dataset.inlineSideView === inlineView));
+    }
   }
 
   function renderNav() {
@@ -348,6 +359,7 @@
     $("#checkAllInline").addEventListener("click", () => exam.blanks.forEach((blank) => checkInlineBlank(blank.id)));
     $("#goFirstInline").addEventListener("click", () => root.querySelector("[data-inline-answer]")?.scrollIntoView({ behavior: "smooth", block: "center" }));
     updateInlineStatus();
+    syncInlineSidebar();
   }
 
   function inlineKey(blankId) { return `inline-${chapter().id}-${blankId}`; }
@@ -443,6 +455,8 @@
     switchPanel("notebookExamPanel");
     renderNotebookExam();
   });
+  $$("[data-inline-side-view]").forEach((button) => button.addEventListener("click", () => { inlineView = button.dataset.inlineSideView; renderNotebookExam(); }));
+  $("#inlineSideFirst").addEventListener("click", () => $("#notebookExamContent").querySelector("[data-inline-answer]")?.scrollIntoView({ behavior: "smooth", block: "center" }));
   $("#collapseCode").addEventListener("click", () => {
     const cells = $$("#fullCodeCells details");
     const shouldOpen = cells.length > 0 && cells.every((cell) => !cell.open);

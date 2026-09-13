@@ -29,6 +29,12 @@
         <button id="fullNotebookTest" class="quiet-button" type="button">현재 노트북 인라인 시험</button>
         <button class="quiet-button" type="button" onclick="location.href='inline-subjective/'">인라인 주관식 시험</button>
       </div>
+      <nav id="inlineSidebarNav" class="inline-sidebar-nav" aria-label="인라인 시험 메뉴" hidden>
+        <strong>인라인 시험 메뉴</strong>
+        <button class="quiet-button" data-inline-side-view="exam" type="button">문제 풀이</button>
+        <button class="quiet-button" data-inline-side-view="notebook" type="button">풀 노트북 보기</button>
+        <button class="quiet-button" id="inlineSideFirst" type="button">첫 빈칸으로</button>
+      </nav>
     </aside>
 
     <main class="workspace">
