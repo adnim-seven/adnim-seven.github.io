@@ -338,7 +338,7 @@
       root.innerHTML = '<div class="notebook-exam-empty"><strong>이 챕터의 인라인 시험을 불러오지 못했습니다.</strong><p>페이지를 새로고침한 뒤 다시 시도하세요.</p></div>';
       return;
     }
-    const input = (blank) => `<textarea class="inline-answer-input" data-inline-answer="${esc(blank.id)}" rows="1" spellcheck="false" placeholder="코드 입력"></textarea>`;
+    const input = (blank) => `<span class="inline-answer-wrap"><textarea class="inline-answer-input" data-inline-answer="${esc(blank.id)}" rows="1" spellcheck="false" placeholder="코드 입력"></textarea><span id="inline-feedback-${esc(blank.id)}" class="inline-answer-feedback" aria-live="polite"></span></span>`;
     const shownCells = inlineView === "notebook" ? exam.cells : exam.cells.filter((cell) => cell.type === "code");
     const cells = shownCells.map((cell) => {
       if (cell.type !== "code") {
@@ -347,7 +347,7 @@
       let source = esc(cell.source);
       const cellBlanks = exam.blanks.filter((blank) => cell.source.includes(`[[BLANK:${blank.id}]]`));
       cellBlanks.forEach((blank) => { source = source.replace(`[[BLANK:${blank.id}]]`, input(blank)); });
-      const checks = cellBlanks.map((blank) => `<div class="inline-check-row"><strong>${esc(blank.label)}</strong><button class="quiet-button" type="button" data-inline-check="${esc(blank.id)}">채점</button><button class="text-button inline-star" type="button" data-inline-star="${esc(blank.id)}">☆ 복습</button><p id="inline-feedback-${esc(blank.id)}" class="inline-answer-feedback"></p></div>`).join("");
+      const checks = cellBlanks.map((blank) => `<div class="inline-check-row"><strong>${esc(blank.label)}</strong><button class="quiet-button" type="button" data-inline-check="${esc(blank.id)}">채점</button><button class="text-button inline-star" type="button" data-inline-star="${esc(blank.id)}">☆ 복습</button></div>`).join("");
       return `<section class="inline-code-cell"><div class="cell-title">코드 Cell ${cell.code_number} · 원본 Notebook Cell ${cell.number}</div><pre class="code-box inline-full-code"><code>${source}</code></pre>${checks}</section>`;
     }).join("");
     root.innerHTML = `<div class="inline-exam-head"><span>INLINE IMPLEMENTATION EXAM</span><h2>${esc(chapter().title)} · 인라인 시험</h2><p>${inlineView === "notebook" ? "설명 마크다운과 코드 셀을 원본 순서대로 봅니다." : "전체 코드의 빈칸에 직접 작성하고, 해당 위치 아래에서 바로 채점합니다."}</p></div><div class="inline-exam-controls"><button class="quiet-button ${inlineView === "exam" ? "active" : ""}" data-inline-view="exam" type="button">인라인 시험</button><button class="quiet-button ${inlineView === "notebook" ? "active" : ""}" data-inline-view="notebook" type="button">풀 노트북 보기</button><a class="quiet-button" href="${inlineExamUrl()}">독립 페이지로 열기</a></div><div class="inline-code-cells">${cells}</div><div class="inline-fixed-bar"><div class="inline-fixed-inner"><span id="inlineExamStatus">빈칸 ${exam.blanks.length}개 · 답안을 입력한 뒤 채점하세요.</span><div><button id="prevInline" class="quiet-button" type="button">이전 문제</button><button id="nextInline" class="quiet-button" type="button">다음 문제</button><button id="checkAllInline" class="primary-button" type="button">모든 빈칸 채점</button></div></div></div>`;
