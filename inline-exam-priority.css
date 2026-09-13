@@ -1,0 +1,25 @@
+/* `★ 유력` 빈칸이 있는 셀: 코드 흐름에서 바로 찾을 수 있게 표시 */
+.inline-code-cell.has-priority-question {
+  border-color: #e6c752;
+  box-shadow: inset 4px 0 0 #f2c94c;
+}
+
+.inline-code-cell.has-priority-question > .cell-title {
+  background: #fff7c9;
+  color: #5a4400;
+}
+
+.inline-priority-badge {
+  display: inline-block;
+  margin-left: .5rem;
+  padding: .12rem .42rem;
+  border-radius: 999px;
+  background: #fff0a3;
+  color: #715300;
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+@media (max-width: 640px) {
+  .inline-priority-badge { display: block; width: fit-content; margin: .35rem 0 0; }
+}
