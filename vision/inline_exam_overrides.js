@@ -38,6 +38,10 @@ window.INLINE_EXAM_OVERRIDES = {
     replacements: [
       {cell: 9, id: "vision-vit-residual-attn", from: "x = attn(x) + x"},
       {cell: 9, id: "vision-vit-residual-ff", from: "x = ff(x) + x"},
+      {cell: 11, id: "vision-vit-patch-embed", from: "x = self.to_patch_embedding(img)"},
+      {cell: 11, id: "vision-vit-cls-repeat", from: "cls_tokens = repeat(self.cls_token, \"1 1 d -> b 1 d\", b=b)"},
+      {cell: 11, id: "vision-vit-cls-concat", from: "x = torch.cat((cls_tokens, x), dim=1)"},
+      {cell: 11, id: "vision-vit-pos-embed", from: "x = x + self.pos_embedding[:, : (n + 1)]"},
       {cell: 19, id: "vision-vit-train-logprob", from: "output = F.log_softmax(model(data), dim=1)"},
       {cell: 19, id: "vision-vit-train-loss", from: "loss = F.nll_loss(output, target)"},
       {cell: 19, id: "vision-vit-train-step", from: "optimizer.step()"},
@@ -46,6 +50,10 @@ window.INLINE_EXAM_OVERRIDES = {
     blanks: [
       {id: "vision-vit-residual-attn", label: "Attention residual 연결", instruction: "Attention 출력과 기존 token 표현을 더해 residual 연결을 만드세요.", answer: "x = attn(x) + x"},
       {id: "vision-vit-residual-ff", label: "FeedForward residual 연결", instruction: "FFN 출력과 기존 token 표현을 더해 residual 연결을 만드세요.", answer: "x = ff(x) + x"},
+      {id: "vision-vit-patch-embed", label: "★ 유력 · Patch embedding 생성", instruction: "[B,C,H,W] 이미지를 patch token [B,N,dim]으로 변환하세요.", answer: "x = self.to_patch_embedding(img)"},
+      {id: "vision-vit-cls-repeat", label: "★ 유력 · 배치별 CLS token 복제", instruction: "학습 가능한 CLS token을 현재 batch 크기만큼 반복하세요.", answer: "cls_tokens = repeat(self.cls_token, \"1 1 d -> b 1 d\", b=b)"},
+      {id: "vision-vit-cls-concat", label: "★ 유력 · CLS token을 시퀀스 앞에 결합", instruction: "CLS token과 patch token을 token 축(dim=1)에서 결합하세요.", answer: "x = torch.cat((cls_tokens, x), dim=1)"},
+      {id: "vision-vit-pos-embed", label: "★ 유력 · token 위치 임베딩 주입", instruction: "CLS를 포함한 현재 token 수만큼의 position embedding을 더하세요.", answer: "x = x + self.pos_embedding[:, : (n + 1)]"},
       {id: "vision-vit-train-logprob", label: "ViT 분류 log-probability", instruction: "모델의 클래스 logits를 class 축 log_softmax로 변환하세요.", answer: "output = F.log_softmax(model(data), dim=1)"},
       {id: "vision-vit-train-loss", label: "NLL 분류 loss", instruction: "log-probability와 정답 target으로 NLL loss를 계산하세요.", answer: "loss = F.nll_loss(output, target)"},
       {id: "vision-vit-train-step", label: "ViT optimizer 갱신", instruction: "역전파 뒤 optimizer의 가중치를 갱신하세요.", answer: "optimizer.step()"},
@@ -121,7 +129,7 @@ window.INLINE_EXAM_OVERRIDES = {
     ]),
     "02_ViT_CIFAR10.ipynb": new Set([
       "blank-vit-qkv", "blank-vit-scores", "blank-vit-weighted-sum",
-      "vision-vit-residual-attn", "vision-vit-residual-ff", "vision-vit-train-logprob", "vision-vit-train-loss", "vision-vit-train-step"
+      "vision-vit-residual-attn", "vision-vit-residual-ff", "vision-vit-patch-embed", "vision-vit-cls-repeat", "vision-vit-cls-concat", "vision-vit-pos-embed", "vision-vit-train-logprob", "vision-vit-train-loss", "vision-vit-train-step"
     ]),
     "04_Unet.ipynb": new Set([
       "blank-unet-up", "blank-unet-skip", "blank-unet-loss",
