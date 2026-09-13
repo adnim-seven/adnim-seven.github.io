@@ -329,15 +329,16 @@
       const cellBlanks = exam.blanks.filter((blank) => cell.source.includes(`[[BLANK:${blank.id}]]`));
       cellBlanks.forEach((blank) => { source = source.replace(`[[BLANK:${blank.id}]]`, input(blank)); });
       const checks = cellBlanks.map((blank) => `<div class="inline-check-row"><strong>${esc(blank.label)}</strong><button class="quiet-button" type="button" data-inline-check="${esc(blank.id)}">채점</button><button class="text-button inline-star" type="button" data-inline-star="${esc(blank.id)}">☆ 복습</button><p id="inline-feedback-${esc(blank.id)}" class="inline-answer-feedback"></p></div>`).join("");
-      return `<section class="inline-code-cell"><div class="cell-title">코드 Cell ${cell.code_number} · 원본 Notebook Cell ${cell.number}</div><pre class="code-box problem-code"><code>${source}</code></pre>${checks}</section>`;
+      return `<section class="inline-code-cell"><div class="cell-title">코드 Cell ${cell.code_number} · 원본 Notebook Cell ${cell.number}</div><pre class="code-box inline-full-code"><code>${source}</code></pre>${checks}</section>`;
     }).join("");
-    root.innerHTML = `<div class="inline-exam-head"><span>INLINE IMPLEMENTATION EXAM</span><h2>${esc(chapter().title)} · 인라인 시험</h2><p>전체 코드의 빈칸에 직접 작성하고, 해당 위치 아래에서 바로 채점합니다.</p></div><div class="inline-exam-controls"><button id="checkAllInline" class="primary-button" type="button">모든 빈칸 채점</button><a class="quiet-button" href="${inlineExamUrl()}">독립 페이지로 열기</a></div><div class="inline-code-cells">${cells}</div>`;
+    root.innerHTML = `<div class="inline-exam-head"><span>INLINE IMPLEMENTATION EXAM</span><h2>${esc(chapter().title)} · 인라인 시험</h2><p>전체 코드의 빈칸에 직접 작성하고, 해당 위치 아래에서 바로 채점합니다.</p></div><div class="inline-exam-controls"><button id="checkAllInline" class="primary-button" type="button">모든 빈칸 채점</button><button class="quiet-button" data-inline-panel="subjectivePanel" type="button">주관식 시험</button><button class="quiet-button" data-inline-panel="fullCodePanel" type="button">풀 노트북 보기</button><a class="quiet-button" href="${inlineExamUrl()}">독립 페이지로 열기</a></div><div class="inline-code-cells">${cells}</div>`;
     root.querySelectorAll("[data-inline-answer]").forEach((element) => {
       const resize = () => { element.style.height = "auto"; element.style.height = `${element.scrollHeight}px`; };
       element.addEventListener("input", resize); resize();
     });
     root.querySelectorAll("[data-inline-check]").forEach((button) => button.addEventListener("click", () => checkInlineBlank(button.dataset.inlineCheck)));
     root.querySelectorAll("[data-inline-star]").forEach((button) => button.addEventListener("click", () => toggleInlineStar(button.dataset.inlineStar)));
+    root.querySelectorAll("[data-inline-panel]").forEach((button) => button.addEventListener("click", () => switchPanel(button.dataset.inlinePanel)));
     $("#checkAllInline").addEventListener("click", () => exam.blanks.forEach((blank) => checkInlineBlank(blank.id)));
   }
 
