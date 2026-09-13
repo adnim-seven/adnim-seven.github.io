@@ -106,10 +106,6 @@
   }
 
   function renderStudy() {
-    const goals = chapter().learning_goals || [];
-    $("#learningGoals").innerHTML = goals.map((goal) => `<li>${esc(goal)}</li>`).join("");
-    const focus = chapter().custom_engine_focus;
-    $("#customEngineFocus").innerHTML = focus ? `<span>5. Custom Query Engine</span><h3>${esc(focus.purpose)}</h3><pre class="code-box"><code>${esc(focus.code)}</code></pre><p><strong>연결:</strong> ${esc(focus.flow)}</p><p><strong>시험 포인트:</strong> ${esc(focus.exam)}</p>` : "";
     $("#keyPoints").innerHTML = chapter().key_points.map((point, index) => `<article class="key-card"><h3>${index + 1}. ${esc(point.title)}</h3><div class="key-body"><p>${esc(point.purpose)}</p><pre class="code-box"><code>${esc(point.code)}</code></pre><div class="key-flow"><span class="mini-label">Tensor/흐름</span>${esc(point.flow)}</div><div class="key-watch"><span class="mini-label">시험 주의</span>${esc(point.watch)}</div></div></article>`).join("");
   }
 

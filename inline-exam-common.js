@@ -5,7 +5,22 @@
   const canonical = (v) => String(v || "").trim().replace(/\s+/g, "").replace(/'/g, '"');
   let view = "exam", blankIndex = 0, renderTimer = null;
   const pathFile = () => ($("#chapterPath")?.textContent || "").split("›").pop().trim();
-  const current = () => exams[pathFile()];
+  const current = () => {
+    const base = exams[pathFile()];
+    const patch = window.INLINE_EXAM_OVERRIDES?.[pathFile()];
+    if (!base || !patch) return base;
+    return {
+      ...base,
+      cells: base.cells.map((cell) => {
+        const edits = (patch.replacements || []).filter((edit) => edit.cell === cell.number);
+        if (!edits.length) return cell;
+        let source = cell.source;
+        edits.forEach((edit) => { source = source.replace(edit.from, `[[BLANK:${edit.id}]]`); });
+        return {...cell, source};
+      }),
+      blanks: [...base.blanks, ...(patch.blanks || [])],
+    };
+  };
   const panel = document.createElement("section");
   panel.id = "inlineExamPanel"; panel.className = "panel inline-exam-panel";
   document.querySelector(".workspace").append(panel);
