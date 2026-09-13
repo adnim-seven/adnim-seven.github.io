@@ -20,6 +20,10 @@
     "Chapter_3_Excercise_Attention.ipynb": "inline-subjective/llm_chapter_3_subjective_test.html",
     "Chapter_4_Excercise_GPT.ipynb": "inline-subjective/llm_chapter_4_subjective_test.html",
     "Chapter_5_Excercise_Pretraining.ipynb": "inline-subjective/llm_chapter_5_subjective_test.html",
+    "Chapter_6_Excercise_Finetuning_Classification.ipynb": "inline-subjective/llm_chapter_6a_classification_subjective_test.html",
+    "Chapter_6_Excercise_Finetuning_Classification_LoRA.ipynb": "inline-subjective/llm_chapter_6b_lora_subjective_test.html",
+    "Chapter_7_Exercise_Follow_Instructions.ipynb": "inline-subjective/llm_chapter_7a_instruction_subjective_test.html",
+    "Chapter_7_Exercise_Follow_Instructions_dpo.ipynb": "inline-subjective/llm_chapter_7b_dpo_subjective_test.html",
   };
   const inlineExamUrl = () => inlineExamByFile[chapter().file] || "inline-subjective/";
 
