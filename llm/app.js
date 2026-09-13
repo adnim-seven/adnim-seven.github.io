@@ -15,6 +15,7 @@
   const currentMcq = () => chapter().mcq[mcqIndex];
   const currentSubjective = () => subjectivePool[subjectiveIndex];
   const currentNotebookExam = () => window.NOTEBOOK_FULL_EXAMS?.[chapter().id];
+  const currentInlineExam = () => window.LLM_INLINE_EXAMS?.[chapter().file];
   const inlineExamByFile = {
     "Chapter_2_Exercise_Dataset.ipynb": "inline-subjective/llm_chapter_2_subjective_test.html",
     "Chapter_3_Excercise_Attention.ipynb": "inline-subjective/llm_chapter_3_subjective_test.html",
@@ -317,9 +318,49 @@
 
   function renderNotebookExam() {
     const root = $("#notebookExamContent");
-    root.innerHTML = `
-      <div class="inline-exam-head"><span>INLINE IMPLEMENTATION EXAM</span><h2>${esc(chapter().title)} · 인라인 시험</h2><p>기존 학습 탭 안에서 전체 코드 문맥과 빈칸별 채점을 그대로 제공합니다.</p></div>
-      <iframe class="inline-exam-frame" title="${esc(chapter().file)} 인라인 시험" src="${inlineExamUrl()}"></iframe>`;
+    const exam = currentInlineExam();
+    if (!exam) {
+      root.innerHTML = '<div class="notebook-exam-empty"><strong>이 챕터의 인라인 시험을 불러오지 못했습니다.</strong><p>페이지를 새로고침한 뒤 다시 시도하세요.</p></div>';
+      return;
+    }
+    const input = (blank) => `<textarea class="inline-answer-input" data-inline-answer="${esc(blank.id)}" rows="1" spellcheck="false" placeholder="코드 입력"></textarea>`;
+    const cells = exam.cells.filter((cell) => cell.type === "code").map((cell) => {
+      let source = esc(cell.source);
+      const cellBlanks = exam.blanks.filter((blank) => cell.source.includes(`[[BLANK:${blank.id}]]`));
+      cellBlanks.forEach((blank) => { source = source.replace(`[[BLANK:${blank.id}]]`, input(blank)); });
+      const checks = cellBlanks.map((blank) => `<div class="inline-check-row"><strong>${esc(blank.label)}</strong><button class="quiet-button" type="button" data-inline-check="${esc(blank.id)}">채점</button><button class="text-button inline-star" type="button" data-inline-star="${esc(blank.id)}">☆ 복습</button><p id="inline-feedback-${esc(blank.id)}" class="inline-answer-feedback"></p></div>`).join("");
+      return `<section class="inline-code-cell"><div class="cell-title">코드 Cell ${cell.code_number} · 원본 Notebook Cell ${cell.number}</div><pre class="code-box problem-code"><code>${source}</code></pre>${checks}</section>`;
+    }).join("");
+    root.innerHTML = `<div class="inline-exam-head"><span>INLINE IMPLEMENTATION EXAM</span><h2>${esc(chapter().title)} · 인라인 시험</h2><p>전체 코드의 빈칸에 직접 작성하고, 해당 위치 아래에서 바로 채점합니다.</p></div><div class="inline-exam-controls"><button id="checkAllInline" class="primary-button" type="button">모든 빈칸 채점</button><a class="quiet-button" href="${inlineExamUrl()}">독립 페이지로 열기</a></div><div class="inline-code-cells">${cells}</div>`;
+    root.querySelectorAll("[data-inline-answer]").forEach((element) => {
+      const resize = () => { element.style.height = "auto"; element.style.height = `${element.scrollHeight}px`; };
+      element.addEventListener("input", resize); resize();
+    });
+    root.querySelectorAll("[data-inline-check]").forEach((button) => button.addEventListener("click", () => checkInlineBlank(button.dataset.inlineCheck)));
+    root.querySelectorAll("[data-inline-star]").forEach((button) => button.addEventListener("click", () => toggleInlineStar(button.dataset.inlineStar)));
+    $("#checkAllInline").addEventListener("click", () => exam.blanks.forEach((blank) => checkInlineBlank(blank.id)));
+  }
+
+  function inlineKey(blankId) { return `inline-${chapter().id}-${blankId}`; }
+  function checkInlineBlank(blankId) {
+    const exam = currentInlineExam();
+    const blank = exam.blanks.find((item) => item.id === blankId);
+    const answer = document.querySelector(`[data-inline-answer="${blankId}"]`)?.value || "";
+    const correct = scoreAnswer(answer, [blank.answer]);
+    recordAttempt(inlineKey(blankId), "subjective", correct, "애매", false, correct ? "" : "인라인 구현");
+    const target = $(`#inline-feedback-${blankId}`);
+    target.className = `inline-answer-feedback ${correct ? "correct" : "wrong"}`;
+    target.textContent = correct ? "정답입니다." : `오답입니다. 정답: ${blank.answer}`;
+    saveState();
+  }
+
+  function toggleInlineStar(blankId) {
+    state.inlineStars ||= {};
+    const key = inlineKey(blankId);
+    state.inlineStars[key] = !state.inlineStars[key];
+    const button = document.querySelector(`[data-inline-star="${blankId}"]`);
+    button.textContent = state.inlineStars[key] ? "★ 복습됨" : "☆ 복습";
+    saveState();
   }
 
   function submitNotebookExam() {
