@@ -9,6 +9,7 @@
   let subjectivePool = [];
   let hintUsed = false;
   let inlineView = "exam";
+  let inlineBlankIndex = 0;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -102,6 +103,7 @@
     subjectivePool = chapter().subjective.slice();
     subjectiveIndex = 0;
     inlineView = "exam";
+    inlineBlankIndex = 0;
     $("#chapterPath").textContent = `1. LLM › ${chapter().file}`;
     $("#chapterTitle").textContent = `${chapter().number} · ${chapter().title}`;
     $("#notebookGoal").textContent = `목표 · ${chapter().notebook_goal || chapter().summary}`;
@@ -348,16 +350,19 @@
       const checks = cellBlanks.map((blank) => `<div class="inline-check-row"><strong>${esc(blank.label)}</strong><button class="quiet-button" type="button" data-inline-check="${esc(blank.id)}">채점</button><button class="text-button inline-star" type="button" data-inline-star="${esc(blank.id)}">☆ 복습</button><p id="inline-feedback-${esc(blank.id)}" class="inline-answer-feedback"></p></div>`).join("");
       return `<section class="inline-code-cell"><div class="cell-title">코드 Cell ${cell.code_number} · 원본 Notebook Cell ${cell.number}</div><pre class="code-box inline-full-code"><code>${source}</code></pre>${checks}</section>`;
     }).join("");
-    root.innerHTML = `<div class="inline-exam-head"><span>INLINE IMPLEMENTATION EXAM</span><h2>${esc(chapter().title)} · 인라인 시험</h2><p>${inlineView === "notebook" ? "설명 마크다운과 코드 셀을 원본 순서대로 봅니다." : "전체 코드의 빈칸에 직접 작성하고, 해당 위치 아래에서 바로 채점합니다."}</p></div><div class="inline-exam-controls"><button class="quiet-button ${inlineView === "exam" ? "active" : ""}" data-inline-view="exam" type="button">인라인 시험</button><button class="quiet-button ${inlineView === "notebook" ? "active" : ""}" data-inline-view="notebook" type="button">풀 노트북 보기</button><a class="quiet-button" href="${inlineExamUrl()}">독립 페이지로 열기</a></div><div class="inline-code-cells">${cells}</div><div class="inline-fixed-bar"><div class="inline-fixed-inner"><span id="inlineExamStatus">빈칸 ${exam.blanks.length}개 · 답안을 입력한 뒤 채점하세요.</span><div><button id="goFirstInline" class="quiet-button" type="button">첫 빈칸</button><button id="checkAllInline" class="primary-button" type="button">모든 빈칸 채점</button></div></div></div>`;
+    root.innerHTML = `<div class="inline-exam-head"><span>INLINE IMPLEMENTATION EXAM</span><h2>${esc(chapter().title)} · 인라인 시험</h2><p>${inlineView === "notebook" ? "설명 마크다운과 코드 셀을 원본 순서대로 봅니다." : "전체 코드의 빈칸에 직접 작성하고, 해당 위치 아래에서 바로 채점합니다."}</p></div><div class="inline-exam-controls"><button class="quiet-button ${inlineView === "exam" ? "active" : ""}" data-inline-view="exam" type="button">인라인 시험</button><button class="quiet-button ${inlineView === "notebook" ? "active" : ""}" data-inline-view="notebook" type="button">풀 노트북 보기</button><a class="quiet-button" href="${inlineExamUrl()}">독립 페이지로 열기</a></div><div class="inline-code-cells">${cells}</div><div class="inline-fixed-bar"><div class="inline-fixed-inner"><span id="inlineExamStatus">빈칸 ${exam.blanks.length}개 · 답안을 입력한 뒤 채점하세요.</span><div><button id="prevInline" class="quiet-button" type="button">이전 문제</button><button id="nextInline" class="quiet-button" type="button">다음 문제</button><button id="checkAllInline" class="primary-button" type="button">모든 빈칸 채점</button></div></div></div>`;
     root.querySelectorAll("[data-inline-answer]").forEach((element) => {
       const resize = () => { element.style.height = "auto"; element.style.height = `${element.scrollHeight}px`; };
-      element.addEventListener("input", () => { resize(); updateInlineStatus(); }); resize();
+      element.addEventListener("input", () => { resize(); updateInlineStatus(); });
+      element.addEventListener("focus", () => { inlineBlankIndex = exam.blanks.findIndex((blank) => blank.id === element.dataset.inlineAnswer); updateInlineStatus(); });
+      resize();
     });
     root.querySelectorAll("[data-inline-check]").forEach((button) => button.addEventListener("click", () => checkInlineBlank(button.dataset.inlineCheck)));
     root.querySelectorAll("[data-inline-star]").forEach((button) => button.addEventListener("click", () => toggleInlineStar(button.dataset.inlineStar)));
     root.querySelectorAll("[data-inline-view]").forEach((button) => button.addEventListener("click", () => { inlineView = button.dataset.inlineView; renderNotebookExam(); }));
     $("#checkAllInline").addEventListener("click", () => exam.blanks.forEach((blank) => checkInlineBlank(blank.id)));
-    $("#goFirstInline").addEventListener("click", () => root.querySelector("[data-inline-answer]")?.scrollIntoView({ behavior: "smooth", block: "center" }));
+    $("#prevInline").addEventListener("click", () => focusInlineBlank(inlineBlankIndex - 1));
+    $("#nextInline").addEventListener("click", () => focusInlineBlank(inlineBlankIndex + 1));
     updateInlineStatus();
     syncInlineSidebar();
   }
@@ -382,7 +387,19 @@
     if (!exam || !status) return;
     const answered = exam.blanks.filter((blank) => document.querySelector(`[data-inline-answer="${blank.id}"]`)?.value.trim()).length;
     const correct = exam.blanks.filter((blank) => scoreAnswer(document.querySelector(`[data-inline-answer="${blank.id}"]`)?.value || "", [blank.answer])).length;
-    status.textContent = `빈칸 ${exam.blanks.length}개 · 작성 ${answered}개 · 현재 정답 ${correct}개`;
+    status.textContent = `문제 ${inlineBlankIndex + 1}/${exam.blanks.length} · 작성 ${answered}개 · 현재 정답 ${correct}개`;
+  }
+
+  function focusInlineBlank(index) {
+    const exam = currentInlineExam();
+    if (!exam?.blanks.length) return;
+    inlineBlankIndex = (index + exam.blanks.length) % exam.blanks.length;
+    const blank = exam.blanks[inlineBlankIndex];
+    const input = document.querySelector(`[data-inline-answer="${blank.id}"]`);
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    input.closest(".inline-code-cell")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    updateInlineStatus();
   }
 
   function toggleInlineStar(blankId) {
@@ -456,7 +473,7 @@
     renderNotebookExam();
   });
   $$("[data-inline-side-view]").forEach((button) => button.addEventListener("click", () => { inlineView = button.dataset.inlineSideView; renderNotebookExam(); }));
-  $("#inlineSideFirst").addEventListener("click", () => $("#notebookExamContent").querySelector("[data-inline-answer]")?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  $("#inlineSideFirst").addEventListener("click", () => focusInlineBlank(0));
   $("#collapseCode").addEventListener("click", () => {
     const cells = $$("#fullCodeCells details");
     const shouldOpen = cells.length > 0 && cells.every((cell) => !cell.open);
