@@ -9,6 +9,10 @@
   <link rel="stylesheet" href="../assets/css/full_code.css">
   <link rel="stylesheet" href="../assets/css/subject-mobile.css">
   <link rel="stylesheet" href="overrides.css">
+  <link rel="stylesheet" href="../assets/css/inline-exam-common.css">
+  <link rel="stylesheet" href="../assets/css/inline-exam-toast.css">
+  <link rel="stylesheet" href="../assets/css/inline-exam-priority.css">
+  <link rel="stylesheet" href="../assets/css/inline-exam-history.css">
   <link rel="stylesheet" href="../assets/css/global-font.css">
 </head>
 <body>
@@ -49,7 +53,7 @@
         <button class="mode-tab" role="tab" aria-selected="false" data-panel="fullCodePanel" type="button">2. 전체 코드</button>
         <button class="mode-tab" role="tab" aria-selected="false" data-panel="mcqPanel" type="button">3. 코드 5지선다</button>
         <button class="mode-tab" role="tab" aria-selected="false" data-panel="subjectivePanel" type="button">4. 주관식 시험</button>
-        <button class="mode-tab" role="tab" aria-selected="false" data-panel="notebookExamPanel" type="button">5. 인라인 시험</button>
+        <button class="mode-tab" role="tab" aria-selected="false" data-panel="inlineExamPanel" type="button">5. 인라인 시험</button>
         <button class="mode-tab" role="tab" aria-selected="false" data-panel="resultsPanel" type="button">6. 결과·오답</button>
       </div>
 
@@ -103,8 +107,8 @@
         <div id="subFeedback" class="feedback neutral" aria-live="polite">자료를 보지 않고 작성하세요. 힌트를 사용한 정답은 숙달 횟수에 포함되지 않습니다.</div>
       </section>
 
-      <section id="notebookExamPanel" class="panel">
-        <div id="notebookExamContent"></div>
+            <section id="inlineExamPanel" class="panel inline-exam-panel">
+        <div id="inlineExamContent"></div>
       </section>
 
       <section id="resultsPanel" class="panel">
@@ -123,5 +127,10 @@
   <script src="../assets/js/inline-exam-expand.js"></script>
   <script src="subject.config.js"></script>
   <script src="../assets/js/subject-app.js"></script>
+  <script src="../assets/js/inline-exam-common.js"></script>
+  <script src="../assets/js/inline-exam-toast.js"></script>
+  <script src="../assets/js/inline-exam-priority.js"></script>
+  <script src="../assets/js/inline-exam-review.js"></script>
+  <script src="../assets/js/inline-exam-history.js"></script>
 </body>
 </html>

@@ -26,7 +26,7 @@
   const currentMcq = () => chapter().mcq[mcqIndex];
   const currentSubjective = () => subjectivePool[subjectiveIndex];
   const currentNotebookExam = () => window.NOTEBOOK_FULL_EXAMS?.[chapter().id];
-  const currentInlineExam = () => window.LLM_INLINE_EXAMS?.[chapter().file];
+  const currentInlineExam = () => (window.INLINE_EXAM_MAP || window.LLM_INLINE_EXAMS)?.[chapter().file];
   const inlineExamByFile = {
     "Chapter_2_Exercise_Dataset.ipynb": "inline-subjective/llm_chapter_2_subjective_test.html",
     "Chapter_3_Excercise_Attention.ipynb": "inline-subjective/llm_chapter_3_subjective_test.html",
@@ -37,7 +37,7 @@
     "Chapter_7_Exercise_Follow_Instructions.ipynb": "inline-subjective/llm_chapter_7a_instruction_subjective_test.html",
     "Chapter_7_Exercise_Follow_Instructions_dpo.ipynb": "inline-subjective/llm_chapter_7b_dpo_subjective_test.html",
   };
-  const inlineExamUrl = () => inlineExamByFile[chapter().file] || "inline-subjective/";
+  const inlineExamUrl = () => (currentInlineExam()?.page ? `inline-subjective/${currentInlineExam().page}.html` : (inlineExamByFile[chapter().file] || "inline-subjective/"));
 
   function loadState() {
     try { return JSON.parse(localStorage.getItem(storageKey)) || { questions: {} }; }
@@ -94,7 +94,7 @@
   function syncInlineSidebar() {
     const nav = $("#inlineSidebarNav");
     if (!nav) return;
-    const active = $("#notebookExamPanel")?.classList.contains("active");
+    const active = ($("#notebookExamPanel") || $("#inlineExamPanel"))?.classList.contains("active");
     nav.hidden = !active;
     if (active) {
       nav.querySelectorAll("[data-inline-side-view]").forEach((button) => button.classList.toggle("active", button.dataset.inlineSideView === inlineView));
@@ -505,7 +505,7 @@
     cells.forEach((cell) => { cell.open = shouldOpen; });
     $("#collapseCode").textContent = shouldOpen ? "모두 접기" : "모두 펼치기";
   });
-  $("#resetProgress").addEventListener("click", () => { if (confirm("현재 과목의 학습 기록을 모두 지울까요?")) { state = { questions: {} }; saveState(); selectChapter(0); } });
+  $("#resetProgress").addEventListener("click", () => { if (confirm("현재 과목의 학습 기록을 모두 초기화할까요?")) { state = { questions: {} }; saveState(); selectChapter(0); } });
 
   subjectivePool = chapter().subjective.slice();
   selectChapter(0);

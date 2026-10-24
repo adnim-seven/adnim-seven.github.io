@@ -27,8 +27,16 @@
       <div class="side-actions">
         <button id="retryWrong" class="danger-button" type="button">현재 노트북 오답 재시험</button>
         <button id="randomTest" class="quiet-button" type="button">랜덤 주관식 10문제</button>
+        <button id="pastExamTest" class="past-exam-button" type="button">현재 노트북 실제 기출</button>
+        <button id="fullNotebookTest" class="quiet-button" type="button">현재 노트북 인라인 시험</button>
         <button class="quiet-button" type="button" onclick="location.href='inline-subjective/'">인라인 주관식 시험</button>
       </div>
+      <nav id="inlineSidebarNav" class="inline-sidebar-nav" aria-label="인라인 시험 메뉴" hidden>
+        <strong>인라인 시험 메뉴</strong>
+        <button class="quiet-button" data-inline-side-view="exam" type="button">문제 풀이</button>
+        <button class="quiet-button" data-inline-side-view="notebook" type="button">풀 노트북 보기</button>
+        <button class="quiet-button" id="inlineSideFirst" type="button">첫 빈칸으로</button>
+      </nav>
     </aside>
 
     <main class="workspace">
@@ -44,6 +52,7 @@
         <button class="mode-tab" role="tab" aria-selected="false" data-panel="fullCodePanel" type="button">2. 전체 코드</button>
         <button class="mode-tab" role="tab" aria-selected="false" data-panel="mcqPanel" type="button">3. 코드 5지선다</button>
         <button class="mode-tab" role="tab" aria-selected="false" data-panel="subjectivePanel" type="button">4. 주관식 시험</button>
+        <button class="mode-tab" role="tab" aria-selected="false" data-panel="inlineExamPanel" type="button">5. 인라인 시험</button>
         <button class="mode-tab" role="tab" aria-selected="false" data-panel="resultsPanel" type="button">6. 결과·오답</button>
       </div>
 
@@ -95,6 +104,10 @@
           <div><button id="showHint" class="quiet-button" type="button">힌트</button><button id="submitSubjective" class="primary-button" type="button">제출</button><button id="nextSubjective" class="quiet-button" type="button">다음 문제</button></div>
         </div>
         <div id="subFeedback" class="feedback neutral" aria-live="polite">자료를 보지 않고 작성하세요. 힌트를 사용한 정답은 숙달 횟수에 포함되지 않습니다.</div>
+      </section>
+
+            <section id="inlineExamPanel" class="panel inline-exam-panel">
+        <div id="inlineExamContent"></div>
       </section>
 
       <section id="resultsPanel" class="panel">

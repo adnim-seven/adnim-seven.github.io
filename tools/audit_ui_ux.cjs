@@ -375,15 +375,27 @@ function auditSubjectHomes() {
       `미사용 데이터 로드: llm/index.html:${findLine(fs.readFileSync(path.join(ROOT, 'llm/index.html'), 'utf8'), 'notebook_full_exam.js')}에서 notebook_full_exam.js를 로드하지만 subject-app.js:28의 currentNotebookExam()은 호출되지 않음`
     );
   }
-  addFinding({
-    id: 'SUBJ-03',
-    severity: 'High',
-    category: '3. 인라인 시험 UX',
-    title: '과목 홈 인라인 시험 엔진 이원화 및 on-device/rag의 priority·review·history 스크립트 미적용',
-    evidence: inlineMatrixEv,
-    recommendation:
-      'on-device/index.html과 rag/index.html에 inline-exam-priority.css/js 및 inline-exam-review.js를 추가하고, 4개 과목에 inline-exam-history.css/js를 연결하여 ★ 복습 및 오답·북마크 모달을 활성화',
+  const engineSet = new Set(SUBJECTS.map((s) => scriptsBySubject[s].some((x) => x.includes('inline-exam-common.js')) ? 'inline-exam-common.js' : 'subject-app.js 내장'));
+  const hasMissingModule = SUBJECTS.some((s) => {
+    const sc = scriptsBySubject[s];
+    const cs = cssBySubject[s];
+    return !sc.some((x) => x.includes('inline-exam-priority.js')) ||
+           !cs.some((x) => x.includes('inline-exam-priority.css')) ||
+           !sc.some((x) => x.includes('inline-exam-review.js')) ||
+           !sc.some((x) => x.includes('inline-exam-history.js')) ||
+           !cs.some((x) => x.includes('inline-exam-history.css'));
   });
+  if (engineSet.size > 1 || hasMissingModule || !anyUsesHistoryJs) {
+    addFinding({
+      id: 'SUBJ-03',
+      severity: 'High',
+      category: '3. 인라인 시험 UX',
+      title: '과목 홈 인라인 시험 엔진 이원화 및 priority·review·history 스크립트 미적용',
+      evidence: inlineMatrixEv,
+      recommendation:
+        '5개 과목 홈 모두 inline-exam-common.js, inline-exam-priority.css/js, inline-exam-review.js, inline-exam-history.css/js를 연결하여 인라인 시험 엔진 및 복습 모달을 통일',
+    });
+  }
 
   // 2-D. #studyPanel, #subjectivePanel, .subject-title <small> 비교
   const panelEv = [];
@@ -406,15 +418,19 @@ function auditSubjectHomes() {
       `data/index.html:${studyPanelBySubject.data.subjectSmallLine} -> .subject-title <small>이 "${studyPanelBySubject.data.subjectSmall}"로 되어 있어 3번째 노트북(NCF)이 누락됨`
     );
   }
-  addFinding({
-    id: 'SUBJ-04',
-    severity: 'Medium',
-    category: '2. 탭·패널·버튼 구조 (#studyPanel / #subjectivePanel)',
-    title: '#studyPanel 출제범위(#examScope) 유무, #subjectivePanel 발문·코드 순서, 좌측 과목 부제(.subject-title small) 불일치',
-    evidence: panelEv,
-    recommendation:
-      '#subjectivePanel 내 발문(#subPrompt)과 코드(#subContext) 순서를 통일하고, vision("ResNet · ViT · DETR · Diffusion · 6개 노트북") 및 data("Time Series · NGCF · NCF")의 좌측 부제를 현행화',
-  });
+  const hasSubOrderMismatch = subOrders.size > 1;
+  const hasSubjectSmallIssue = studyPanelBySubject.vision.subjectSmall.includes('첫 번째 노트북') || studyPanelBySubject.data.subjectSmall === 'Time Series · NGCF';
+  if (hasSubOrderMismatch || hasSubjectSmallIssue) {
+    addFinding({
+      id: 'SUBJ-04',
+      severity: 'Medium',
+      category: '2. 탭·패널·버튼 구조 (#studyPanel / #subjectivePanel)',
+      title: '#subjectivePanel 발문·코드 순서 또는 좌측 과목 부제(.subject-title small) 불일치',
+      evidence: panelEv,
+      recommendation:
+        '#subjectivePanel 내 발문(#subPrompt)과 코드(#subContext) 순서를 통일하고, vision 및 data의 좌측 부제를 현행화',
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
