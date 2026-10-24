@@ -1,7 +1,14 @@
 (() => {
   "use strict";
+  // 과목 공통 학습 엔진. 과목별 차이는 각 과목 폴더의 subject.config.js(window.SUBJECT_CONFIG)로만 둔다.
   const course = window.LLM_COURSE;
-  const storageKey = "ai-coding-recall-rag-html-v1";
+  const config = Object.assign({
+    pathLabel: course.subject || "",
+    hintTail: "전후 Tensor shape와 다음 연산이 요구하는 입력을 확인하세요.",
+    flowLabel: "Tensor 흐름"
+  }, window.SUBJECT_CONFIG || {});
+  if (!config.storageKey) throw new Error("SUBJECT_CONFIG.storageKey가 필요합니다.");
+  const storageKey = config.storageKey;
   let state = loadState();
   let chapterIndex = 0;
   let mcqIndex = 0;
@@ -75,12 +82,13 @@
     mcqIndex = 0;
     subjectivePool = chapter().subjective.slice();
     subjectiveIndex = 0;
-    $("#chapterPath").textContent = `2. RAG › ${chapter().file}`;
+    $("#chapterPath").textContent = `${config.pathLabel} › ${chapter().file}`;
     $("#chapterTitle").textContent = `${chapter().number} · ${chapter().title}`;
     $("#notebookGoal").textContent = `목표 · ${chapter().notebook_goal || chapter().summary}`;
     $("#capability").textContent = chapter().capability;
     $("#summary").textContent = chapter().summary;
     renderNav();
+    renderExamScope();
     renderOverview();
     renderStudy();
     renderTheoryGuide();
@@ -91,18 +99,23 @@
     renderResults();
   }
 
+  function renderExamScope() {
+    if (!$("#examScope")) return;
+    const data = window.VISION_EXAM_SCOPE || { scope: [], chapters: {} };
+    const selected = data.chapters[chapter().file] || { matched: [], highlights: [] };
+    $("#examScope").innerHTML = `
+      <div class="exam-scope-heading"><span>OFFICIAL EXAM SCOPE · VISION</span><h2>시험범위 → 현재 챕터 → 핵심 코드</h2></div>
+      <div class="exam-scope-list">${data.scope.map(([title, text]) => `<article class="exam-scope-card ${selected.matched.includes(title) ? "matched" : ""}"><h3>${esc(title)}</h3><p>${esc(text)}</p><strong>${selected.matched.includes(title) ? "이 챕터 핵심" : "다른 챕터 중심"}</strong></article>`).join("")}</div>
+      <div class="chapter-highlight-head"><span>현재 챕터에서 우선 볼 코드</span><p>${selected.matched.map(esc).join(" · ")}</p></div>
+      <div class="chapter-highlight-list">${selected.highlights.map(([title, why, code], index) => `<article class="chapter-highlight"><h3>${index + 1}. ${esc(title)}</h3><p>${esc(why)}</p><pre class="code-box"><code>${esc(code)}</code></pre></article>`).join("")}</div>`;
+  }
+
   function renderOverview() {
+    if (!$("#notebookOverview")) return;
     const data = chapter().overview || {};
-    const steps = data.steps || chapter().key_points.map((point) => ({
-      label: point.title, code: point.code.split("\n")[0], flow: point.flow
-    }));
+    const steps = data.steps || chapter().key_points.map((point) => ({label:point.title,code:point.code.split("\n")[0],flow:point.flow}));
     const rules = data.rules || chapter().key_points.map((point) => point.watch);
-    $("#notebookOverview").innerHTML = `
-      <figcaption><span>NOTEBOOK AT A GLANCE</span><h2>${esc(data.title || chapter().title)}</h2><p>${esc(data.subtitle || chapter().capability)}</p></figcaption>
-      <div class="overview-flow">${steps.map((step, index) => `
-        <article class="overview-step"><span class="overview-step-no">${String(index + 1).padStart(2, "0")}</span><h3>${esc(step.label)}</h3><code>${esc(step.code)}</code><p>${esc(step.flow)}</p></article>
-        ${index < steps.length - 1 ? '<span class="overview-arrow" aria-hidden="true">→</span>' : ""}`).join("")}</div>
-      <div class="overview-rules"><strong>시험장에서 복원할 규칙</strong><ul>${rules.map((rule) => `<li>${esc(rule)}</li>`).join("")}</ul></div>`;
+    $("#notebookOverview").innerHTML = `<figcaption><span>NOTEBOOK AT A GLANCE</span><h2>${esc(data.title || chapter().title)}</h2><p>${esc(data.subtitle || chapter().capability)}</p></figcaption><div class="overview-flow">${steps.map((step,index)=>`<article class="overview-step"><span class="overview-step-no">${String(index+1).padStart(2,"0")}</span><h3>${esc(step.label)}</h3><code>${esc(step.code)}</code><p>${esc(step.flow)}</p></article>${index<steps.length-1?'<span class="overview-arrow" aria-hidden="true">→</span>':""}`).join("")}</div><div class="overview-rules"><strong>시험장에서 복원할 규칙</strong><ul>${rules.map((rule)=>`<li>${esc(rule)}</li>`).join("")}</ul></div>`;
   }
 
   function renderStudy() {
@@ -238,7 +251,7 @@
     const answer = item.answer.trim();
     const lineCount = answer.split("\n").length;
     const shape = lineCount > 1 ? `${lineCount}줄 구현 블록` : answer.includes("(") ? "함수·메서드 호출 또는 생성자" : answer.includes("[") ? "인덱싱·슬라이싱" : answer.includes("=") ? "대입문" : "코드 표현식";
-    feedback($("#subFeedback"), `힌트: ${shape}\n전후 변수와 검색→합성 흐름에서 다음 단계가 요구하는 입력을 확인하세요.`, "neutral");
+    feedback($("#subFeedback"), `힌트: ${shape}\n${config.hintTail}`, "neutral");
   }
   function submitSubjective() {
     const item = currentSubjective(); if (!item) return;
@@ -248,7 +261,7 @@
     const status = state.questions[item.id].status;
     const statusText = { mastered: "숙달", learned: "주관식 1회 성공", recognition: "5지선다 확인", wrong: "오답 재시험" }[status];
     const explanation = item.explanation ? `\n\n왜 이 코드인가\n${item.explanation}` : "";
-    const tensorFlow = item.tensor_flow ? `\n\n자료 흐름\n${item.tensor_flow}` : "";
+    const tensorFlow = item.tensor_flow ? `\n\n${config.flowLabel}\n${item.tensor_flow}` : "";
     const codeSignal = item.code_signal ? `\n\n문맥에서 찾을 신호\n${item.code_signal}` : "";
     const retry = item.retry ? `\n\n다시 풀기\n${item.retry}` : "";
     feedback($("#subFeedback"), `${correct ? "정답입니다." : "오답입니다."}\n현재 상태: ${statusText}\n\n정답\n${item.answer}${explanation}${tensorFlow}${codeSignal}${retry}`, correct ? "correct" : "wrong");
