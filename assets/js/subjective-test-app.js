@@ -173,6 +173,11 @@ $('#reviewModal').addEventListener('click', e => {
   if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
 });
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('#reviewModal').classList.contains('open')) {
+    e.preventDefault();
+    $('#reviewModal').classList.remove('open');
+    return;
+  }
   if (e.ctrlKey && e.key === 'Enter') {
     e.preventDefault();
     checkCurrent();

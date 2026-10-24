@@ -41,6 +41,7 @@
       modal.innerHTML = '<section class="inline-history-card"><header><div><h2>인라인 오답·북마크</h2><p>현재 브라우저에 저장된 문제별 복습 기록입니다.</p></div><button class="close" type="button">닫기</button></header><div class="inline-history-list"></div></section>';
       document.body.append(modal); modal.querySelector(".close").addEventListener("click", () => modal.classList.remove("open"));
       modal.addEventListener("click", (event) => { if (event.target === modal) modal.classList.remove("open"); });
+      document.addEventListener("keydown", (event) => { if (event.key === "Escape") modal.classList.remove("open"); });
     }
     modal.querySelector(".inline-history-list").innerHTML = rows.length ? rows.map((item) => `<div class="inline-history-row"><strong>${item.label}</strong><span class="${item.starred ? "starred" : ""}">${item.starred ? "★ 복습 표시 · " : ""}오답 ${item.wrong || 0}회 · ${item.correct ? "최근 정답" : "최근 오답"}</span></div>`).join("") : '<p class="inline-history-empty">기록된 오답 또는 북마크가 없습니다.</p>';
     modal.classList.add("open");

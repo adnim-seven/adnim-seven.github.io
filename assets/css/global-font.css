@@ -3,5 +3,5 @@ html, body, button, input, textarea, select, code, pre {
 }
 
 code, pre, textarea {
-  font-family: "Malgun Gothic", "맑은 고딕", monospace;
+  font-family: Consolas, "Courier New", "Malgun Gothic", "맑은 고딕", monospace;
 }

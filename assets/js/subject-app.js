@@ -80,7 +80,11 @@
   }
 
   function switchPanel(panelId) {
-    $$(".mode-tab").forEach((button) => button.classList.toggle("active", button.dataset.panel === panelId));
+    $$(".mode-tab").forEach((button) => {
+      const active = button.dataset.panel === panelId;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", String(active));
+    });
     $$(".panel").forEach((panel) => panel.classList.toggle("active", panel.id === panelId));
     syncInlineSidebar();
     if (panelId === "resultsPanel") renderResults();
@@ -480,6 +484,12 @@
   $("#showHint").addEventListener("click", showHint);
   $("#submitSubjective").addEventListener("click", submitSubjective);
   $("#nextSubjective").addEventListener("click", nextSubjective);
+  $("#subAnswer").addEventListener("keydown", (event) => {
+    if (event.ctrlKey && event.key === "Enter") {
+      event.preventDefault();
+      submitSubjective();
+    }
+  });
   $("#retryWrong").addEventListener("click", retryWrong);
   $("#randomTest").addEventListener("click", randomTest);
   if ($("#pastExamTest")) $("#pastExamTest").addEventListener("click", pastExamTest);
@@ -495,7 +505,7 @@
     cells.forEach((cell) => { cell.open = shouldOpen; });
     $("#collapseCode").textContent = shouldOpen ? "모두 접기" : "모두 펼치기";
   });
-  $("#resetProgress").addEventListener("click", () => { if (confirm("이 HTML의 학습 기록을 모두 지울까요?")) { state = { questions: {} }; saveState(); selectChapter(0); } });
+  $("#resetProgress").addEventListener("click", () => { if (confirm("현재 과목의 학습 기록을 모두 지울까요?")) { state = { questions: {} }; saveState(); selectChapter(0); } });
 
   subjectivePool = chapter().subjective.slice();
   selectChapter(0);

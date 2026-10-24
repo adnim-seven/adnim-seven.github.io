@@ -55,10 +55,9 @@
 .is-disabled{opacity:.48;cursor:not-allowed}
 @media(max-width:650px){.notebook-exam-head h2{font-size:1.12rem}.notebook-exam-cells{gap:8px}.notebook-exam-cell .code-box{max-height:58vh}.full-blank textarea{min-height:76px}.notebook-exam-summary{font-size:.82rem}}
 
-html,body,button,input,textarea,select,pre,code,.code-box{
+html,body,button,input,textarea,select{
   font-family:"Malgun Gothic","맑은 고딕","Segoe UI",sans-serif !important;
 }
-@media(min-width:1051px){
-  .sidebar{max-height:none}
-  .sidebar #chapterNav{overflow:visible}
+pre,code,.code-box{
+  font-family:Consolas,"Courier New","Malgun Gothic","맑은 고딕",monospace !important;
 }

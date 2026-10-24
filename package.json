@@ -1,0 +1,19 @@
+{
+  "name": "ai-coding-recall",
+  "version": "1.0.0",
+  "description": "AI Specialist 코드 구현 시험 대비 학습 사이트",
+  "private": true,
+  "scripts": {
+    "test": "node tools/run_all_tests.cjs",
+    "validate": "node tools/validate_site.cjs",
+    "audit": "node tools/audit_ui_ux.cjs",
+    "verify:exams": "node tools/verify-exam-session.cjs && node tools/verify-mock-exams.cjs"
+  },
+  "keywords": [
+    "ai-specialist",
+    "study",
+    "coding-test"
+  ],
+  "author": "adnim-seven",
+  "license": "ISC"
+}

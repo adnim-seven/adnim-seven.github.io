@@ -45,12 +45,12 @@
       </div>
 
       <div class="mode-tabs" role="tablist" aria-label="학습 단계">
-        <button class="mode-tab active" data-panel="studyPanel" type="button">0. 한 장 오버뷰</button>
-        <button class="mode-tab" data-panel="fullCodePanel" type="button">1. 전체 코드</button>
-        <button class="mode-tab" data-panel="mcqPanel" type="button">2. 코드 5지선다</button>
-        <button class="mode-tab" data-panel="subjectivePanel" type="button">3. 주관식 시험</button>
-        <button class="mode-tab" data-panel="notebookExamPanel" type="button">4. 인라인 시험</button>
-        <button class="mode-tab" data-panel="resultsPanel" type="button">5. 결과·오답</button>
+        <button class="mode-tab active" role="tab" aria-selected="true" data-panel="studyPanel" type="button">1. 한 장 오버뷰</button>
+        <button class="mode-tab" role="tab" aria-selected="false" data-panel="fullCodePanel" type="button">2. 전체 코드</button>
+        <button class="mode-tab" role="tab" aria-selected="false" data-panel="mcqPanel" type="button">3. 코드 5지선다</button>
+        <button class="mode-tab" role="tab" aria-selected="false" data-panel="subjectivePanel" type="button">4. 주관식 시험</button>
+        <button class="mode-tab" role="tab" aria-selected="false" data-panel="notebookExamPanel" type="button">5. 인라인 시험</button>
+        <button class="mode-tab" role="tab" aria-selected="false" data-panel="resultsPanel" type="button">6. 결과·오답</button>
       </div>
 
       <section id="studyPanel" class="panel active" aria-labelledby="chapterTitle">
@@ -119,7 +119,6 @@
   <script src="course_data.js"></script>
   <script src="exam_overrides.js"></script>
   <script src="subjective_scope.js"></script>
-  <script src="notebook_full_exam.js"></script>
   <script src="inline_exam_data.js"></script>
   <script src="../assets/js/inline-exam-expand.js"></script>
   <script src="subject.config.js"></script>

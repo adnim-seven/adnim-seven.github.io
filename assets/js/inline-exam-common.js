@@ -25,10 +25,16 @@
   panel.id = "inlineExamPanel"; panel.className = "panel inline-exam-panel";
   document.querySelector(".workspace").append(panel);
   const tab = document.createElement("button");
-  tab.className = "mode-tab"; tab.type = "button"; tab.dataset.panel = "inlineExamPanel"; tab.textContent = "인라인 시험";
-  document.querySelector(".mode-tabs").append(tab);
+  tab.className = "mode-tab"; tab.type = "button"; tab.setAttribute("role", "tab"); tab.setAttribute("aria-selected", "false"); tab.dataset.panel = "inlineExamPanel"; tab.textContent = "5. 인라인 시험";
+  const tabsWrap = document.querySelector(".mode-tabs");
+  const resultsTab = tabsWrap.querySelector('[data-panel="resultsPanel"]');
+  if (resultsTab) tabsWrap.insertBefore(tab, resultsTab); else tabsWrap.append(tab);
   const show = () => {
-    document.querySelectorAll(".mode-tab").forEach(b => b.classList.toggle("active", b === tab));
+    document.querySelectorAll(".mode-tab").forEach(b => {
+      const active = b === tab;
+      b.classList.toggle("active", active);
+      b.setAttribute("aria-selected", String(active));
+    });
     document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p === panel));
     // RAG처럼 코드 셀이 많은 노트북은 클릭 이벤트 안에서 전부 그리면 멈춘 것처럼 보인다.
     // 탭을 먼저 연 뒤, 다음 화면 갱신에서 코드를 그린다.

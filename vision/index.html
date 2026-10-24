@@ -12,22 +12,23 @@
   <link rel="stylesheet" href="../assets/css/inline-exam-common.css">
   <link rel="stylesheet" href="../assets/css/inline-exam-toast.css">
   <link rel="stylesheet" href="../assets/css/inline-exam-priority.css">
+  <link rel="stylesheet" href="../assets/css/inline-exam-history.css">
   <link rel="stylesheet" href="../assets/css/global-font.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="brand-mark">A</span><span>AI Coding Recall<small>LLM 집중 학습</small></span></div>
+    <div class="brand"><span class="brand-mark">A</span><span>AI Coding Recall<small>Vision 집중 학습</small></span></div>
     <div class="topbar-right"><div class="headline-stats" id="headlineStats"></div><a class="home-link" href="../">← 전체 홈</a></div>
   </header>
 
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="subject-title"><span>04</span><div><strong>Vision</strong><small>첫 번째 노트북 · 순차 확장</small></div></div>
-      <nav id="chapterNav" aria-label="LLM 노트북 선택"></nav>
+      <div class="subject-title"><span>04</span><div><strong>Vision</strong><small>ResNet · ViT · DETR · U-Net · Diffusion · 6개 노트북</small></div></div>
+      <nav id="chapterNav" aria-label="Vision 노트북 선택"></nav>
       <div class="side-actions">
-        <button class="quiet-button" type="button" onclick="location.href='inline-subjective/'">인라인 주관식 시험</button>
         <button id="retryWrong" class="danger-button" type="button">현재 노트북 오답 재시험</button>
         <button id="randomTest" class="quiet-button" type="button">랜덤 주관식 10문제</button>
+        <button class="quiet-button" type="button" onclick="location.href='inline-subjective/'">인라인 주관식 시험</button>
       </div>
     </aside>
 
@@ -40,11 +41,11 @@
       </div>
 
       <div class="mode-tabs" role="tablist" aria-label="학습 단계">
-        <button class="mode-tab active" data-panel="studyPanel" type="button">1. 핵심 정리</button>
-        <button class="mode-tab" data-panel="fullCodePanel" type="button">2. 전체 코드</button>
-        <button class="mode-tab" data-panel="mcqPanel" type="button">3. 코드 5지선다</button>
-        <button class="mode-tab" data-panel="subjectivePanel" type="button">4. 주관식 시험</button>
-        <button class="mode-tab" data-panel="resultsPanel" type="button">5. 결과·오답</button>
+        <button class="mode-tab active" role="tab" aria-selected="true" data-panel="studyPanel" type="button">1. 한 장 오버뷰</button>
+        <button class="mode-tab" role="tab" aria-selected="false" data-panel="fullCodePanel" type="button">2. 전체 코드</button>
+        <button class="mode-tab" role="tab" aria-selected="false" data-panel="mcqPanel" type="button">3. 코드 5지선다</button>
+        <button class="mode-tab" role="tab" aria-selected="false" data-panel="subjectivePanel" type="button">4. 주관식 시험</button>
+        <button class="mode-tab" role="tab" aria-selected="false" data-panel="resultsPanel" type="button">6. 결과·오답</button>
       </div>
 
       <section id="studyPanel" class="panel active" aria-labelledby="chapterTitle">
@@ -86,8 +87,8 @@
       <section id="subjectivePanel" class="panel">
         <div class="question-meta"><span id="subPosition"></span><strong id="subSource"></strong></div>
         <h2 id="subTopic"></h2>
-        <pre class="code-box problem-code"><code id="subContext"></code></pre>
         <p id="subPrompt" class="question-prompt"></p>
+        <pre class="code-box problem-code"><code id="subContext"></code></pre>
         <label class="answer-label" for="subAnswer">내 답안</label>
         <textarea id="subAnswer" class="answer-input" spellcheck="false" placeholder="정답 코드를 직접 작성하세요."></textarea>
         <div class="question-controls subjective-controls">
@@ -119,5 +120,6 @@
   <script src="../assets/js/inline-exam-toast.js"></script>
   <script src="../assets/js/inline-exam-priority.js"></script>
   <script src="../assets/js/inline-exam-review.js"></script>
+  <script src="../assets/js/inline-exam-history.js"></script>
 </body>
 </html>
