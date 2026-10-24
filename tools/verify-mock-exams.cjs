@@ -1,3 +1,4 @@
+const path=require('path');process.chdir(path.resolve(__dirname,'..'));
 const fs=require('fs'),vm=require('vm'),cp=require('child_process');
 let count=0;const codeSamples=[];
 for(let round=2;round<=5;round++){

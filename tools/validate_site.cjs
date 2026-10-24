@@ -5,9 +5,7 @@
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const ROOT = path.resolve(__dirname, '..');
 const SUBJECTS = ['llm', 'vision', 'on-device', 'rag', 'data'];
-const REQUIRED = ['index.html', 'exam_overrides.js', 'inline_exam_data.js', 'inline-subjective/index.html'];
-// 공통 엔진(assets/js/subject-app.js)으로 옮긴 과목은 subject.config.js, 아직 전용 엔진인 과목은 app.js
-const ENGINE = { llm: 'app.js' };
+const REQUIRED = ['index.html', 'course_data.js', 'subject.config.js', 'exam_overrides.js', 'inline_exam_data.js', 'inline-subjective/index.html'];
 const errors = [], warnings = [];
 const rel = p => path.relative(ROOT, p).replace(/\\/g, '/');
 
@@ -50,7 +48,7 @@ for (const f of files.filter(f => /\.(js|cjs)$/.test(f))) {
 // 3) 과목 폴더 규칙 + 데이터 로드
 for (const s of SUBJECTS) {
   const dir = path.join(ROOT, s);
-  for (const r of [...REQUIRED, ENGINE[s] || 'subject.config.js']) if (!fs.existsSync(path.join(dir, r))) errors.push(`[subject] ${s}/${r} 없음`);
+  for (const r of REQUIRED) if (!fs.existsSync(path.join(dir, r))) errors.push(`[subject] ${s}/${r} 없음`);
   const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8');
   const scripts = [...html.matchAll(/<script src="([^"]+)"/g)].map(m => m[1].split('?')[0]);
   const dataScripts = scripts.filter(x => !x.startsWith('../') && x !== 'app.js' && /data|overrides|scope/.test(x));

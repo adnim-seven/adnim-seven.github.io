@@ -7,7 +7,7 @@ import io
 import tokenize
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = (Path(__file__).resolve().parent.parent / "llm")
 script = '''global.window={};require('./course_data.js');
 const original=JSON.parse(JSON.stringify(window.LLM_COURSE.cells));
 require('./exam_overrides.js');

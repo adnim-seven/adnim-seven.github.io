@@ -4,7 +4,7 @@ import re
 from difflib import SequenceMatcher
 from pathlib import Path
 
-root = Path(__file__).resolve().parent
+root = (Path(__file__).resolve().parent.parent / "llm")
 source = root.parent / "ai_coding_recall_desktop" / "llm_course.json"
 data = json.loads(source.read_text(encoding="utf-8"))
 data["sample_mode"] = False

@@ -1,11 +1,13 @@
 (() => {
   "use strict";
-  // 과목 공통 학습 엔진. 과목별 차이는 각 과목 폴더의 subject.config.js(window.SUBJECT_CONFIG)로만 둔다.
+  // 5개 과목(LLM, Vision, On-device, RAG, Data) 공통 학습 엔진.
+  // 과목별 설정(storageKey, pathLabel, 문구 차이)은 각 과목 폴더의 subject.config.js(window.SUBJECT_CONFIG)에서 읽는다.
   const course = window.LLM_COURSE;
   const config = Object.assign({
     pathLabel: course.subject || "",
     hintTail: "전후 Tensor shape와 다음 연산이 요구하는 입력을 확인하세요.",
-    flowLabel: "Tensor 흐름"
+    flowLabel: "Tensor 흐름",
+    showPastExamCount: false
   }, window.SUBJECT_CONFIG || {});
   if (!config.storageKey) throw new Error("SUBJECT_CONFIG.storageKey가 필요합니다.");
   const storageKey = config.storageKey;
@@ -15,12 +17,27 @@
   let subjectiveIndex = 0;
   let subjectivePool = [];
   let hintUsed = false;
+  let inlineView = "exam";
+  let inlineBlankIndex = 0;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const chapter = () => course.chapters[chapterIndex];
   const currentMcq = () => chapter().mcq[mcqIndex];
   const currentSubjective = () => subjectivePool[subjectiveIndex];
+  const currentNotebookExam = () => window.NOTEBOOK_FULL_EXAMS?.[chapter().id];
+  const currentInlineExam = () => window.LLM_INLINE_EXAMS?.[chapter().file];
+  const inlineExamByFile = {
+    "Chapter_2_Exercise_Dataset.ipynb": "inline-subjective/llm_chapter_2_subjective_test.html",
+    "Chapter_3_Excercise_Attention.ipynb": "inline-subjective/llm_chapter_3_subjective_test.html",
+    "Chapter_4_Excercise_GPT.ipynb": "inline-subjective/llm_chapter_4_subjective_test.html",
+    "Chapter_5_Excercise_Pretraining.ipynb": "inline-subjective/llm_chapter_5_subjective_test.html",
+    "Chapter_6_Excercise_Finetuning_Classification.ipynb": "inline-subjective/llm_chapter_6a_classification_subjective_test.html",
+    "Chapter_6_Excercise_Finetuning_Classification_LoRA.ipynb": "inline-subjective/llm_chapter_6b_lora_subjective_test.html",
+    "Chapter_7_Exercise_Follow_Instructions.ipynb": "inline-subjective/llm_chapter_7a_instruction_subjective_test.html",
+    "Chapter_7_Exercise_Follow_Instructions_dpo.ipynb": "inline-subjective/llm_chapter_7b_dpo_subjective_test.html",
+  };
+  const inlineExamUrl = () => inlineExamByFile[chapter().file] || "inline-subjective/";
 
   function loadState() {
     try { return JSON.parse(localStorage.getItem(storageKey)) || { questions: {} }; }
@@ -65,14 +82,29 @@
   function switchPanel(panelId) {
     $$(".mode-tab").forEach((button) => button.classList.toggle("active", button.dataset.panel === panelId));
     $$(".panel").forEach((panel) => panel.classList.toggle("active", panel.id === panelId));
+    syncInlineSidebar();
     if (panelId === "resultsPanel") renderResults();
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function syncInlineSidebar() {
+    const nav = $("#inlineSidebarNav");
+    if (!nav) return;
+    const active = $("#notebookExamPanel")?.classList.contains("active");
+    nav.hidden = !active;
+    if (active) {
+      nav.querySelectorAll("[data-inline-side-view]").forEach((button) => button.classList.toggle("active", button.dataset.inlineSideView === inlineView));
+    }
   }
 
   function renderNav() {
     $("#chapterNav").innerHTML = course.chapters.map((item, index) => {
       const c = counts(item.subjective.map((q) => q.id));
-      return `<button class="chapter-button ${index === chapterIndex ? "active" : ""}" data-index="${index}" type="button"><span class="chapter-number">${esc(item.number)}</span><span><strong>${esc(item.title)}</strong><small>주관식 ${item.subjective.length} · 오답 ${c.wrong}</small></span></button>`;
+      const pastCount = item.subjective.filter((q) => q.isPastExam).length;
+      const meta = config.showPastExamCount
+        ? `주관식 ${item.subjective.length} · 기출 ${pastCount} · 오답 ${c.wrong}`
+        : `주관식 ${item.subjective.length} · 오답 ${c.wrong}`;
+      return `<button class="chapter-button ${index === chapterIndex ? "active" : ""}" data-index="${index}" type="button"><span class="chapter-number">${esc(item.number)}</span><span><strong>${esc(item.title)}</strong><small>${meta}</small></span></button>`;
     }).join("");
     $$(".chapter-button").forEach((button) => button.addEventListener("click", () => selectChapter(Number(button.dataset.index))));
   }
@@ -82,11 +114,19 @@
     mcqIndex = 0;
     subjectivePool = chapter().subjective.slice();
     subjectiveIndex = 0;
+    inlineView = "exam";
+    inlineBlankIndex = 0;
     $("#chapterPath").textContent = `${config.pathLabel} › ${chapter().file}`;
     $("#chapterTitle").textContent = `${chapter().number} · ${chapter().title}`;
     $("#notebookGoal").textContent = `목표 · ${chapter().notebook_goal || chapter().summary}`;
     $("#capability").textContent = chapter().capability;
     $("#summary").textContent = chapter().summary;
+    const fullNotebookButton = $("#fullNotebookTest");
+    if (fullNotebookButton) {
+      fullNotebookButton.disabled = false;
+      fullNotebookButton.title = "전체 코드 문맥 안에서 답안을 바로 작성하고 빈칸별로 채점합니다.";
+      fullNotebookButton.classList.remove("is-disabled");
+    }
     renderNav();
     renderExamScope();
     renderOverview();
@@ -95,6 +135,7 @@
     renderFullCode();
     renderMcq();
     renderSubjective();
+    renderNotebookExam();
     renderStats();
     renderResults();
   }
@@ -182,6 +223,7 @@
   }
   function sourceContext(question) {
     if (!question) return "????";
+    if (question.scope_context) return question.scope_context;
     if (question.problem_context) return question.problem_context;
     const source = course.cells[question.sourceId]?.source || "";
     const answer = question.answer;
@@ -205,7 +247,7 @@
     $("#mcqPosition").textContent = `5지선다 ${mcqIndex + 1} / ${chapter().mcq.length}`;
     $("#mcqSource").textContent = "원본 노트북 빈칸 기반";
     $("#mcqTopic").textContent = item.topic;
-    $("#mcqCode").textContent = sourceContext(source);
+    $("#mcqCode").textContent = source?.mcq_context || sourceContext(source);
     $("#mcqPrompt").textContent = item.prompt;
     $("#mcqChoices").innerHTML = item.choices.map((choice, index) => `<label class="choice"><input type="radio" name="mcqChoice" value="${index}"><span><strong>${index + 1}.</strong> <code>${esc(choice.text)}</code></span></label>`).join("");
     feedback($("#mcqFeedback"), "빈칸에 들어갈 코드를 고른 뒤 제출하세요. 제출 후 각 보기의 오류를 확인할 수 있습니다.");
@@ -239,7 +281,8 @@
       feedback($("#subFeedback"), "현재 조건에 해당하는 문제가 없습니다."); return;
     }
     $("#subPosition").textContent = `주관식 ${subjectiveIndex + 1} / ${subjectivePool.length}`;
-    $("#subSource").textContent = item.isSourceBlank ? "실제 강의 빈칸" : "원본 코드 기반";
+    $("#subSource").textContent = item.isPastExam ? "실제 기출 · 전체 구현 복원" : item.scope_context ? "기출 유형 · 전체 구현 복원" : item.isSourceBlank ? "실제 강의 빈칸" : "원본 코드 기반";
+    $("#subSource").classList.toggle("past-exam-badge", Boolean(item.isPastExam));
     $("#subTopic").textContent = item.topic;
     $("#subContext").textContent = sourceContext(item);
     $("#subPrompt").textContent = item.prompt;
@@ -283,6 +326,123 @@
     subjectiveIndex = 0;
     switchPanel("subjectivePanel"); renderSubjective();
   }
+  function pastExamTest() {
+    subjectivePool = chapter().subjective.filter((q) => q.isPastExam);
+    subjectiveIndex = 0;
+    switchPanel("subjectivePanel"); renderSubjective();
+  }
+
+  function renderNotebookExam() {
+    const root = $("#notebookExamContent");
+    if (!root) return;
+    const exam = currentInlineExam();
+    if (!exam) {
+      const choices = course.chapters.map((item, index) => ({ item, index })).filter(({ item }) => window.LLM_INLINE_EXAMS?.[item.file]);
+      root.innerHTML = `<div class="inline-exam-head"><span>INLINE IMPLEMENTATION EXAM</span><h2>노트북별 인라인 시험 선택</h2><p>종합 리뷰에는 독립된 원본 노트북이 없으므로, 아래에서 실습 노트북을 선택하세요.</p></div><div class="inline-exam-choices">${choices.map(({ item, index }) => `<button class="quiet-button" data-inline-chapter="${index}" type="button">${esc(item.number)} · ${esc(item.title)}</button>`).join("")}</div>`;
+      root.querySelectorAll("[data-inline-chapter]").forEach((button) => button.addEventListener("click", () => {
+        selectChapter(Number(button.dataset.inlineChapter));
+        switchPanel("notebookExamPanel");
+      }));
+      return;
+    }
+    const input = (blank) => `<textarea class="inline-answer-input" data-inline-answer="${esc(blank.id)}" rows="1" spellcheck="false" placeholder="코드 입력"></textarea>`;
+    const shownCells = inlineView === "notebook" ? exam.cells : exam.cells.filter((cell) => cell.type === "code");
+    const cells = shownCells.map((cell) => {
+      if (cell.type !== "code") {
+        return `<section class="inline-markdown-cell"><div class="cell-title">원본 Notebook Cell ${cell.number} · 설명</div><div class="inline-markdown-source">${esc(cell.source) || "(빈 마크다운 셀)"}</div></section>`;
+      }
+      let source = esc(cell.source);
+      const cellBlanks = exam.blanks.filter((blank) => cell.source.includes(`[[BLANK:${blank.id}]]`));
+      cellBlanks.forEach((blank) => { source = source.replace(`[[BLANK:${blank.id}]]`, input(blank)); });
+      const checks = cellBlanks.map((blank) => `<div class="inline-check-row"><strong>${esc(blank.label)}</strong><button class="quiet-button" type="button" data-inline-check="${esc(blank.id)}">채점</button><button class="text-button inline-star" type="button" data-inline-star="${esc(blank.id)}">☆ 복습</button></div>`).join("");
+      return `<section class="inline-code-cell"><div class="cell-title">코드 Cell ${cell.code_number} · 원본 Notebook Cell ${cell.number}</div><pre class="code-box inline-full-code"><code>${source}</code></pre>${checks}</section>`;
+    }).join("");
+    root.innerHTML = `<div class="inline-exam-head"><span>INLINE IMPLEMENTATION EXAM</span><h2>${esc(chapter().title)} · 인라인 시험</h2><p>${inlineView === "notebook" ? "원본 노트북의 설명 마크다운과 코드 셀을 순서대로 함께 봅니다." : "전체 코드 문맥 안에서 빈칸에 답안을 바로 작성하고, 해당 줄 아래에서 즉시 채점합니다."}</p></div><div class="inline-exam-controls"><button class="quiet-button ${inlineView === "exam" ? "active" : ""}" data-inline-view="exam" type="button">인라인 시험</button><button class="quiet-button ${inlineView === "notebook" ? "active" : ""}" data-inline-view="notebook" type="button">풀 노트북 보기</button><a class="quiet-button" href="${esc(inlineExamUrl())}">전체 화면으로 열기</a></div><div class="inline-code-cells">${cells}</div><div class="inline-fixed-bar"><div class="inline-fixed-inner"><span id="inlineExamStatus">문제 1/${exam.blanks.length}</span><div class="inline-fixed-actions"><button id="prevInline" class="quiet-button" type="button">이전 문제</button><button id="nextInline" class="quiet-button" type="button">다음 문제</button><button id="checkAllInline" class="primary-button" type="button">모든 빈칸 채점</button></div></div></div>`;
+    root.querySelectorAll("[data-inline-answer]").forEach((element) => {
+      const resize = () => { element.style.height = "auto"; element.style.height = `${element.scrollHeight}px`; };
+      element.addEventListener("input", () => {
+        element.classList.remove("correct", "wrong");
+        resize();
+        updateInlineStatus();
+      });
+      element.addEventListener("focus", () => {
+        const index = exam.blanks.findIndex((blank) => blank.id === element.dataset.inlineAnswer);
+        if (index >= 0) inlineBlankIndex = index;
+        updateInlineStatus();
+      });
+      element.addEventListener("keydown", (event) => {
+        if (event.ctrlKey && event.key === "Enter") {
+          event.preventDefault();
+          checkInlineBlank(element.dataset.inlineAnswer);
+        }
+      });
+      resize();
+    });
+    root.querySelectorAll("[data-inline-check]").forEach((button) => button.addEventListener("click", () => checkInlineBlank(button.dataset.inlineCheck)));
+    root.querySelectorAll("[data-inline-star]").forEach((button) => button.addEventListener("click", () => toggleInlineStar(button.dataset.inlineStar)));
+    root.querySelectorAll("[data-inline-view]").forEach((button) => button.addEventListener("click", () => { inlineView = button.dataset.inlineView; renderNotebookExam(); }));
+    $("#checkAllInline").addEventListener("click", () => exam.blanks.forEach((blank) => checkInlineBlank(blank.id)));
+    $("#prevInline").addEventListener("click", () => focusInlineBlank(inlineBlankIndex - 1));
+    $("#nextInline").addEventListener("click", () => focusInlineBlank(inlineBlankIndex + 1));
+    updateInlineStatus();
+    syncInlineSidebar();
+  }
+
+  function inlineKey(blankId) { return `inline-${chapter().id}-${blankId}`; }
+  function checkInlineBlank(blankId) {
+    const exam = currentInlineExam();
+    const blank = exam.blanks.find((item) => item.id === blankId);
+    const answer = document.querySelector(`[data-inline-answer="${blankId}"]`)?.value || "";
+    if (!answer.trim()) return;
+    const correct = scoreAnswer(answer, [blank.answer]);
+    recordAttempt(inlineKey(blankId), "subjective", correct, "애매", false, correct ? "" : "인라인 구현");
+    const input = document.querySelector(`[data-inline-answer="${blankId}"]`);
+    input?.classList.toggle("correct", correct);
+    input?.classList.toggle("wrong", !correct);
+    showInlineToast(correct ? "정답입니다." : `오답입니다. 정답: ${blank.answer}`, correct);
+    updateInlineStatus();
+    saveState();
+  }
+
+  function updateInlineStatus() {
+    const exam = currentInlineExam();
+    const status = $("#inlineExamStatus");
+    if (!exam || !status) return;
+    const answered = exam.blanks.filter((blank) => document.querySelector(`[data-inline-answer="${blank.id}"]`)?.value.trim()).length;
+    const correct = exam.blanks.filter((blank) => scoreAnswer(document.querySelector(`[data-inline-answer="${blank.id}"]`)?.value || "", [blank.answer])).length;
+    status.textContent = `문제 ${inlineBlankIndex + 1}/${exam.blanks.length} · 작성 ${answered}개 · 현재 정답 ${correct}개`;
+  }
+
+  function showInlineToast(message, correct) {
+    let toast = $("#inlineExamToast");
+    if (!toast) { toast = document.createElement("div"); toast.id = "inlineExamToast"; toast.className = "inline-exam-toast"; document.body.append(toast); }
+    toast.className = `inline-exam-toast ${correct ? "correct" : "wrong"}`;
+    toast.textContent = message;
+    clearTimeout(showInlineToast.timer);
+    showInlineToast.timer = setTimeout(() => toast.classList.remove("show"), 3000);
+    requestAnimationFrame(() => toast.classList.add("show"));
+  }
+
+  function focusInlineBlank(index) {
+    const exam = currentInlineExam();
+    if (!exam?.blanks.length) return;
+    inlineBlankIndex = (index + exam.blanks.length) % exam.blanks.length;
+    const blank = exam.blanks[inlineBlankIndex];
+    const input = document.querySelector(`[data-inline-answer="${blank.id}"]`);
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    input.closest(".inline-code-cell")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    updateInlineStatus();
+  }
+
+  function toggleInlineStar(blankId) {
+    state.inlineStars ||= {};
+    const key = inlineKey(blankId);
+    state.inlineStars[key] = !state.inlineStars[key];
+    const button = document.querySelector(`[data-inline-star="${blankId}"]`);
+    button.textContent = state.inlineStars[key] ? "★ 복습됨" : "☆ 복습";
+    saveState();
+  }
 
   function renderStats() {
     const ids = chapter().subjective.map((q) => q.id);
@@ -322,6 +482,13 @@
   $("#nextSubjective").addEventListener("click", nextSubjective);
   $("#retryWrong").addEventListener("click", retryWrong);
   $("#randomTest").addEventListener("click", randomTest);
+  if ($("#pastExamTest")) $("#pastExamTest").addEventListener("click", pastExamTest);
+  if ($("#fullNotebookTest")) $("#fullNotebookTest").addEventListener("click", () => {
+    switchPanel("notebookExamPanel");
+    renderNotebookExam();
+  });
+  $$("[data-inline-side-view]").forEach((button) => button.addEventListener("click", () => { inlineView = button.dataset.inlineSideView; renderNotebookExam(); }));
+  if ($("#inlineSideFirst")) $("#inlineSideFirst").addEventListener("click", () => focusInlineBlank(0));
   $("#collapseCode").addEventListener("click", () => {
     const cells = $$("#fullCodeCells details");
     const shouldOpen = cells.length > 0 && cells.every((cell) => !cell.open);

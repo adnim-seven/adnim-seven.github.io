@@ -3,7 +3,7 @@ import ast
 import json
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = (Path(__file__).resolve().parent.parent / "llm")
 NOTEBOOK_ROOT = ROOT.parents[2] / "1. llm_hands_on-main" / "llm_hands_on-main" / "llm_from_scratch"
 
 

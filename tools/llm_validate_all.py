@@ -1,7 +1,7 @@
 import json
 import ast
 from pathlib import Path
-root = Path(__file__).resolve().parent
+root = (Path(__file__).resolve().parent.parent / "llm")
 raw = (root / 'course_data.js').read_text(encoding='utf-8')
 data = json.loads(raw[len('window.LLM_COURSE = '):].strip().rstrip(';'))
 assert len(data['chapters']) == 8
