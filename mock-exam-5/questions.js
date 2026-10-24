@@ -11,22 +11,32 @@ window.EXAM=[
         "key": "A",
         "points": 1,
         "answer": "logits.flatten(0, 1)",
-        "why": "B,T를 합치고 V는 유지합니다.",
-        "alternatives": []
+        "why": "3차원 로짓 [B, T, V]의 배치와 시퀀스 축을 병합하여 CrossEntropyLoss 입력 형식인 [B*T, V] 형태로 평탄화합니다.",
+        "alternatives": [
+          "logits.reshape(-1, logits.shape[-1])",
+          "logits.view(-1, logits.shape[-1])",
+          "logits.view(-1, logits.size(-1))"
+        ]
       },
       {
         "key": "B",
         "points": 1,
         "answer": "targets.flatten()",
-        "why": "각 토큰 정답을 1차원으로 만듭니다.",
-        "alternatives": []
+        "why": "2차원 정답 라벨 [B, T]를 1차원 [B*T] 텐서로 변환하여 로짓 샘플과 1:1 대응시킵니다.",
+        "alternatives": [
+          "targets.reshape(-1)",
+          "targets.view(-1)"
+        ]
       },
       {
         "key": "C",
         "points": 3,
         "answer": "nn.functional.cross_entropy(flat_logits, flat_targets, ignore_index=-100)",
-        "why": "padding 정답은 loss와 gradient에서 제외합니다.",
-        "alternatives": []
+        "why": "프롬프트 및 패딩 토큰 위치(-100)를 손실 및 역전파 계산에서 무시(ignore_index=-100)하여 유효한 응답 토큰에 대해서만 교차 엔트로피 손실을 계산합니다.",
+        "alternatives": [
+          "F.cross_entropy(flat_logits, flat_targets, ignore_index=-100)",
+          "torch.nn.functional.cross_entropy(flat_logits, flat_targets, ignore_index=-100)"
+        ]
       }
     ],
     "id": "1-1"
@@ -43,15 +53,20 @@ window.EXAM=[
         "key": "A",
         "points": 4,
         "answer": "self.A = nn.Parameter(torch.empty(in_dim, rank))",
-        "alternatives": [],
-        "why": "x의 마지막 in_dim과 A의 첫 축이 소거되고 rank를 거쳐 B의 out_dim이 남습니다. 이 구조가 큰 dense 변화량을 저랭크 곱으로 표현합니다.\n재도전: 행렬곱에서 인접한 안쪽 차원을 표시하고 다시 채우세요."
+        "alternatives": [
+          "self.A = torch.nn.Parameter(torch.empty(in_dim, rank))",
+          "self.A = nn.Parameter(torch.zeros(in_dim, rank))"
+        ],
+        "why": "LoRA 다운 프로젝션 파라미터 행렬 A는 입력 차원(in_dim)에서 저순위 차원(rank)으로 축소하는 [in_dim, rank] 크기로 선언합니다."
       },
       {
         "key": "B",
         "points": 3,
         "answer": "self.B = nn.Parameter(torch.zeros(rank, out_dim))",
-        "alternatives": [],
-        "why": "x의 마지막 in_dim과 A의 첫 축이 소거되고 rank를 거쳐 B의 out_dim이 남습니다. 이 구조가 큰 dense 변화량을 저랭크 곱으로 표현합니다.\n재도전: 행렬곱에서 인접한 안쪽 차원을 표시하고 다시 채우세요."
+        "alternatives": [
+          "self.B = torch.nn.Parameter(torch.zeros(rank, out_dim))"
+        ],
+        "why": "LoRA 업 프로젝션 행렬 B는 [rank, out_dim] 크기로 선언하되, 초기 학습 시 기존 사전학습 가중치를 그대로 보존(ΔW = B @ A = 0)하기 위해 반드시 0(zeros)으로 초기화합니다."
       }
     ]
   },
@@ -68,28 +83,31 @@ window.EXAM=[
         "points": 2,
         "answer": "model_logratios = model_chosen_logprobs - model_rejected_logprobs",
         "alternatives": [],
-        "why": "각 모델의 chosen-rejected log-ratio가 선호 강도입니다. policy 비율에서 reference 비율을 뺀 margin이 클수록 좋은데, -logsigmoid는 이를 최소화하도록 policy를 학습시킵니다.\n재도전: 먼저 두 ratio를 같은 방향으로 쓴 뒤 policy에서 reference를 빼세요."
+        "why": "학습 대상 모델(policy)에서 선호 응답(chosen)과 비선호 응답(rejected)의 로그 확률 차이를 계산합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "reference_logratios = reference_chosen_logprobs - reference_rejected_logprobs",
         "alternatives": [],
-        "why": "각 모델의 chosen-rejected log-ratio가 선호 강도입니다. policy 비율에서 reference 비율을 뺀 margin이 클수록 좋은데, -logsigmoid는 이를 최소화하도록 policy를 학습시킵니다.\n재도전: 먼저 두 ratio를 같은 방향으로 쓴 뒤 policy에서 reference를 빼세요."
+        "why": "기준 모델(reference)에서 선호 응답과 비선호 응답의 로그 확률 차이를 계산합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "logits = model_logratios - reference_logratios",
         "alternatives": [],
-        "why": "각 모델의 chosen-rejected log-ratio가 선호 강도입니다. policy 비율에서 reference 비율을 뺀 margin이 클수록 좋은데, -logsigmoid는 이를 최소화하도록 policy를 학습시킵니다.\n재도전: 먼저 두 ratio를 같은 방향으로 쓴 뒤 policy에서 reference를 빼세요."
+        "why": "학습 모델의 로그 비율에서 기준 모델의 로그 비율을 차감하여 암묵적 보상 차이 로짓을 산출합니다."
       },
       {
         "key": "D",
         "points": 2,
         "answer": "losses = -F.logsigmoid(beta * logits)",
-        "alternatives": [],
-        "why": "각 모델의 chosen-rejected log-ratio가 선호 강도입니다. policy 비율에서 reference 비율을 뺀 margin이 클수록 좋은데, -logsigmoid는 이를 최소화하도록 policy를 학습시킵니다.\n재도전: 먼저 두 ratio를 같은 방향으로 쓴 뒤 policy에서 reference를 빼세요."
+        "alternatives": [
+          "losses = -torch.logsigmoid(beta * logits)",
+          "losses = -torch.nn.functional.logsigmoid(beta * logits)"
+        ],
+        "why": "KL 계수 beta를 곱한 상대적 보상 로짓에 -log(sigmoid)를 적용하여 DPO 손실을 완성합니다."
       }
     ]
   },
@@ -105,15 +123,19 @@ window.EXAM=[
         "key": "A",
         "points": 3,
         "answer": "question = example_item['query']",
-        "alternatives": [],
-        "why": "query는 모델에 줄 질문이고 answer는 평가 기준입니다. 두 field를 분리해야 모델 응답과 ground truth를 비교할 수 있습니다.\n재도전: 입력과 평가 기준 중 어느 것이 query이고 answer인지 구분하세요."
+        "alternatives": [
+          "question = example_item[\"query\"]"
+        ],
+        "why": "평가 데이터 딕셔너리로부터 모델 입력으로 전달할 질의 문자열 필드(\"query\")를 추출합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "answer = example_item['answer']",
-        "alternatives": [],
-        "why": "query는 모델에 줄 질문이고 answer는 평가 기준입니다. 두 field를 분리해야 모델 응답과 ground truth를 비교할 수 있습니다.\n재도전: 입력과 평가 기준 중 어느 것이 query이고 answer인지 구분하세요."
+        "alternatives": [
+          "answer = example_item[\"answer\"]"
+        ],
+        "why": "생성된 응답의 정답 일치 검증 기준으로 사용할 타깃 필드(\"answer\")를 추출합니다."
       }
     ]
   },
@@ -130,14 +152,18 @@ window.EXAM=[
         "points": 4,
         "answer": "n_hallucinate = len(finance_test_dataset_ids) - n_correct_exact - n_correct - n_miss",
         "alternatives": [],
-        "why": "모든 사례는 exact, acceptable, miss, hallucinate 중 하나입니다. exact는 1점, 의미 정답은 0.5점, hallucination은 -1점이며 miss는 점수 0입니다.\n재도전: 전체=네 범주 합을 먼저 쓰고 점수 가중치를 적용하세요."
+        "why": "전체 평가 샘플 수에서 정확 일치, 의미 일치, 미답변(miss) 건수를 차감하여 모델의 환각(hallucination) 건수를 산출합니다."
       },
       {
         "key": "B",
         "points": 3,
         "answer": "CRAG_score = n_correct_exact + 0.5 * n_correct - n_hallucinate",
-        "alternatives": [],
-        "why": "모든 사례는 exact, acceptable, miss, hallucinate 중 하나입니다. exact는 1점, 의미 정답은 0.5점, hallucination은 -1점이며 miss는 점수 0입니다.\n재도전: 전체=네 범주 합을 먼저 쓰고 점수 가중치를 적용하세요."
+        "alternatives": [
+          "CRAG_score = 1.0 * n_correct_exact + 0.5 * n_correct - n_hallucinate",
+          "CRAG_score = n_correct_exact + 0.5 * n_correct - 1.0 * n_hallucinate",
+          "CRAG_score = n_correct_exact + 0.5 * n_correct - 1 * n_hallucinate"
+        ],
+        "why": "완전 일치(+1.0), 의미적 일치(+0.5), 환각(-1.0) 가중치를 적용하여 CRAG 총점을 합산합니다."
       }
     ]
   },
@@ -154,35 +180,35 @@ window.EXAM=[
         "points": 2,
         "answer": "if is_finance:",
         "alternatives": [],
-        "why": "두 검색을 수행한 뒤 is_finance가 True면 구조화 KG 근거를 목록으로, 아니면 웹 chunks를 선택합니다. 이후 생성 코드는 분기 밖에서 한 번만 실행합니다.\n재도전: 각 분기가 동일 타입 list를 만드는지와 분기 밖에서 한 번만 생성하는지 검산하세요."
+        "why": "금융 도메인 질문인지 여부를 불리언 플래그로 분기합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "combined_results = [kg_results]",
         "alternatives": [],
-        "why": "두 검색을 수행한 뒤 is_finance가 True면 구조화 KG 근거를 목록으로, 아니면 웹 chunks를 선택합니다. 이후 생성 코드는 분기 밖에서 한 번만 실행합니다.\n재도전: 각 분기가 동일 타입 list를 만드는지와 분기 밖에서 한 번만 생성하는지 검산하세요."
+        "why": "금융 질문인 경우 지식 그래프(Knowledge Graph)의 단일 사실 문자열을 리스트로 감싸 컨텍스트를 구성합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "else:",
         "alternatives": [],
-        "why": "두 검색을 수행한 뒤 is_finance가 True면 구조화 KG 근거를 목록으로, 아니면 웹 chunks를 선택합니다. 이후 생성 코드는 분기 밖에서 한 번만 실행합니다.\n재도전: 각 분기가 동일 타입 list를 만드는지와 분기 밖에서 한 번만 생성하는지 검산하세요."
+        "why": "일반 질문인 경우의 분기입니다."
       },
       {
         "key": "D",
         "points": 1,
         "answer": "combined_results = retrieved_results",
         "alternatives": [],
-        "why": "두 검색을 수행한 뒤 is_finance가 True면 구조화 KG 근거를 목록으로, 아니면 웹 chunks를 선택합니다. 이후 생성 코드는 분기 밖에서 한 번만 실행합니다.\n재도전: 각 분기가 동일 타입 list를 만드는지와 분기 밖에서 한 번만 생성하는지 검산하세요."
+        "why": "일반 질문인 경우 웹 검색 엔진으로부터 가져온 텍스트 청크 리스트를 그대로 선택합니다."
       },
       {
         "key": "E",
         "points": 1,
         "answer": "answer = self.reader.generate_response(query, combined_results)",
         "alternatives": [],
-        "why": "두 검색을 수행한 뒤 is_finance가 True면 구조화 KG 근거를 목록으로, 아니면 웹 chunks를 선택합니다. 이후 생성 코드는 분기 밖에서 한 번만 실행합니다.\n재도전: 각 분기가 동일 타입 list를 만드는지와 분기 밖에서 한 번만 생성하는지 검산하세요."
+        "why": "질의와 취합된 근거 리스트를 Reader 모델에 전달하여 최종 답변 문자열을 생성합니다."
       }
     ]
   },
@@ -199,28 +225,31 @@ window.EXAM=[
         "points": 2,
         "answer": "pos_item_indices = train_edge_index[1, indices] - num_users",
         "alternatives": [],
-        "why": "edge_index의 item은 통합 node 번호이므로 item_features용 0 기반 index로 되돌립니다. negative는 [0,num_movies)에서 batch_size개를 뽑아 같은 shape의 비교 embedding을 만듭니다.\n재도전: offset 제거 전 index로 item_features를 조회하면 왜 범위를 벗어날 수 있는지 설명하세요."
+        "why": "edge_index의 아이템 노드 번호에 포함된 유저 오프셋(num_users)을 차감하여 순수 아이템 0 기반 인덱스로 환원합니다."
       },
       {
         "key": "B",
         "points": 1,
         "answer": "neg_item_indices = torch.randint(0, num_movies, (batch_size,), device=device)",
-        "alternatives": [],
-        "why": "edge_index의 item은 통합 node 번호이므로 item_features용 0 기반 index로 되돌립니다. negative는 [0,num_movies)에서 batch_size개를 뽑아 같은 shape의 비교 embedding을 만듭니다.\n재도전: offset 제거 전 index로 item_features를 조회하면 왜 범위를 벗어날 수 있는지 설명하세요."
+        "alternatives": [
+          "neg_item_indices = torch.randint(low=0, high=num_movies, size=(batch_size,), device=device)",
+          "neg_item_indices = torch.randint(0, num_movies, [batch_size], device=device)"
+        ],
+        "why": "전체 영화 아이템 수 범위 [0, num_movies)에서 배치 크기만큼의 부정 아이템 인덱스를 균일 무작위 샘플링합니다."
       },
       {
         "key": "C",
         "points": 1,
         "answer": "pos_emb = item_features[pos_item_indices]",
         "alternatives": [],
-        "why": "edge_index의 item은 통합 node 번호이므로 item_features용 0 기반 index로 되돌립니다. negative는 [0,num_movies)에서 batch_size개를 뽑아 같은 shape의 비교 embedding을 만듭니다.\n재도전: offset 제거 전 index로 item_features를 조회하면 왜 범위를 벗어날 수 있는지 설명하세요."
+        "why": "긍정 아이템 인덱스를 사용하여 아이템 특징 행렬에서 실제 상호작용 아이템 임베딩을 추출합니다."
       },
       {
         "key": "D",
         "points": 1,
         "answer": "neg_emb = item_features[neg_item_indices]",
         "alternatives": [],
-        "why": "edge_index의 item은 통합 node 번호이므로 item_features용 0 기반 index로 되돌립니다. negative는 [0,num_movies)에서 batch_size개를 뽑아 같은 shape의 비교 embedding을 만듭니다.\n재도전: offset 제거 전 index로 item_features를 조회하면 왜 범위를 벗어날 수 있는지 설명하세요."
+        "why": "부정 아이템 인덱스를 사용하여 아이템 특징 행렬에서 대조 학습용 부정 아이템 임베딩을 추출합니다."
       }
     ]
   },
@@ -236,22 +265,29 @@ window.EXAM=[
         "key": "A",
         "points": 3,
         "answer": "final_features = torch.concat(layer_outputs,dim=-1)",
-        "alternatives": [],
-        "why": "같은 node의 hop별 표현을 길게 붙이므로 마지막 feature 축 dim=-1을 사용합니다. node 배열은 user가 먼저이므로 self.num_users를 경계로 자릅니다.\n재도전: dim=0을 쓰면 어떤 축 크기가 잘못 커지는지 확인하세요."
+        "alternatives": [
+          "final_features = torch.concat(layer_outputs, dim=-1)",
+          "final_features = torch.cat(layer_outputs, dim=-1)",
+          "final_features = torch.cat(layer_outputs, -1)",
+          "final_features = torch.concat(layer_outputs, -1)"
+        ],
+        "why": "각 레이어의 노드 임베딩 출력 리스트를 마지막 특징 차원(dim=-1)을 따라 연결하여 다중 홉(multi-hop) 표현을 만듭니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "user_features = final_features[:self.num_users]",
-        "alternatives": [],
-        "why": "같은 node의 hop별 표현을 길게 붙이므로 마지막 feature 축 dim=-1을 사용합니다. node 배열은 user가 먼저이므로 self.num_users를 경계로 자릅니다.\n재도전: dim=0을 쓰면 어떤 축 크기가 잘못 커지는지 확인하세요."
+        "alternatives": [
+          "user_features = final_features[0:self.num_users]"
+        ],
+        "why": "통합 노드 행렬의 앞쪽 영역([:self.num_users])을 슬라이싱하여 유저 노드들의 최종 특징 임베딩을 분리합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "item_features = final_features[self.num_users:]",
         "alternatives": [],
-        "why": "같은 node의 hop별 표현을 길게 붙이므로 마지막 feature 축 dim=-1을 사용합니다. node 배열은 user가 먼저이므로 self.num_users를 경계로 자릅니다.\n재도전: dim=0을 쓰면 어떤 축 크기가 잘못 커지는지 확인하세요."
+        "why": "통합 노드 행렬의 뒤쪽 영역([self.num_users:])을 슬라이싱하여 아이템 노드들의 최종 특징 임베딩을 분리합니다."
       }
     ]
   },
@@ -268,28 +304,30 @@ window.EXAM=[
         "points": 2,
         "answer": "loss = model.bpr_loss(u_emb, pos_emb, neg_emb)",
         "alternatives": [],
-        "why": "모델의 bpr_loss로 scalar를 만든 뒤 이전 gradient를 지우고 backward로 새 gradient를 계산해 optimizer가 파라미터를 갱신합니다.\n재도전: zero_grad, backward, step을 각각 왜 필요한지 한 문장씩 말하세요."
+        "why": "유저, 긍정 아이템, 부정 아이템 임베딩을 bpr_loss 함수에 전달하여 베이지안 개인화 랭킹 손실 스칼라를 계산합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "optimizer.zero_grad()",
-        "alternatives": [],
-        "why": "모델의 bpr_loss로 scalar를 만든 뒤 이전 gradient를 지우고 backward로 새 gradient를 계산해 optimizer가 파라미터를 갱신합니다.\n재도전: zero_grad, backward, step을 각각 왜 필요한지 한 문장씩 말하세요."
+        "alternatives": [
+          "optimizer.zero_grad(set_to_none=True)"
+        ],
+        "why": "이전 배치에서 계산된 가중치 파라미터의 gradient를 0으로 초기화합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "loss.backward()",
         "alternatives": [],
-        "why": "모델의 bpr_loss로 scalar를 만든 뒤 이전 gradient를 지우고 backward로 새 gradient를 계산해 optimizer가 파라미터를 갱신합니다.\n재도전: zero_grad, backward, step을 각각 왜 필요한지 한 문장씩 말하세요."
+        "why": "손실값으로부터 모델 파라미터에 대한 기울기를 역전파합니다."
       },
       {
         "key": "D",
         "points": 2,
         "answer": "optimizer.step()",
         "alternatives": [],
-        "why": "모델의 bpr_loss로 scalar를 만든 뒤 이전 gradient를 지우고 backward로 새 gradient를 계산해 optimizer가 파라미터를 갱신합니다.\n재도전: zero_grad, backward, step을 각각 왜 필요한지 한 문장씩 말하세요."
+        "why": "옵티마이저를 통해 모델 파라미터 가중치를 갱신합니다."
       }
     ]
   },
@@ -305,15 +343,20 @@ window.EXAM=[
         "key": "A",
         "points": 3,
         "answer": "x = x[:, 0] if self.pool == \"cls\" else x.mean(dim=1)",
-        "alternatives": [],
-        "why": "CLS pooling은 index 0, mean pooling은 token 축 dim=1을 제거합니다. 둘 다 [B,D]가 되어 mlp_head에서 [B,C] logits로 바뀝니다.\n재도전: mean(dim=-1)을 쓰면 head 입력 shape가 왜 틀리는지 설명하세요."
+        "alternatives": [
+          "x = x[:, 0] if self.pool == 'cls' else x.mean(dim=1)",
+          "x = x[:, 0] if self.pool == \"cls\" else x.mean(1)",
+          "x = x[:, 0] if self.pool == 'cls' else x.mean(1)",
+          "x = x[:, 0] if self.pool == \"cls\" else torch.mean(x, dim=1)"
+        ],
+        "why": "ViT에서 pool 모드가 \"cls\"인 경우 첫 번째 CLS 토큰([:, 0])을 취하고, 그렇지 않으면 패치 토큰 축(dim=1)의 평균(GAP)을 계산하여 [B, D] 표현을 만듭니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "return self.mlp_head(x)",
         "alternatives": [],
-        "why": "CLS pooling은 index 0, mean pooling은 token 축 dim=1을 제거합니다. 둘 다 [B,D]가 되어 mlp_head에서 [B,C] logits로 바뀝니다.\n재도전: mean(dim=-1)을 쓰면 head 입력 shape가 왜 틀리는지 설명하세요."
+        "why": "풀링된 특징 벡터를 MLP 헤드에 통과시켜 클래스 수에 대응하는 로짓 [B, C]를 출력합니다."
       }
     ]
   },
@@ -329,22 +372,30 @@ window.EXAM=[
         "key": "A",
         "points": 3,
         "answer": "cm[int(t), int(p)] += 1",
-        "alternatives": [],
-        "why": "대각선은 정답과 예측이 같은 개수이고 각 행 합은 해당 실제 class 수입니다. 0개 class의 나눗셈을 막기 위해 분모를 최소 1로 clamp합니다.\n재도전: 행·열을 반대로 누적하면 어떤 metric 해석이 바뀌는지 설명하세요."
+        "alternatives": [
+          "cm[int(t)][int(p)] += 1",
+          "cm[t.long(), p.long()] += 1",
+          "cm[t.item(), p.item()] += 1"
+        ],
+        "why": "실제 클래스 t와 예측 클래스 p의 교차 위치 빈도를 1 증가시켜 혼동 행렬(Confusion Matrix) 원소를 누적합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "per_class_acc = cm.diagonal().float() / torch.clamp(cm.sum(dim=1).float(), min=1.0)",
-        "alternatives": [],
-        "why": "대각선은 정답과 예측이 같은 개수이고 각 행 합은 해당 실제 class 수입니다. 0개 class의 나눗셈을 막기 위해 분모를 최소 1로 clamp합니다.\n재도전: 행·열을 반대로 누적하면 어떤 metric 해석이 바뀌는지 설명하세요."
+        "alternatives": [
+          "per_class_acc = cm.diagonal().float() / torch.clamp(cm.sum(1).float(), min=1.0)",
+          "per_class_acc = cm.diag().float() / torch.clamp(cm.sum(dim=1).float(), min=1.0)",
+          "per_class_acc = cm.diagonal() / torch.clamp(cm.sum(dim=1), min=1.0).float()"
+        ],
+        "why": "대각선 원소(정답 수)를 각 행의 합(실제 클래스 총 샘플 수)으로 나누되, 0으로 나누기를 방지하기 위해 분모를 최소 1.0으로 clamp하여 클래스별 정확도를 구합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "return cm, per_class_acc",
         "alternatives": [],
-        "why": "대각선은 정답과 예측이 같은 개수이고 각 행 합은 해당 실제 class 수입니다. 0개 class의 나눗셈을 막기 위해 분모를 최소 1로 clamp합니다.\n재도전: 행·열을 반대로 누적하면 어떤 metric 해석이 바뀌는지 설명하세요."
+        "why": "계산된 혼동 행렬과 클래스별 정확도 텐서를 튜플로 반환합니다."
       }
     ]
   },
@@ -360,36 +411,38 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "logits = model(images)",
-        "alternatives": [],
-        "why": "forward와 loss는 autocast 안에서 계산합니다. scaler가 loss를 확대해 backward하고 optimizer step의 안전성을 확인한 뒤 다음 batch를 위해 scale을 조절합니다.\n재도전: 일반 FP32 학습이라면 마지막 세 줄을 어떤 두 줄로 바꾸는지 작성하세요."
+        "alternatives": [
+          "logits = model.forward(images)"
+        ],
+        "why": "자동 혼합 정밀도(autocast) 컨텍스트 내에서 모델 순전파를 실행하여 FP16/BF16 가속 로짓을 산출합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "loss = criterion(logits, labels)",
         "alternatives": [],
-        "why": "forward와 loss는 autocast 안에서 계산합니다. scaler가 loss를 확대해 backward하고 optimizer step의 안전성을 확인한 뒤 다음 batch를 위해 scale을 조절합니다.\n재도전: 일반 FP32 학습이라면 마지막 세 줄을 어떤 두 줄로 바꾸는지 작성하세요."
+        "why": "autocast 내부에서 정답 레이블과 비교하여 손실을 계산합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "scaler.scale(loss).backward()",
         "alternatives": [],
-        "why": "forward와 loss는 autocast 안에서 계산합니다. scaler가 loss를 확대해 backward하고 optimizer step의 안전성을 확인한 뒤 다음 batch를 위해 scale을 조절합니다.\n재도전: 일반 FP32 학습이라면 마지막 세 줄을 어떤 두 줄로 바꾸는지 작성하세요."
+        "why": "FP16 언더플로우를 방지하기 위해 GradScaler로 손실을 스케일업(확대)한 뒤 역전파를 수행합니다."
       },
       {
         "key": "D",
         "points": 1,
         "answer": "scaler.step(optimizer)",
         "alternatives": [],
-        "why": "forward와 loss는 autocast 안에서 계산합니다. scaler가 loss를 확대해 backward하고 optimizer step의 안전성을 확인한 뒤 다음 batch를 위해 scale을 조절합니다.\n재도전: 일반 FP32 학습이라면 마지막 세 줄을 어떤 두 줄로 바꾸는지 작성하세요."
+        "why": "scaler가 gradient를 unscale하고 inf/nan 여부를 확인한 뒤 안전할 때만 optimizer.step()을 실행합니다."
       },
       {
         "key": "E",
         "points": 1,
         "answer": "scaler.update()",
         "alternatives": [],
-        "why": "forward와 loss는 autocast 안에서 계산합니다. scaler가 loss를 확대해 backward하고 optimizer step의 안전성을 확인한 뒤 다음 batch를 위해 scale을 조절합니다.\n재도전: 일반 FP32 학습이라면 마지막 세 줄을 어떤 두 줄로 바꾸는지 작성하세요."
+        "why": "다음 iteration을 위해 스케일링 팩터의 크기를 동적으로 갱신합니다."
       }
     ]
   },
@@ -404,14 +457,17 @@ window.EXAM=[
         "key": "A",
         "points": 3,
         "answer": "input_dict[key].sqrt_()",
-        "why": "누적된 제곱 norm에서 제곱근을 취해 importance에 사용할 크기를 얻습니다.",
-        "alternatives": []
+        "why": "누적된 제곱 평균 활성화 텐서에 in-place 제곱근(sqrt_)을 적용하여 실제 L2 노름 크기로 변환합니다.",
+        "alternatives": [
+          "input_dict[key] = input_dict[key].sqrt()",
+          "input_dict[key] = torch.sqrt(input_dict[key])"
+        ]
       },
       {
         "key": "B",
         "points": 2,
         "answer": "hook.remove()",
-        "why": "calibration 이후 불필요한 수집이 계속되지 않도록 해제합니다.",
+        "why": "캘리브레이션 완료 후 등록되었던 순전파 훅(forward hook handle)을 해제하여 메모리 누수와 불필요한 연산 오버헤드를 방지합니다.",
         "alternatives": []
       }
     ],
@@ -429,36 +485,52 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "row, col = W.shape",
-        "alternatives": [],
-        "why": "Wanda는 input feature norm을 곱해 실제 activation에 민감한 column을 중요하게 보고, output row마다 같은 개수만 제거합니다.\n재도전: global magnitude와 Wanda가 서로 다르게 남길 수 있는 weight를 설명하세요."
+        "alternatives": [
+          "row, col = W.size()"
+        ],
+        "why": "가중치 행렬 W의 출력 행(row)과 입력 열(col) 크기를 추출합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "num_zeros_per_row = round(col * sparsity)",
-        "alternatives": [],
-        "why": "Wanda는 input feature norm을 곱해 실제 activation에 민감한 column을 중요하게 보고, output row마다 같은 개수만 제거합니다.\n재도전: global magnitude와 Wanda가 서로 다르게 남길 수 있는 weight를 설명하세요."
+        "alternatives": [
+          "num_zeros_per_row = int(round(col * sparsity))",
+          "num_zeros_per_row = int(col * sparsity)"
+        ],
+        "why": "각 행마다 동일하게 제거할 입력 열의 개수를 산출합니다."
       },
       {
         "key": "C",
         "points": 1,
         "answer": "importance = torch.abs(W) * input_feat[n]",
-        "alternatives": [],
-        "why": "Wanda는 input feature norm을 곱해 실제 activation에 민감한 column을 중요하게 보고, output row마다 같은 개수만 제거합니다.\n재도전: global magnitude와 Wanda가 서로 다르게 남길 수 있는 weight를 설명하세요."
+        "alternatives": [
+          "importance = W.abs() * input_feat[n]",
+          "importance = torch.abs(W) * input_feat[n].view(1, -1)"
+        ],
+        "why": "가중치 절댓값과 입력 활성화 노름의 곱으로 Wanda 중요도 행렬 [row, col]을 계산합니다."
       },
       {
         "key": "D",
         "points": 1,
         "answer": "threshold = torch.kthvalue(importance, num_zeros_per_row, dim=1)[0]",
-        "alternatives": [],
-        "why": "Wanda는 input feature norm을 곱해 실제 activation에 민감한 column을 중요하게 보고, output row마다 같은 개수만 제거합니다.\n재도전: global magnitude와 Wanda가 서로 다르게 남길 수 있는 weight를 설명하세요."
+        "alternatives": [
+          "threshold = torch.kthvalue(importance, num_zeros_per_row, dim=1).values",
+          "threshold = torch.kthvalue(importance, num_zeros_per_row, dim=-1)[0]",
+          "threshold = torch.kthvalue(importance, num_zeros_per_row, dim=-1).values"
+        ],
+        "why": "행 차원(dim=1)을 따라 각 행에서 num_zeros_per_row번째로 작은 중요도를 찾아 행별 문턱값 [row]을 구합니다."
       },
       {
         "key": "E",
         "points": 1,
         "answer": "mask = importance > threshold.reshape(row, 1)",
-        "alternatives": [],
-        "why": "Wanda는 input feature norm을 곱해 실제 activation에 민감한 column을 중요하게 보고, output row마다 같은 개수만 제거합니다.\n재도전: global magnitude와 Wanda가 서로 다르게 남길 수 있는 weight를 설명하세요."
+        "alternatives": [
+          "mask = importance > threshold.view(row, 1)",
+          "mask = importance > threshold.unsqueeze(1)",
+          "mask = importance > threshold.unsqueeze(-1)"
+        ],
+        "why": "1차원 문턱값을 [row, 1]로 확장하여 원본 중요도와 브로드캐스팅 비교함으로써 행 단위 가지치기 마스크를 생성합니다."
       }
     ]
   },
@@ -474,29 +546,40 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "outlier_mask = torch.topk(importance, int(len(importance) * 0.01))[1]",
-        "alternatives": [],
-        "why": "outlier channel은 작은 bitwidth에서 큰 오차를 만들 수 있어 양자화 전 확대하고 후에 같은 비율로 되돌립니다.\n재도전: 확대 후 되돌리지 않으면 layer 출력에 어떤 변화가 생기는지 설명하세요."
+        "alternatives": [
+          "outlier_mask = torch.topk(importance, int(len(importance) * 0.01)).indices",
+          "outlier_mask = torch.topk(importance, int(importance.numel() * 0.01))[1]",
+          "outlier_mask = torch.topk(importance, int(importance.numel() * 0.01)).indices"
+        ],
+        "why": "입력 채널 중 활성화 중요도 상위 1%에 해당하는 이상치(Outlier) 채널 인덱스를 추출합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "m.weight.data[:, outlier_mask] *= scale_factor",
-        "alternatives": [],
-        "why": "outlier channel은 작은 bitwidth에서 큰 오차를 만들 수 있어 양자화 전 확대하고 후에 같은 비율로 되돌립니다.\n재도전: 확대 후 되돌리지 않으면 layer 출력에 어떤 변화가 생기는지 설명하세요."
+        "alternatives": [
+          "m.weight.data[:, outlier_mask] = m.weight.data[:, outlier_mask] * scale_factor"
+        ],
+        "why": "이상치 채널에 해당하는 가중치 열들을 scale_factor배 확대하여 양자화 격자 해상도를 높입니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "m.weight.data = pseudo_quantize_tensor(m.weight.data, n_bit=w_bit, q_group_size=q_group_size)",
-        "alternatives": [],
-        "why": "outlier channel은 작은 bitwidth에서 큰 오차를 만들 수 있어 양자화 전 확대하고 후에 같은 비율로 되돌립니다.\n재도전: 확대 후 되돌리지 않으면 layer 출력에 어떤 변화가 생기는지 설명하세요."
+        "alternatives": [
+          "m.weight.data = pseudo_quantize_tensor(m.weight.data, w_bit, q_group_size=q_group_size)",
+          "m.weight.data = pseudo_quantize_tensor(m.weight.data, n_bit=w_bit, q_group_size=q_group_size)"
+        ],
+        "why": "확대된 가중치에 대해 지정된 비트수(w_bit)와 그룹 크기로 모의 양자화를 수행합니다."
       },
       {
         "key": "D",
         "points": 2,
         "answer": "m.weight.data[:, outlier_mask] /= scale_factor",
-        "alternatives": [],
-        "why": "outlier channel은 작은 bitwidth에서 큰 오차를 만들 수 있어 양자화 전 확대하고 후에 같은 비율로 되돌립니다.\n재도전: 확대 후 되돌리지 않으면 layer 출력에 어떤 변화가 생기는지 설명하세요."
+        "alternatives": [
+          "m.weight.data[:, outlier_mask] = m.weight.data[:, outlier_mask] / scale_factor"
+        ],
+        "why": "양자화 완료 후 확대한 비율만큼 다시 scale_factor로 나누어 수학적 크기를 복원합니다."
       }
     ]
   }

@@ -11,15 +11,20 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "idx_cond = idx[:, -context_size:]",
-        "why": "batch는 유지하고 최근 token window만 선택합니다.",
-        "alternatives": []
+        "why": "토큰 시퀀스 [B, T]가 사전 훈련된 위치 임베딩 크기(context_size)를 초과하지 않도록 가장 최근의 마지막 context_size개 토큰만 슬라이싱하여 조건부 입력으로 사용합니다.",
+        "alternatives": [
+          "idx_cond = idx[:, -context_size:, ...]"
+        ]
       },
       {
         "key": "B",
         "points": 3,
         "answer": "logits = logits[:, -1, :]",
-        "why": "마지막 시점의 다음 토큰 예측만 추출합니다.",
-        "alternatives": []
+        "why": "모델의 3차원 출력 로짓 [B, T, V]에서 가장 마지막 타임스텝(-1)의 어휘 로짓 [B, V]을 선택하여 다음 토큰 예측 확률 분포를 산출합니다.",
+        "alternatives": [
+          "logits = logits[:, -1]",
+          "logits = logits[:, -1, :].squeeze(1)"
+        ]
       }
     ],
     "id": "1-1"
@@ -36,15 +41,26 @@ window.EXAM=[
         "key": "A",
         "points": 4,
         "answer": "idx_next = torch.argmax(logits, dim=-1, keepdim=True)",
-        "alternatives": [],
-        "why": "argmax는 vocab 축의 최고 점수 ID를 고르고 keepdim=True로 [B,1]을 유지합니다. cat은 token 시간축 dim=1에 이어 붙입니다.\n재도전: 각 함수의 출력 shape을 먼저 적고 두 줄을 다시 작성하세요."
+        "alternatives": [
+          "idx_next = torch.argmax(logits, dim=1, keepdim=True)",
+          "idx_next = logits.argmax(dim=-1, keepdim=True)",
+          "idx_next = logits.argmax(dim=1, keepdim=True)",
+          "idx_next = torch.argmax(logits, -1, keepdim=True)"
+        ],
+        "why": "어휘 로짓 [B, V]에서 가장 높은 확률의 토큰을 선택하되, 텐서 결합을 위해 2차원 [B, 1] 형태를 유지(keepdim=True)합니다."
       },
       {
         "key": "B",
         "points": 3,
         "answer": "idx = torch.cat((idx, idx_next), dim=1)",
-        "alternatives": [],
-        "why": "argmax는 vocab 축의 최고 점수 ID를 고르고 keepdim=True로 [B,1]을 유지합니다. cat은 token 시간축 dim=1에 이어 붙입니다.\n재도전: 각 함수의 출력 shape을 먼저 적고 두 줄을 다시 작성하세요."
+        "alternatives": [
+          "idx = torch.cat([idx, idx_next], dim=1)",
+          "idx = torch.cat((idx, idx_next), dim=-1)",
+          "idx = torch.cat([idx, idx_next], dim=-1)",
+          "idx = torch.concat((idx, idx_next), dim=1)",
+          "idx = torch.concat([idx, idx_next], dim=1)"
+        ],
+        "why": "기존 토큰 시퀀스 [B, T]와 새로 생성된 토큰 [B, 1]을 시퀀스 축(dim=1)을 따라 이어붙여 [B, T+1]로 확장합니다."
       }
     ]
   },
@@ -60,15 +76,18 @@ window.EXAM=[
         "key": "A",
         "points": 4,
         "answer": "if indices.numel() > 1:",
-        "alternatives": [],
-        "why": "첫 pad_token_id는 모델이 문장 종료를 예측해야 하는 실제 target입니다. 그 뒤 길이 맞춤용 pad만 -100으로 바꿔 Cross Entropy에서 제외합니다.\n재도전: indices[0]과 indices[1:]의 의미를 구분하세요."
+        "alternatives": [
+          "if len(indices) > 1:",
+          "if indices.size(0) > 1:"
+        ],
+        "why": "패딩 토큰 인덱스가 2개 이상일 때(첫 EOS 뒤에 실제 패딩이 존재할 때)만 슬라이싱을 적용하기 위해 개수를 확인합니다."
       },
       {
         "key": "B",
         "points": 4,
         "answer": "targets[indices[1:]] = ignore_index",
         "alternatives": [],
-        "why": "첫 pad_token_id는 모델이 문장 종료를 예측해야 하는 실제 target입니다. 그 뒤 길이 맞춤용 pad만 -100으로 바꿔 Cross Entropy에서 제외합니다.\n재도전: indices[0]과 indices[1:]의 의미를 구분하세요."
+        "why": "첫 번째 패딩 위치(EOS)는 모델의 생성 종료 학습을 위해 유지하고, 두 번째 이후 위치(indices[1:])만 손실 계산에서 무시되는 ignore_index(-100)로 치환합니다."
       }
     ]
   },
@@ -85,21 +104,21 @@ window.EXAM=[
         "points": 2,
         "answer": "mcp_client = BasicMCPClient(external_mcp_server)",
         "alternatives": [],
-        "why": "BasicMCPClient가 서버 통신을 담당하고 McpToolSpec이 도구 metadata를 LlamaIndex 형식으로 변환합니다. 목록 조회는 네트워크 작업이라 await합니다.\n재도전: Client→Spec→await 목록의 세 객체 변화를 적으세요."
+        "why": "외부 MCP(Model Context Protocol) 서버와 통신하는 기본 MCP 클라이언트를 생성합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "mcp_tool = McpToolSpec(client=mcp_client)",
         "alternatives": [],
-        "why": "BasicMCPClient가 서버 통신을 담당하고 McpToolSpec이 도구 metadata를 LlamaIndex 형식으로 변환합니다. 목록 조회는 네트워크 작업이라 await합니다.\n재도전: Client→Spec→await 목록의 세 객체 변화를 적으세요."
+        "why": "클라이언트를 감싸서 LlamaIndex 도구 명세 객체(McpToolSpec)로 초기화합니다."
       },
       {
         "key": "C",
         "points": 1,
         "answer": "tools = await mcp_tool.to_tool_list_async()",
         "alternatives": [],
-        "why": "BasicMCPClient가 서버 통신을 담당하고 McpToolSpec이 도구 metadata를 LlamaIndex 형식으로 변환합니다. 목록 조회는 네트워크 작업이라 await합니다.\n재도전: Client→Spec→await 목록의 세 객체 변화를 적으세요."
+        "why": "원격 MCP 서버에 비동기 RPC를 보내 제공되는 도구 목록을 FunctionTool 리스트로 가져옵니다."
       }
     ]
   },
@@ -115,15 +134,17 @@ window.EXAM=[
         "key": "A",
         "points": 4,
         "answer": "self.agent = FunctionAgent(\n    tools=tools,\n    llm=self.llm,\n    system_prompt=SYSTEM_PROMPT,\n)",
-        "alternatives": [],
-        "why": "FunctionAgent는 사용 가능한 tools와 판단할 LLM, tool 사용 규칙을 받습니다. Context(self.agent)는 이후 run에서 대화와 workflow 상태를 유지합니다.\n재도전: Agent 구성 요소와 Context가 감싸는 대상이 같은 Agent인지 확인하세요."
+        "alternatives": [
+          "self.agent = FunctionAgent(tools=tools, llm=self.llm, system_prompt=SYSTEM_PROMPT,)"
+        ],
+        "why": "제공된 MCP 도구 리스트, LLM, 그리고 시스템 프롬프트를 바인딩하여 도구 호출 에이전트를 초기화합니다."
       },
       {
         "key": "B",
         "points": 3,
         "answer": "self.agent_context = Context(self.agent)",
         "alternatives": [],
-        "why": "FunctionAgent는 사용 가능한 tools와 판단할 LLM, tool 사용 규칙을 받습니다. Context(self.agent)는 이후 run에서 대화와 workflow 상태를 유지합니다.\n재도전: Agent 구성 요소와 Context가 감싸는 대상이 같은 Agent인지 확인하세요."
+        "why": "에이전트 인스턴스로부터 실행 상태 및 대화 이력을 추적할 Context 객체를 생성하여 저장합니다."
       }
     ]
   },
@@ -140,35 +161,39 @@ window.EXAM=[
         "points": 2,
         "answer": "handler = self.agent.run(question, ctx=self.agent_context)",
         "alternatives": [],
-        "why": "run은 handler를 반환합니다. async for로 진행 이벤트를 관찰할 수 있고 모든 처리가 끝난 최종 값은 await handler로 얻습니다.\n재도전: 이벤트 관찰과 최종 결과 대기를 별개의 단계로 쓰세요."
+        "why": "질문 텍스트와 대화 컨텍스트를 에이전트에 전달하여 비동기 실행 핸들러를 획득합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "async for event in handler.stream_events():",
         "alternatives": [],
-        "why": "run은 handler를 반환합니다. async for로 진행 이벤트를 관찰할 수 있고 모든 처리가 끝난 최종 값은 await handler로 얻습니다.\n재도전: 이벤트 관찰과 최종 결과 대기를 별개의 단계로 쓰세요."
+        "why": "핸들러가 비동기적으로 발생시키는 이벤트 스트림을 순회합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "if verbose and type(event) == ToolCall:",
-        "alternatives": [],
-        "why": "run은 handler를 반환합니다. async for로 진행 이벤트를 관찰할 수 있고 모든 처리가 끝난 최종 값은 await handler로 얻습니다.\n재도전: 이벤트 관찰과 최종 결과 대기를 별개의 단계로 쓰세요."
+        "alternatives": [
+          "if verbose and isinstance(event, ToolCall):"
+        ],
+        "why": "상세 출력(verbose) 모드이고 이벤트 타입이 도구 호출(ToolCall)인지 검사합니다."
       },
       {
         "key": "D",
         "points": 1,
         "answer": "print(event.tool_name, event.tool_kwargs)",
-        "alternatives": [],
-        "why": "run은 handler를 반환합니다. async for로 진행 이벤트를 관찰할 수 있고 모든 처리가 끝난 최종 값은 await handler로 얻습니다.\n재도전: 이벤트 관찰과 최종 결과 대기를 별개의 단계로 쓰세요."
+        "alternatives": [
+          "print(event.tool_name,event.tool_kwargs)"
+        ],
+        "why": "호출되는 도구의 함수명과 전달된 키워드 인자들을 콘솔에 출력합니다."
       },
       {
         "key": "E",
         "points": 1,
         "answer": "response = await handler",
         "alternatives": [],
-        "why": "run은 handler를 반환합니다. async for로 진행 이벤트를 관찰할 수 있고 모든 처리가 끝난 최종 값은 await handler로 얻습니다.\n재도전: 이벤트 관찰과 최종 결과 대기를 별개의 단계로 쓰세요."
+        "why": "핸들러 작업의 완료를 비동기 대기(await)하여 최종 응답 객체를 수신합니다."
       }
     ]
   },
@@ -184,22 +209,24 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)",
-        "alternatives": [],
-        "why": "Encoder의 목적은 전체 시점 출력보다 과거를 요약한 hidden state를 Decoder에 전달하는 것입니다. 따라서 out을 _로 버리고 h를 반환합니다.\n재도전: RNN의 (out,h) 중 다음 Decoder 호출 인자로 쓰이는 것을 고르세요."
+        "alternatives": [
+          "self.rnn = nn.RNN(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True)"
+        ],
+        "why": "시계열 인코더용 다층 순환신경망(batch_first=True) 계층을 정의합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "_, h = self.rnn(x)",
         "alternatives": [],
-        "why": "Encoder의 목적은 전체 시점 출력보다 과거를 요약한 hidden state를 Decoder에 전달하는 것입니다. 따라서 out을 _로 버리고 h를 반환합니다.\n재도전: RNN의 (out,h) 중 다음 Decoder 호출 인자로 쓰이는 것을 고르세요."
+        "why": "입력 시계열 [B, T, input_size]을 RNN에 통과시켜 전체 시점 출력과 최종 은닉 상태 h [num_layers, B, hidden_size]를 구합니다."
       },
       {
         "key": "C",
         "points": 1,
         "answer": "return h",
         "alternatives": [],
-        "why": "Encoder의 목적은 전체 시점 출력보다 과거를 요약한 hidden state를 Decoder에 전달하는 것입니다. 따라서 out을 _로 버리고 h를 반환합니다.\n재도전: RNN의 (out,h) 중 다음 Decoder 호출 인자로 쓰이는 것을 고르세요."
+        "why": "디코더의 초기 은닉 상태로 전달할 컨텍스트 은닉 상태 h를 반환합니다."
       }
     ]
   },
@@ -215,36 +242,40 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)",
-        "alternatives": [],
-        "why": "Decoder RNN 출력 hidden_size를 다음 입력과 같은 input_size로 투영해야 autoregressive loop에서 input=out이 가능합니다. 갱신된 h도 다음 step으로 넘깁니다.\n재도전: 현재 step 값과 다음 step 상태 두 반환값을 구분하세요."
+        "alternatives": [
+          "self.rnn = nn.RNN(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True)"
+        ],
+        "why": "1개 시점의 입력을 받아 순환 갱신을 수행할 디코더 순환신경망 계층을 구성합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "self.fc = nn.Linear(hidden_size, input_size)",
-        "alternatives": [],
-        "why": "Decoder RNN 출력 hidden_size를 다음 입력과 같은 input_size로 투영해야 autoregressive loop에서 input=out이 가능합니다. 갱신된 h도 다음 step으로 넘깁니다.\n재도전: 현재 step 값과 다음 step 상태 두 반환값을 구분하세요."
+        "alternatives": [
+          "self.fc = nn.Linear(in_features=hidden_size, out_features=input_size)"
+        ],
+        "why": "은닉 상태 차원(hidden_size)을 다음 시점 입력 크기(input_size)로 변환하는 선형 계층을 구성합니다."
       },
       {
         "key": "C",
         "points": 1,
         "answer": "out, h = self.rnn(x, h)",
         "alternatives": [],
-        "why": "Decoder RNN 출력 hidden_size를 다음 입력과 같은 input_size로 투영해야 autoregressive loop에서 input=out이 가능합니다. 갱신된 h도 다음 step으로 넘깁니다.\n재도전: 현재 step 값과 다음 step 상태 두 반환값을 구분하세요."
+        "why": "1개 시점 입력 x [B, 1, input_size]와 이전 은닉 상태 h를 RNN에 전달하여 출력과 새 은닉 상태를 획득합니다."
       },
       {
         "key": "D",
         "points": 1,
         "answer": "out = self.fc(out)",
         "alternatives": [],
-        "why": "Decoder RNN 출력 hidden_size를 다음 입력과 같은 input_size로 투영해야 autoregressive loop에서 input=out이 가능합니다. 갱신된 h도 다음 step으로 넘깁니다.\n재도전: 현재 step 값과 다음 step 상태 두 반환값을 구분하세요."
+        "why": "RNN 출력을 완전연결계층에 통과시켜 다음 1시점의 예측값 out [B, 1, input_size]을 생성합니다."
       },
       {
         "key": "E",
         "points": 1,
         "answer": "return out, h",
         "alternatives": [],
-        "why": "Decoder RNN 출력 hidden_size를 다음 입력과 같은 input_size로 투영해야 autoregressive loop에서 input=out이 가능합니다. 갱신된 h도 다음 step으로 넘깁니다.\n재도전: 현재 step 값과 다음 step 상태 두 반환값을 구분하세요."
+        "why": "예측값 out과 갱신된 은닉 상태 h를 튜플로 반환합니다."
       }
     ]
   },
@@ -261,35 +292,38 @@ window.EXAM=[
         "points": 2,
         "answer": "h = self.encoder(source)",
         "alternatives": [],
-        "why": "Encoder가 만든 h와 관측된 마지막 값을 첫 Decoder 입력으로 사용합니다. 각 예측 out을 저장하고 그대로 다음 입력으로 재사용해 target_len만큼 생성합니다.\n재도전: 첫 입력, 한 step 출력 저장, 다음 입력 갱신 세 역할을 확인하세요."
+        "why": "과거 관측 데이터 source [B, T_in, F]를 인코더에 통과시켜 초기 은닉 상태 h를 획득합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "input = source[:, -1, :].unsqueeze(1)",
-        "alternatives": [],
-        "why": "Encoder가 만든 h와 관측된 마지막 값을 첫 Decoder 입력으로 사용합니다. 각 예측 out을 저장하고 그대로 다음 입력으로 재사용해 target_len만큼 생성합니다.\n재도전: 첫 입력, 한 step 출력 저장, 다음 입력 갱신 세 역할을 확인하세요."
+        "alternatives": [
+          "input = source[:, -1:].clone()",
+          "input = source[:, -1:, :]"
+        ],
+        "why": "관측 시계열의 가장 마지막 실제 시점 벡터 [B, F]에 시간 차원을 추가하여 첫 디코더 입력 [B, 1, F]을 준비합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "for t in range(target_len):",
         "alternatives": [],
-        "why": "Encoder가 만든 h와 관측된 마지막 값을 첫 Decoder 입력으로 사용합니다. 각 예측 out을 저장하고 그대로 다음 입력으로 재사용해 target_len만큼 생성합니다.\n재도전: 첫 입력, 한 step 출력 저장, 다음 입력 갱신 세 역할을 확인하세요."
+        "why": "예측 목표 길이(target_len)만큼 반복하여 자기회귀 생성을 수행합니다."
       },
       {
         "key": "D",
         "points": 1,
         "answer": "out, h = self.decoder(input, h)",
         "alternatives": [],
-        "why": "Encoder가 만든 h와 관측된 마지막 값을 첫 Decoder 입력으로 사용합니다. 각 예측 out을 저장하고 그대로 다음 입력으로 재사용해 target_len만큼 생성합니다.\n재도전: 첫 입력, 한 step 출력 저장, 다음 입력 갱신 세 역할을 확인하세요."
+        "why": "현재 시점 입력과 은닉 상태를 디코더에 통과시켜 다음 시점 예측 out과 갱신된 은닉 상태 h를 구합니다."
       },
       {
         "key": "E",
         "points": 1,
         "answer": "input = out",
         "alternatives": [],
-        "why": "Encoder가 만든 h와 관측된 마지막 값을 첫 Decoder 입력으로 사용합니다. 각 예측 out을 저장하고 그대로 다음 입력으로 재사용해 target_len만큼 생성합니다.\n재도전: 첫 입력, 한 step 출력 저장, 다음 입력 갱신 세 역할을 확인하세요."
+        "why": "현재 생성된 예측값 out을 다음 스텝의 입력으로 피드백합니다."
       }
     ]
   },
@@ -305,15 +339,18 @@ window.EXAM=[
         "key": "A",
         "points": 3,
         "answer": "self.up = nn.ConvTranspose2d(in_channels, in_channels // 2, kernel_size=2, stride=2)",
-        "alternatives": [],
-        "why": "2×2 stride2 transposed convolution이 H,W를 2배, channel을 절반으로 만듭니다. skip concat 후 총 channel은 원래 in_channels가 되어 DoubleConv 입력과 맞습니다.\n재도전: bilinear=True 분기에서 channel 감소를 어느 block이 담당하는지 확인하세요."
+        "alternatives": [
+          "self.up = nn.ConvTranspose2d(in_channels, in_channels // 2, 2, stride=2)",
+          "self.up = nn.ConvTranspose2d(in_channels, in_channels // 2, kernel_size=2, stride=2, bias=True)"
+        ],
+        "why": "피처맵 공간 해상도를 2배 확장하고 채널을 절반으로 축소하는 전치 합성곱(ConvTranspose2d) 계층을 구성합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "self.conv = DoubleConv(in_channels, out_channels)",
         "alternatives": [],
-        "why": "2×2 stride2 transposed convolution이 H,W를 2배, channel을 절반으로 만듭니다. skip concat 후 총 channel은 원래 in_channels가 되어 DoubleConv 입력과 맞습니다.\n재도전: bilinear=True 분기에서 channel 감소를 어느 block이 담당하는지 확인하세요."
+        "why": "스킵 연결로 합쳐진 2배 채널을 최종 출력 채널(out_channels)로 정제하는 DoubleConv 블록을 준비합니다."
       }
     ]
   },
@@ -330,21 +367,27 @@ window.EXAM=[
         "points": 3,
         "answer": "x1 = self.up(x1)",
         "alternatives": [],
-        "why": "upsample 후 홀수 크기 오차를 x2 기준 diff로 구합니다. pad 순서는 left,right,top,bottom이며 마지막에 같은 공간 크기의 두 feature를 dim=1로 concat합니다.\n재도전: diff_x=3이면 left와 right pad가 각각 얼마인지 계산하세요."
+        "why": "디코더 피처 x1의 공간 해상도를 2배 업샘플링합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "x1 = F.pad(x1, [diff_x // 2, diff_x - diff_x // 2, diff_y // 2, diff_y - diff_y // 2])",
-        "alternatives": [],
-        "why": "upsample 후 홀수 크기 오차를 x2 기준 diff로 구합니다. pad 순서는 left,right,top,bottom이며 마지막에 같은 공간 크기의 두 feature를 dim=1로 concat합니다.\n재도전: diff_x=3이면 left와 right pad가 각각 얼마인지 계산하세요."
+        "alternatives": [
+          "x1 = F.pad(x1, (diff_x // 2, diff_x - diff_x // 2, diff_y // 2, diff_y - diff_y // 2))"
+        ],
+        "why": "다운샘플링 절삭으로 인한 인코더 스킵 피처 x2와의 해상도 불일치를 보정하기 위해 상하좌우 패딩을 적용합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "x = torch.cat([x2, x1], dim=1)",
-        "alternatives": [],
-        "why": "upsample 후 홀수 크기 오차를 x2 기준 diff로 구합니다. pad 순서는 left,right,top,bottom이며 마지막에 같은 공간 크기의 두 feature를 dim=1로 concat합니다.\n재도전: diff_x=3이면 left와 right pad가 각각 얼마인지 계산하세요."
+        "alternatives": [
+          "x = torch.cat((x2, x1), dim=1)",
+          "x = torch.concat([x2, x1], dim=1)",
+          "x = torch.concat((x2, x1), dim=1)"
+        ],
+        "why": "공간 크기가 일치된 인코더 스킵 피처 x2와 업샘플링 피처 x1을 채널 차원(dim=1)으로 이어붙입니다."
       }
     ]
   },
@@ -361,35 +404,35 @@ window.EXAM=[
         "points": 2,
         "answer": "x = self.up1(x5, x4)",
         "alternatives": [],
-        "why": "각 Up은 현재 decoder feature와 같은 scale의 encoder feature를 받습니다. 마지막 x1까지 결합한 [B,64,H,W]를 1×1 head가 [B,n_classes,H,W]로 투영합니다.\n재도전: up2가 x2가 아니라 x3을 받는 이유를 spatial scale로 설명하세요."
+        "why": "보틀넥 x5와 최하단 인코더 스킵 피처 x4를 첫 번째 업샘플링 계층에 통과시켜 결합합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "x = self.up2(x, x3)",
         "alternatives": [],
-        "why": "각 Up은 현재 decoder feature와 같은 scale의 encoder feature를 받습니다. 마지막 x1까지 결합한 [B,64,H,W]를 1×1 head가 [B,n_classes,H,W]로 투영합니다.\n재도전: up2가 x2가 아니라 x3을 받는 이유를 spatial scale로 설명하세요."
+        "why": "이전 단계 디코더 피처와 x3 스킵 피처를 두 번째 업샘플링 블록에서 결합합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "x = self.up3(x, x2)",
         "alternatives": [],
-        "why": "각 Up은 현재 decoder feature와 같은 scale의 encoder feature를 받습니다. 마지막 x1까지 결합한 [B,64,H,W]를 1×1 head가 [B,n_classes,H,W]로 투영합니다.\n재도전: up2가 x2가 아니라 x3을 받는 이유를 spatial scale로 설명하세요."
+        "why": "세 번째 업샘플링 블록을 거쳐 x2 피처와 결합합니다."
       },
       {
         "key": "D",
         "points": 1,
         "answer": "x = self.up4(x, x1)",
         "alternatives": [],
-        "why": "각 Up은 현재 decoder feature와 같은 scale의 encoder feature를 받습니다. 마지막 x1까지 결합한 [B,64,H,W]를 1×1 head가 [B,n_classes,H,W]로 투영합니다.\n재도전: up2가 x2가 아니라 x3을 받는 이유를 spatial scale로 설명하세요."
+        "why": "최상단 원본 해상도 스킵 피처 x1과 마지막 업샘플링 결합을 수행합니다."
       },
       {
         "key": "E",
         "points": 1,
         "answer": "logits = self.outc(x)",
         "alternatives": [],
-        "why": "각 Up은 현재 decoder feature와 같은 scale의 encoder feature를 받습니다. 마지막 x1까지 결합한 [B,64,H,W]를 1×1 head가 [B,n_classes,H,W]로 투영합니다.\n재도전: up2가 x2가 아니라 x3을 받는 이유를 spatial scale로 설명하세요."
+        "why": "1x1 합성곱(self.outc)을 통해 최종 세그멘테이션 클래스 수 채널의 로짓 맵 [B, C, H, W]을 출력합니다."
       }
     ]
   },
@@ -404,22 +447,25 @@ window.EXAM=[
         "key": "A",
         "points": 1,
         "answer": "teacher.eval()",
-        "why": "dropout·batch normalization을 평가 동작으로 바꿉니다. eval만으로 gradient가 꺼지지는 않습니다.",
+        "why": "교사 모델을 평가 모드로 전환하여 드롭아웃 및 배치 정규화 이동 통계를 동결합니다.",
         "alternatives": []
       },
       {
         "key": "B",
         "points": 1,
         "answer": "student.train()",
-        "why": "Student 학습 모드입니다.",
+        "why": "지식을 전수받을 학생 모델을 학습 모드로 설정합니다.",
         "alternatives": []
       },
       {
         "key": "C",
         "points": 3,
         "answer": "optimizer = optim.Adam(student.parameters(), lr=learning_rate)",
-        "why": "Teacher parameter를 optimizer에 넣지 않습니다.",
-        "alternatives": []
+        "why": "교사 모델 가중치는 고정하고 오직 학생 모델 파라미터(student.parameters())만을 최적화 대상에 등록합니다.",
+        "alternatives": [
+          "optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)",
+          "optimizer = optim.Adam(params=student.parameters(), lr=learning_rate)"
+        ]
       }
     ],
     "id": "5-1"
@@ -436,29 +482,33 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "with torch.no_grad():",
-        "alternatives": [],
-        "why": "feature 값 자체를 맞추려면 같은 shape의 Student regressor output과 Teacher feature map에 MSE를 적용합니다.\n재도전: feature map shape가 다르면 왜 MSE가 실패하는지 설명하세요."
+        "alternatives": [
+          "with torch.inference_mode():"
+        ],
+        "why": "교사 모델의 특징 맵 추출 시 불필요한 gradient 그래프 생성을 방지하기 위해 no_grad 컨텍스트를 적용합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "_, teacher_feature_map = teacher(inputs)",
         "alternatives": [],
-        "why": "feature 값 자체를 맞추려면 같은 shape의 Student regressor output과 Teacher feature map에 MSE를 적용합니다.\n재도전: feature map shape가 다르면 왜 MSE가 실패하는지 설명하세요."
+        "why": "교사 모델을 순전파하여 중간 은닉 특징 맵(teacher_feature_map)을 추출합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "student_logits, regressor_feature_map = student(inputs)",
         "alternatives": [],
-        "why": "feature 값 자체를 맞추려면 같은 shape의 Student regressor output과 Teacher feature map에 MSE를 적용합니다.\n재도전: feature map shape가 다르면 왜 MSE가 실패하는지 설명하세요."
+        "why": "학생 모델을 순전파하여 학생의 로짓과 매핑된 특징 맵을 동시에 추출합니다."
       },
       {
         "key": "D",
         "points": 1,
         "answer": "hidden_rep_loss = mse_loss(regressor_feature_map, teacher_feature_map)",
-        "alternatives": [],
-        "why": "feature 값 자체를 맞추려면 같은 shape의 Student regressor output과 Teacher feature map에 MSE를 적용합니다.\n재도전: feature map shape가 다르면 왜 MSE가 실패하는지 설명하세요."
+        "alternatives": [
+          "hidden_rep_loss = mse_loss(input=regressor_feature_map, target=teacher_feature_map)"
+        ],
+        "why": "학생과 교사의 중간 특징 맵 간 평균 제곱 오차(MSE)를 계산하여 중간 계층 증류 손실을 구합니다."
       }
     ]
   },
@@ -474,29 +524,34 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "with torch.no_grad():",
-        "alternatives": [],
-        "why": "CosineEmbeddingLoss에서 target +1은 두 vector 방향의 cosine similarity를 높이는 목표입니다. Teacher hidden은 fixed target이고 Student hidden만 gradient를 받습니다.\n재도전: cosine loss와 MSE loss가 각각 feature의 무엇을 맞추는지 비교하세요."
+        "alternatives": [
+          "with torch.inference_mode():"
+        ],
+        "why": "교사 모델의 은닉 표현 추출 시 연산 그래프 생성과 메모리 낭비를 방지합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "_, teacher_hidden_representation = teacher(inputs)",
         "alternatives": [],
-        "why": "CosineEmbeddingLoss에서 target +1은 두 vector 방향의 cosine similarity를 높이는 목표입니다. Teacher hidden은 fixed target이고 Student hidden만 gradient를 받습니다.\n재도전: cosine loss와 MSE loss가 각각 feature의 무엇을 맞추는지 비교하세요."
+        "why": "교사 모델로부터 최종 은닉 벡터 표현 [B, D]를 추출합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "student_logits, student_hidden_representation = student(inputs)",
         "alternatives": [],
-        "why": "CosineEmbeddingLoss에서 target +1은 두 vector 방향의 cosine similarity를 높이는 목표입니다. Teacher hidden은 fixed target이고 Student hidden만 gradient를 받습니다.\n재도전: cosine loss와 MSE loss가 각각 feature의 무엇을 맞추는지 비교하세요."
+        "why": "학생 모델로부터 학생의 로짓과 은닉 벡터 표현 [B, D]를 추출합니다."
       },
       {
         "key": "D",
         "points": 2,
         "answer": "hidden_rep_loss = cosine_loss(student_hidden_representation, teacher_hidden_representation,\n                              target=torch.ones(inputs.size(0)).cuda())",
-        "alternatives": [],
-        "why": "CosineEmbeddingLoss에서 target +1은 두 vector 방향의 cosine similarity를 높이는 목표입니다. Teacher hidden은 fixed target이고 Student hidden만 gradient를 받습니다.\n재도전: cosine loss와 MSE loss가 각각 feature의 무엇을 맞추는지 비교하세요."
+        "alternatives": [
+          "hidden_rep_loss = cosine_loss(student_hidden_representation, teacher_hidden_representation, target=torch.ones(inputs.size(0), device=inputs.device))",
+          "hidden_rep_loss = cosine_loss(student_hidden_representation, teacher_hidden_representation, torch.ones(inputs.size(0)).cuda())"
+        ],
+        "why": "CosineEmbeddingLoss에서 두 벡터가 동일 방향(코사인 유사도 1)을 지향하도록 target을 1로 설정한 텐서를 넘겨 손실을 계산합니다."
       }
     ]
   }

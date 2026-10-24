@@ -99,14 +99,28 @@ print(input_embeddings.shape)`,
       "중급 · Dataset 조회 규약",
       "DataLoader가 idx를 전달했을 때 같은 인덱스의 입력 Tensor와 정답 Tensor를 한 쌍으로 반환하시오.",
       "return self.input_ids[idx], self.target_ids[idx]",
-      "ch2-cell-2"
+      "ch2-cell-2",
+      [
+        "return self.input_ids[idx], self.target_ids[idx]",
+        "return (self.input_ids[idx], self.target_ids[idx])",
+        "self.input_ids[idx], self.target_ids[idx]",
+        "(self.input_ids[idx], self.target_ids[idx])"
+      ]
     ),
     Q(
       "exam-llm02-05",
       "실전 · DataLoader 구성",
       "생성된 dataset을 받아 함수 인자로 전달된 batch_size, shuffle, drop_last, num_workers 설정을 모두 보존하는 DataLoader 생성 블록을 완성하시오.",
       "dataloader = DataLoader(\n        dataset,\n        batch_size=batch_size,\n        shuffle=shuffle,\n        drop_last=drop_last,\n        num_workers=num_workers\n    )",
-      "ch2-cell-3"
+      "ch2-cell-3",
+      [
+        "dataloader = DataLoader(\n        dataset,\n        batch_size=batch_size,\n        shuffle=shuffle,\n        drop_last=drop_last,\n        num_workers=num_workers\n    )",
+        "dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=num_workers)",
+        "DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=num_workers)",
+        "DataLoader(\n        dataset,\n        batch_size=batch_size,\n        shuffle=shuffle,\n        drop_last=drop_last,\n        num_workers=num_workers\n    )",
+        "dataset = GPTDatasetV1(txt, tokenizer, max_length, stride)",
+        "GPTDatasetV1(txt, tokenizer, max_length, stride)"
+      ]
     ),
     Q(
       "exam-llm02-06",
@@ -361,7 +375,7 @@ selected_log_probs = torch.gather(
     dim=-1,
     index=labels.unsqueeze(-1)
 ).squeeze(-1)`,explanation:"시점 t의 logits는 t+1 label을 예측하므로 labels[:,1:]와 logits[:,:-1]을 맞춥니다. gather는 각 위치의 전체 vocab log-prob 중 실제 label ID 한 값을 선택합니다.",tensor_flow:"logits [B,T,V]→[B,T-1,V]; labels [B,T]→[B,T-1]; gather→[B,T-1]",code_signal:"'labels 한 칸 앞/마지막 logits 제외'와 raw logits가 아닌 log_probs라는 힌트가 세 빈칸을 결정합니다.",retry:"작은 [A,B,C]→[B,C] 예제로 예측과 label 위치를 맞춘 뒤 다시 쓰세요."}),
-    m({id:"exam-llm07d-03",topic:"DPO Loss",difficulty:"3 · 선호도 계산",sourceId:"exam-dpo-loss",prompt:"policy와 reference의 chosen-rejected log-ratio 차이에 beta를 적용한 DPO loss 네 줄을 완성하세요.",answer:cells["exam-dpo-loss"],problem_context:`# TODO: policy와 reference 모두 chosen - rejected 순서
+    m({id:"exam-llm07d-03",topic:"DPO Loss",difficulty:"3 · 선호도 계산",sourceId:"exam-dpo-loss",prompt:"policy와 reference의 chosen-rejected log-ratio 차이에 beta를 적용한 DPO loss 네 줄을 완성하세요.",answer:cells["exam-dpo-loss"],accepted_answers:[cells["exam-dpo-loss"], cells["exam-dpo-loss"].replace('F.logsigmoid', 'torch.nn.functional.logsigmoid'), cells["exam-dpo-loss"].replace('beta * logits', 'beta*logits')],problem_context:`# TODO: policy와 reference 모두 chosen - rejected 순서
 model_logratios = ???? - model_rejected_logprobs
 reference_logratios = ???? - reference_rejected_logprobs
 # TODO: policy 개선량
@@ -564,7 +578,7 @@ loss = torch.nn.functional.cross_entropy(logits, target_batch)`,
 for param in model.parameters():
     param.requires_grad = ????`,
       explanation:"requires_grad=False이면 backward가 해당 Parameter의 gradient를 만들지 않습니다. eval()은 dropout 동작을 바꿀 뿐 Parameter를 동결하지 않습니다.",tensor_flow:"Parameter.requires_grad True→False; Tensor shape 변화 없음",code_signal:"주석의 '고정'과 '학습에서 제외'가 False를 의미합니다.",retry:"모델 모드와 gradient 허용 설정의 차이를 확인하세요."}),
-    make({id:"exam-llm06a-04",topic:"분류 Head 교체",difficulty:"2 · Layer 구성",sourceId:"exam-ch6a-head",prompt:"embedding 표현을 햄/스팸 두 class logits로 바꾸는 완성된 out_head 코드를 작성하세요.",answer:cells["exam-ch6a-head"],accepted_answers:[cells["exam-ch6a-head"],`model.out_head = torch.nn.Linear(in_features=BASE_CONFIG["emb_dim"], out_features=num_classes)`],
+    make({id:"exam-llm06a-04",topic:"분류 Head 교체",difficulty:"2 · Layer 구성",sourceId:"exam-ch6a-head",prompt:"embedding 표현을 햄/스팸 두 class logits로 바꾸는 완성된 out_head 코드를 작성하세요.",answer:cells["exam-ch6a-head"],accepted_answers:[cells["exam-ch6a-head"],`model.out_head = torch.nn.Linear(in_features=BASE_CONFIG["emb_dim"], out_features=num_classes)`,`model.out_head = torch.nn.Linear(BASE_CONFIG["emb_dim"], num_classes)`,`model.out_head = torch.nn.Linear(BASE_CONFIG["emb_dim"], 2)`,`model.out_head = nn.Linear(in_features=BASE_CONFIG["emb_dim"], out_features=num_classes)`,`model.out_head = nn.Linear(BASE_CONFIG["emb_dim"], num_classes)`,`model.out_head = nn.Linear(BASE_CONFIG["emb_dim"], 2)`],
       problem_context:`num_classes = 2
 # TODO: 기존 vocab 출력층을 이진 분류층으로 교체하세요.
 model.out_head = torch.nn.Linear(
@@ -855,6 +869,7 @@ return self.???? * norm_x + self.????`,
       explanation:"scale(γ)은 크기를, shift(β)는 위치를 학습해 정규화 뒤에도 필요한 표현 분포를 복원합니다.",tensor_flow:"[B,T,D] * [D] + [D] → [B,T,D]",code_signal:"ones로 초기화된 것은 곱셈 scale, zeros는 덧셈 shift입니다.",retry:"초깃값 1과 0이 각각 어떤 연산의 항등원인지 확인하세요."}),
     make({id:"exam-llm04-03",topic:"FeedForward 구성",difficulty:"3 · 연결 구현",sourceId:"exam-ch4-ffn",
       prompt:"D→4D→D 구조와 GELU를 포함하는 완성된 self.layers 블록을 작성하세요.",answer:cells["exam-ch4-ffn"],
+      accepted_answers:[cells["exam-ch4-ffn"], cells["exam-ch4-ffn"].replace(/nn\./g, 'torch.nn.'), cells["exam-ch4-ffn"].replace(/4 \* cfg/g, 'cfg["emb_dim"] * 4'), cells["exam-ch4-ffn"].replace(/nn\./g, 'torch.nn.').replace(/4 \* cfg/g, 'cfg["emb_dim"] * 4')],
       problem_context:`# TODO: FeedForward의 확장 배수와 활성화 함수 클래스를 채우세요.
 self.layers = nn.Sequential(
     nn.Linear(cfg["emb_dim"], ???? * cfg["emb_dim"]),
@@ -880,6 +895,7 @@ x = x + shortcut`,
       explanation:"첫 residual 가지는 토큰 간 정보를 모으는 self.att, 두 번째는 토큰별 표현을 변환하는 self.ff입니다.",tensor_flow:"두 가지 모두 [B,T,D] → [B,T,D], 따라서 shortcut과 덧셈 가능",code_signal:"norm1은 att 앞, norm2는 ff 앞이라는 __init__ 구성과 주석이 대응됩니다.",retry:"두 residual 가지의 역할을 '관계 수집/개별 변환'으로 구분하세요."}),
     make({id:"exam-llm04-05",topic:"GPT 입출력 레이어",difficulty:"3 · 모델 구성",sourceId:"exam-ch4-model-layers",
       prompt:"token·position Embedding과 vocab logits 출력 head의 완성된 세 줄을 작성하세요.",answer:cells["exam-ch4-model-layers"],
+      accepted_answers:[cells["exam-ch4-model-layers"], cells["exam-ch4-model-layers"].replace(/nn\./g, 'torch.nn.')],
       problem_context:`# 토큰 임베딩: token ID → D
 self.tok_emb = nn.Embedding(cfg["????"], cfg["emb_dim"])
 # 위치 임베딩: position ID → D

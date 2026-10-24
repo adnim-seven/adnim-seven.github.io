@@ -1,4 +1,4 @@
-:root{--navy:#11294a;--blue:#306eff;--paper:#fff;--canvas:#f3f6fb;--line:#d9e2ee;--ink:#152238;--muted:#647187;--green:#087a4d;--red:#bd3948;--amber:#a96908}
+:root{--navy:#102849;--blue:#2563eb;--paper:#fff;--canvas:#f3f6fb;--line:#dae2ee;--ink:#17243a;--muted:#647187;--green:#147b4d;--red:#bd3948;--amber:#a96908}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{margin:0;padding-bottom:92px;background:var(--canvas);color:var(--ink);font-family:"Malgun Gothic","Segoe UI",sans-serif;line-height:1.55}

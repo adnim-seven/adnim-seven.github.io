@@ -1,5 +1,98 @@
 (() => {
   "use strict";
+  const expandVisionAccepted = (window.expandVisionAccepted = function(d) {
+    const ans = d.answer || "";
+    const pctx = d.problem_context || "";
+    const set = new Set();
+    const add = (s) => {
+      if (s && typeof s === 'string') {
+        const trimmed = s.trim();
+        if (trimmed) set.add(trimmed);
+      }
+    };
+
+    add(ans);
+    if (d.accepted_answers && Array.isArray(d.accepted_answers)) {
+      d.accepted_answers.forEach(add);
+    }
+
+    // 1. Trailing comma on the last line
+    const lines = ans.split('\n');
+    const lastLine = lines[lines.length - 1] || "";
+    if (lastLine.endsWith(',')) {
+      add([...lines.slice(0, -1), lastLine.slice(0, -1)].join('\n'));
+    } else {
+      add(ans + ',');
+    }
+
+    // 2. RHS-only extraction if problem_context has var = ????
+    if (pctx) {
+      const ctxLines = pctx.split('\n');
+      const rhsLines = [];
+      let canBeRhs = true;
+      for (let i = 0; i < lines.length; i++) {
+        const aLine = lines[i].trim();
+        const match = aLine.match(/^([a-zA-Z0-9_.]+)\s*=\s*(.+)$/);
+        if (match) {
+          const varName = match[1];
+          const rhs = match[2];
+          const found = ctxLines.some(cl => cl.includes(varName) && cl.includes('????'));
+          if (found) {
+            rhsLines.push(rhs);
+          } else {
+            canBeRhs = false;
+            break;
+          }
+        } else {
+          canBeRhs = false;
+          break;
+        }
+      }
+      if (canBeRhs && rhsLines.length === lines.length) {
+        add(rhsLines.join('\n'));
+        if (rhsLines[rhsLines.length - 1].endsWith(',')) {
+          add([...rhsLines.slice(0, -1), rhsLines[rhsLines.length - 1].slice(0, -1)].join('\n'));
+        }
+      }
+    }
+
+    // 3. Permutations / variations for each item in set
+    const currentItems = Array.from(set);
+    for (const item of currentItems) {
+      if (item.includes('T.')) add(item.replace(/T\./g, 'transforms.'));
+      if (item.includes('transforms.')) add(item.replace(/transforms\./g, 'T.'));
+      if (item.includes('F.')) {
+        add(item.replace(/F\./g, 'torch.nn.functional.'));
+        add(item.replace(/F\./g, 'nn.functional.'));
+      }
+      if (item.includes('torch.nn.functional.')) {
+        add(item.replace(/torch\.nn\.functional\./g, 'F.'));
+        add(item.replace(/torch\.nn\.functional\./g, 'nn.functional.'));
+      }
+      if (item.includes('nn.functional.')) {
+        add(item.replace(/nn\.functional\./g, 'F.'));
+        add(item.replace(/nn\.functional\./g, 'torch.nn.functional.'));
+      }
+      if (item.includes('torch.einsum')) add(item.replace(/torch\.einsum/g, 'einsum'));
+      if (item.includes('einsum(') && !item.includes('torch.einsum(')) add(item.replace(/\beinsum\(/g, 'torch.einsum('));
+      if (item.includes('torch.cat([')) add(item.replace(/torch\.cat\(\[([^\]]+)\]/g, 'torch.cat(($1)'));
+      if (item.includes('torch.cat((')) add(item.replace(/torch\.cat\(\(([^)]+)\)/g, 'torch.cat([$1]'));
+      if (item.includes('dim=1')) add(item.replace(/dim=1/g, '1'));
+      if (item.includes('kernel_size=3, stride=1, padding=1, bias=False')) {
+        add(item.replace('kernel_size=3, stride=1, padding=1, bias=False', '3, 1, 1, bias=False'));
+        add(item.replace('kernel_size=3, stride=1, padding=1, bias=False', '3, stride=1, padding=1, bias=False'));
+      }
+      if (item.includes('x * std + mean')) {
+        add(item.replace('x * std + mean', 'mean + x * std'));
+        add(item.replace('x * std + mean', 'x*std + mean'));
+      }
+      if (item.includes('.ne(target)')) add(item.replace('.ne(target)', ' != target'));
+      if (item.includes('!= target')) add(item.replace('!= target', '.ne(target)'));
+    }
+
+    return Array.from(set);
+  });
+
   const course=window.LLM_COURSE;
   const chapter=course.chapters.find(c=>c.file==="01_ResNet18_CIFAR10.ipynb");
   if(!chapter)return;
@@ -40,7 +133,7 @@
   };
   Object.entries(cells).forEach(([id,source])=>course.cells[id]={source});
   const base={subject:"Vision",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:true,source_type:"원본 노트북 전체 코드 기반 예상문제"};
-  const make=d=>({...base,accepted_answers:[d.answer],...d});
+  const make=d=>({...base,...d,accepted_answers:window.expandVisionAccepted(d)});
   chapter.subjective=[
     make({id:"exam-v01-01",topic:"Train Transform",difficulty:"1 · 기출 확장",sourceId:"exam-v1-transform",prompt:"CIFAR-10 학습 이미지에 32×32 random crop·좌우 반전을 적용한 뒤 float CHW Tensor와 채널 정규화로 바꾸는 네 줄을 순서대로 작성하세요.",answer:cells["exam-v1-transform"],problem_context:`train_tfms = T.Compose([\n    ????\n    ????\n    ????\n    ????\n])`,explanation:"기하학적 증강은 PIL 상태에서 먼저 수행하고 ToTensor로 [C,H,W] float를 만든 뒤 Normalize가 채널별 표준화를 적용합니다.",tensor_flow:"PIL → augmented PIL → [3,32,32] float 0~1 → normalized float",code_signal:"train transform이라는 이름과 주석의 crop·flip·PIL→Tensor·정규화가 정확한 순서를 줍니다.",retry:"test_tfms에서 빠져야 하는 두 줄만 골라 보세요."}),
     make({id:"exam-v01-02",topic:"DataLoader 분리",difficulty:"2 · 데이터 구성",sourceId:"exam-v1-loader",prompt:"train은 매 epoch 순서를 섞고 test는 고정하며, 두 dataset을 같은 batch·worker·pinned memory 설정으로 로드하는 두 줄을 작성하세요.",answer:cells["exam-v1-loader"],problem_context:`train_loader = DataLoader(????)\ntest_loader  = DataLoader(????)`,explanation:"학습 순서는 섞어 mini-batch 편향을 줄이지만 평가는 재현 가능한 순서로 유지합니다. pin_memory는 GPU 전송 최적화에 사용됩니다.",tensor_flow:"Dataset samples → batches [B,3,32,32] and labels [B]",code_signal:"변수명 train/test와 바로 위 batch_size·num_workers가 모든 인자를 제공합니다.",retry:"두 줄에서 달라지는 dataset과 shuffle 값만 표시하세요."}),
@@ -83,7 +176,7 @@
   };
   Object.entries(cells).forEach(([id,source])=>course.cells[id]={source});
   const base={subject:"Vision",chapterId:"vision-review-07",chapterNumber:"FINAL",chapterTitle:"Vision 종합 구현 모의고사",file:"VISION_FINAL_REVIEW",occurrence:0,isSourceBlank:true,source_type:"6개 Vision 노트북 혼합 전이 문제"};
-  const make=d=>({...base,accepted_answers:[d.answer],...d});
+  const make=d=>({...base,...d,accepted_answers:window.expandVisionAccepted(d)});
   const Q=(id,topic,difficulty,sourceId,prompt,problem_context,explanation,tensor_flow,code_signal,retry)=>make({id,topic,difficulty,sourceId,prompt,answer:cells[sourceId],problem_context,explanation,tensor_flow,code_signal,retry});
   const subjective=[
     Q("exam-vision-review-01","입력 파이프라인","2 · Completion","exam-vision-review-transform","32×32 학습 이미지에 공간 증강을 먼저 적용한 뒤 Tensor 변환과 채널 정규화를 수행하는 Compose 내부 네 줄을 작성하세요.",`train_tfms = T.Compose([\n    ????,\n    ????,\n    ????,\n    ????\n])`,`공간 증강은 PIL 이미지 단계에서 수행하고 ToTensor가 [C,H,W] float Tensor로 바꾼 뒤 Normalize가 채널별 분포를 조정합니다.`,`PIL [H,W,C] → augmented PIL → float [C,32,32] → normalized Tensor`,`학습 transform, CIFAR-10 크기, mean/std 상수가 연산과 순서를 결정합니다.`,`평가 transform에서는 어떤 두 줄만 남겨야 하는지 작성하세요.`),
@@ -125,7 +218,7 @@
     "exam-v6-size":`generator = torch.manual_seed(10)\nimg = pipe(prompt, width=w, height=h, generator=generator).images[0]`,
     "exam-v6-memory":`gc.collect()\ntorch.cuda.empty_cache()`
   };Object.entries(cells).forEach(([id,source])=>course.cells[id]={source});
-  const base={subject:"Vision",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:true,source_type:"원본 노트북 Pipeline 코드 기반 예상문제"},make=d=>({...base,accepted_answers:[d.answer],...d}),M=(id,topic,difficulty,sid,prompt,ctx,exp,flow,signal,retry)=>make({id,topic,difficulty,sourceId:sid,prompt,answer:cells[sid],problem_context:ctx,explanation:exp,tensor_flow:flow,code_signal:signal,retry});
+  const base={subject:"Vision",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:true,source_type:"원본 노트북 Pipeline 코드 기반 예상문제"},make=d=>({...base,...d,accepted_answers:window.expandVisionAccepted(d)}),M=(id,topic,difficulty,sid,prompt,ctx,exp,flow,signal,retry)=>make({id,topic,difficulty,sourceId:sid,prompt,answer:cells[sid],problem_context:ctx,explanation:exp,tensor_flow:flow,code_signal:signal,retry});
   chapter.subjective=[
     M("exam-v06-01","Pipeline Load","2 · 구성","exam-v6-load","기존 model_id를 사용해 pretrained Stable Diffusion을 float16으로 불러오고 CUDA로 이동하는 네 줄을 작성하세요.",`????\n    ????\n    ????\n????`,`from_pretrained가 모든 component와 weight를 구성하고 float16으로 메모리를 줄인 뒤 pipeline 전체를 GPU로 이동합니다.`,`model_id → pipeline components/FP16 CUDA`,`import된 StableDiffusionPipeline, torch.float16, GPU 추론 문맥이 호출을 결정합니다.`,`CPU만 있는 환경에서는 dtype·device를 어떻게 바꿀지 말하세요.`),
     M("exam-v06-02","Pipeline Output","1 · 기본 호출","exam-v6-generate","prompt와 이미 정의된 CFG 값을 pipeline에 전달해 첫 번째 생성 이미지를 꺼내는 한 줄을 작성하세요.",`????`,`pipeline은 StableDiffusionPipelineOutput을 반환하므로 images list의 첫 요소를 선택합니다.`,`prompt str → output.images list → PIL image`,`변수 image 단수와 이어지는 화면 표시가 [0] 선택을 알려줍니다.`,`images[0]을 생략했을 때 반환 타입 차이를 확인하세요.`),
@@ -167,7 +260,7 @@
     "exam-v5-loop":`img = torch.randn(shape, device=device)\nfor i in tqdm(reversed(range(0, timesteps)), desc="sampling loop time step", total=timesteps):\n    img = p_sample(model, img, torch.full((b,), i, device=device, dtype=torch.long), i)\n    imgs.append(img.cpu().numpy())\nreturn imgs`,
     "exam-v5-train":`optimizer.zero_grad()\nt = torch.randint(0, timesteps, (b,), device=device, dtype=torch.long)\nloss = p_losses(model, batch_imgs, t, loss_type="huber")\nloss.backward()\noptimizer.step()`
   };Object.entries(cells).forEach(([id,source])=>course.cells[id]={source});
-  const base={subject:"Vision",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:true,source_type:"원본 노트북 전체 코드 기반 예상문제"},make=d=>({...base,accepted_answers:[d.answer],...d});
+  const base={subject:"Vision",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:true,source_type:"원본 노트북 전체 코드 기반 예상문제"},make=d=>({...base,...d,accepted_answers:window.expandVisionAccepted(d)});
   const meta=(id,topic,difficulty,sourceId,prompt,problem_context,explanation,tensor_flow,code_signal,retry)=>make({id,topic,difficulty,sourceId,prompt,answer:cells[sourceId],problem_context,explanation,tensor_flow,code_signal,retry});
   chapter.subjective=[
     meta("exam-v05-01","Sinusoidal Time Embedding","2 · Conditioning","exam-v5-time","timestep [B]를 서로 다른 주기의 sin/cos vector [B,dim]로 만드는 핵심 네 줄을 작성하세요.",`half_dim = self.dim // 2\n????\n????\n????\n????\nreturn emb`,"서로 지수적으로 다른 frequency를 만들고 time과 outer-product처럼 broadcast한 뒤 sin·cos를 feature 축에 연결합니다.","time [B] × freq [D/2] → args [B,D/2] → embedding [B,D]","half_dim과 주석 (batch,1)*(1,half_dim)이 reshape와 concat 축을 알려줍니다.","time[:,None]과 freq[None,:] 각각의 shape를 먼저 쓰세요."),
@@ -211,7 +304,7 @@
     "exam-v4-train":`optimizer.zero_grad()\nlogits = model(imgs)\nloss = criterion(logits, masks)\nloss.backward()\noptimizer.step()`,
     "exam-v4-predict":`logits = model(imgs)\nprobs = torch.sigmoid(logits)\npreds = (probs > 0.5).float()`
   };Object.entries(cells).forEach(([id,source])=>course.cells[id]={source});
-  const base={subject:"Vision",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:true,source_type:"원본 노트북 전체 코드 기반 예상문제"},make=d=>({...base,accepted_answers:[d.answer],...d});
+  const base={subject:"Vision",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:true,source_type:"원본 노트북 전체 코드 기반 예상문제"},make=d=>({...base,...d,accepted_answers:window.expandVisionAccepted(d)});
   chapter.subjective=[
     make({id:"exam-v04-01",topic:"Synthetic Mask",difficulty:"2 · Dataset",sourceId:"exam-v4-mask",prompt:"원 중심까지 거리로 binary 원 mask를 만들고 Gaussian noise를 더한 입력 이미지를 0~1로 제한하는 네 줄을 작성하세요.",answer:cells["exam-v4-mask"],problem_context:`y, x = np.ogrid[:self.image_size, :self.image_size]\n????\n????\n????\n????`,explanation:"각 pixel과 중심의 Euclidean distance가 radius 이하면 foreground 1입니다. 입력은 mask에 noise를 더하되 유효 이미지 범위로 clip합니다.",tensor_flow:"coordinate grids [H,1],[1,W] → distance [H,W] → mask/image [H,W]",code_signal:"center_x,center_y,radius와 입력 설명 noise+mask가 수식을 결정합니다.",retry:"sqrt 없이 squared distance와 radius**2를 비교하는 동등한 식을 쓰세요."}),
     make({id:"exam-v04-02",topic:"Channel Tensor",difficulty:"1 · Shape",sourceId:"exam-v4-tensor",prompt:"2D NumPy image와 mask 앞에 channel 축을 추가하고 복사 없이 PyTorch Tensor로 변환하는 네 줄을 작성하세요.",answer:cells["exam-v4-tensor"],problem_context:`# (H,W) -> (1,H,W)\n????\n????\n????\n????`,explanation:"Conv2d sample은 C,H,W를 요구하므로 axis=0을 추가합니다. from_numpy는 같은 dtype float32를 유지하며 메모리를 공유합니다.",tensor_flow:"two [H,W] np.float32 → two [1,H,W] torch.float32",code_signal:"주석의 목표 shape와 반환 img,mask 타입이 연산을 알려줍니다.",retry:"axis=-1을 쓰면 만들어지는 shape와 Conv2d 기대 shape를 비교하세요."}),
@@ -253,7 +346,7 @@
     "exam-v3-attnshape":`h, w = conv_features['0'].tensors.shape[-2:]\nax.imshow(dec_attn_weights[0, idx].view(h, w))\nshape = f_map.tensors.shape[-2:]\nsattn = enc_attn_weights[0].reshape(shape + shape)`,
     "exam-v3-point":`idx = (idx_o[0] // fact, idx_o[1] // fact)\nax.imshow(sattn[..., idx[0], idx[1]], cmap='cividis', interpolation='nearest')`
   };Object.entries(cells).forEach(([id,source])=>course.cells[id]={source});
-  const base={subject:"Vision",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:true,source_type:"원본 노트북 전체 코드 기반 예상문제"},make=d=>({...base,accepted_answers:[d.answer],...d});
+  const base={subject:"Vision",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:true,source_type:"원본 노트북 전체 코드 기반 예상문제"},make=d=>({...base,...d,accepted_answers:window.expandVisionAccepted(d)});
   chapter.subjective=[
     make({id:"exam-v03-01",topic:"DETR 전처리",difficulty:"1 · Pipeline",sourceId:"exam-v3-transform",prompt:"COCO pretrained backbone에 맞게 짧은 변을 800으로 조정하고 CHW Tensor·ImageNet 정규화를 적용하는 세 줄을 순서대로 작성하세요.",answer:cells["exam-v3-transform"],problem_context:`transform = T.Compose([\n    ????\n    ????\n    ????\n])`,explanation:"공간 resize를 PIL에 적용하고 Tensor 변환 뒤 pretrained backbone이 학습된 ImageNet 채널 분포로 정규화합니다.",tensor_flow:"PIL → [3,H,W] float 0~1 → normalized float",code_signal:"COCO pretrained ResNet backbone과 주석의 Resize/Normalize가 값을 정합니다.",retry:"ToTensor와 Normalize 순서를 바꾸면 안 되는 이유를 설명하세요."}),
     make({id:"exam-v03-02",topic:"Box 형식 변환",difficulty:"2 · 좌표",sourceId:"exam-v3-box",prompt:"N개 normalized (cx,cy,w,h) box를 성분별로 나누고 (xmin,ymin,xmax,ymax) Tensor로 변환하는 네 줄을 작성하세요.",answer:cells["exam-v3-box"],problem_context:`def box_cxcywh_to_xyxy(x):\n    ????\n    ????\n         ????\n    ????`,explanation:"중심에서 절반 크기를 빼면 좌상단, 더하면 우하단입니다. 각 성분 [N]을 dim=1에 stack해 [N,4]를 복원합니다.",tensor_flow:"[N,4] cxcywh → four [N] → [N,4] xyxy",code_signal:"함수명과 plot이 xmin,ymin,xmax,ymax를 요구하는 문맥이 수식을 결정합니다.",retry:"cx=0.5,w=0.2의 xmin과 xmax를 계산하세요."}),
@@ -295,7 +388,7 @@
     "exam-v2-clsmap":`cls_attn = attn_bhNN.mean(dim=1)[0, 0, 1:]\nattn_2d = cls_attn_1d.reshape(grid_h, grid_w)\nattn_up = F.interpolate(attn_t, size=(out_h, out_w), mode="bilinear", align_corners=False)[0,0]`,
     "exam-v2-wrong":`logits = model(data)\npreds = logits.argmax(dim=1)\nwrong_mask = preds.ne(target)\nwrong_data = data[wrong_mask].detach().cpu()`
   };Object.entries(cells).forEach(([id,source])=>course.cells[id]={source});
-  const base={subject:"Vision",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:true,source_type:"원본 노트북 전체 코드 기반 예상문제"},make=d=>({...base,accepted_answers:[d.answer],...d});
+  const base={subject:"Vision",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:true,source_type:"원본 노트북 전체 코드 기반 예상문제"},make=d=>({...base,...d,accepted_answers:window.expandVisionAccepted(d)});
   chapter.subjective=[
     make({id:"exam-v02-01",topic:"Patch 수·차원",difficulty:"1 · Shape",sourceId:"exam-v2-patchcalc",prompt:"image·patch 크기와 channel 수로 patch token 개수와 펼친 patch feature 차원을 계산하는 두 줄을 작성하세요.",answer:cells["exam-v2-patchcalc"],problem_context:`image_height, image_width = pair(cfg.image_size)\npatch_height, patch_width = pair(cfg.patch_size)\n????\n????`,explanation:"patch 개수는 세로·가로 grid 수의 곱이고 한 patch vector는 channel×patch 높이×너비입니다.",tensor_flow:"[B,C,H,W] → N=(H/Ph)(W/Pw), patch_dim=CPhPw",code_signal:"Rearrange의 h,w와 p1,p2,c가 두 수식에 그대로 대응합니다.",retry:"32×32 RGB, 4×4 patch일 때 N과 patch_dim을 계산하세요."}),
     make({id:"exam-v02-02",topic:"Q·K·V Head 분리",difficulty:"2 · Tensor 재배열",sourceId:"exam-v2-qkv",prompt:"token [B,N,D]를 한 번에 Q·K·V로 투영·분할하고 각각 [B,H,N,d]로 재배열하는 두 줄을 작성하세요.",answer:cells["exam-v2-qkv"],problem_context:`b, n, _, h = *x.shape, self.heads\n????\n????`,explanation:"Linear 출력의 마지막 축 3·H·d를 세 Tensor로 나눈 뒤 결합된 H·d를 head와 head_dim으로 분리합니다.",tensor_flow:"[B,N,D] → [B,N,3Hd] → 3×[B,H,N,d]",code_signal:"to_qkv의 out_features=inner_dim*3과 self.heads가 chunk 수·rearrange pattern을 결정합니다.",retry:"chunk의 dim을 1로 쓰면 어떤 축이 잘못 나뉘는지 설명하세요."}),

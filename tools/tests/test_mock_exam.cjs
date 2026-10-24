@@ -12,10 +12,42 @@ const storage = {};
 function bootExam(round) {
   const nodes = {}, events = {};
   const doc = {
-    querySelector: s => nodes[s] ||= { textContent: '', innerHTML: '', hidden: false, disabled: false, scrollIntoView() {} },
+    querySelector: s => nodes[s] ||= {
+      textContent: '',
+      innerHTML: '',
+      hidden: false,
+      disabled: false,
+      scrollIntoView() {},
+      classList: {
+        add() {},
+        remove() {},
+        toggle() {},
+        contains: () => false
+      },
+      appendChild(c) { return c; },
+      insertBefore(n) { return n; }
+    },
     querySelectorAll: () => [],
     addEventListener: (event, fn) => { (events[event] ||= []).push(fn); },
-    getElementById: id => doc.querySelector('#' + id)
+    getElementById: id => doc.querySelector('#' + id),
+    createElement: tag => ({
+      tagName: tag.toUpperCase(),
+      className: '',
+      id: '',
+      textContent: '',
+      innerHTML: '',
+      classList: {
+        add() {},
+        remove() {},
+        toggle() {},
+        contains: () => false
+      },
+      setAttribute() {},
+      appendChild(c) { return c; }
+    }),
+    body: {
+      appendChild(c) { return c; }
+    }
   };
   const c = {
     window: { scrollTo() {} },
@@ -26,6 +58,8 @@ function bootExam(round) {
     },
     confirm: () => true,
     setInterval: () => {},
+    setTimeout: (fn, ms) => { fn(); return 1; },
+    clearTimeout: () => {},
     Date,
     Blob,
     URL
@@ -67,4 +101,29 @@ for (let round = 1; round <= 5; round++) {
 // 5개 회차가 독립된 스토리지 키를 사용하는지 검증
 assert.strictEqual(Object.keys(storage).length, 5, 'Five independent storage keys verified');
 
-console.log('✓ test_mock_exam: All 5 mock exam rounds scored 100/100 and restored independently.');
+// 대체 정답(alternatives) 허용 채점 검증 (Exam 1)
+delete storage['ai-specialist-mock-1-v1'];
+const altSession = bootExam(1);
+altSession.nodes['#start'].onclick();
+const exam1 = altSession.c.window.EXAM;
+for (const q of exam1) {
+  for (const s of q.slots) {
+    const ans = (s.alternatives && s.alternatives.length > 0) ? s.alternatives[0] : s.answer;
+    for (const fn of altSession.events.input || []) {
+      fn({ target: { dataset: { slot: q.id + '-' + s.key }, value: ans } });
+    }
+  }
+}
+altSession.nodes['#submit'].onclick();
+assert.ok(altSession.nodes['#result'].innerHTML.includes('100 / 100'), 'Alternative answers achieve 100/100 full score');
+
+// 단축키 검증 (Ctrl+Enter, Ctrl+S)
+delete storage['ai-specialist-mock-1-v1'];
+const keySession = bootExam(1);
+let savedTriggered = false;
+for (const fn of keySession.events.keydown || []) {
+  fn({ ctrlKey: true, key: 's', preventDefault() { savedTriggered = true; } });
+}
+assert.strictEqual(savedTriggered, true, 'Ctrl+S shortcut triggers save handler');
+
+console.log('✓ test_mock_exam: All 5 mock exam rounds scored 100/100, alternatives verified, and restored independently.');

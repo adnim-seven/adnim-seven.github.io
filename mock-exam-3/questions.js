@@ -11,15 +11,19 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "param.requires_grad = False",
-        "why": "기존 parameter 전체를 동결합니다.",
-        "alternatives": []
+        "why": "사전학습된 모델의 모든 파라미터에 대해 requires_grad를 False로 설정하여 백본을 동결하고 gradient 계산 대상에서 제외합니다.",
+        "alternatives": [
+          "param.requires_grad_(False)"
+        ]
       },
       {
         "key": "B",
         "points": 3,
         "answer": "param.requires_grad = True",
-        "why": "그 뒤 classifier만 학습 대상으로 되돌립니다. 순서가 중요합니다.",
-        "alternatives": []
+        "why": "새로 부착한 분류 헤드(model.out_head)의 파라미터에 대해서만 requires_grad를 True로 복원하여 해당 계층만 미세조정(fine-tuning)되도록 활성화합니다.",
+        "alternatives": [
+          "param.requires_grad_(True)"
+        ]
       }
     ],
     "id": "1-1"
@@ -36,8 +40,13 @@ window.EXAM=[
         "key": "A",
         "points": 7,
         "answer": "model.out_head = torch.nn.Linear(\n    in_features=BASE_CONFIG[\"emb_dim\"], out_features=num_classes\n)",
-        "alternatives": [],
-        "why": "입력은 GPT hidden 크기 emb_dim이고 출력은 token vocabulary가 아니라 분류 label 수 num_classes입니다. 새 Linear는 기본적으로 학습 가능합니다.\n재도전: 출력 한 칸이 단어 후보인지 class 후보인지 구분하세요."
+        "alternatives": [
+          "model.out_head = nn.Linear(BASE_CONFIG[\"emb_dim\"], num_classes)",
+          "model.out_head = torch.nn.Linear(BASE_CONFIG[\"emb_dim\"], num_classes)",
+          "model.out_head = nn.Linear(in_features=BASE_CONFIG[\"emb_dim\"], out_features=num_classes)",
+          "model.out_head = nn.Linear(BASE_CONFIG['emb_dim'], num_classes)"
+        ],
+        "why": "사전학습된 기본 백본의 출력 차원(BASE_CONFIG[\"emb_dim\"])을 다운스트림 분류 클래스 수(num_classes)로 변환하는 새 선형 계층을 장착합니다."
       }
     ]
   },
@@ -53,8 +62,10 @@ window.EXAM=[
         "key": "A",
         "points": 8,
         "answer": "return self.linear(x) + self.lora(x)",
-        "alternatives": [],
-        "why": "LoRA는 기존 출력을 대체하지 않고 ΔW에 해당하는 adapter 출력을 더합니다. 두 항의 shape이 같아 원소별 합이 가능합니다.\n재도전: 기존 경로와 변화량 경로를 각각 한 항으로 적으세요."
+        "alternatives": [
+          "return self.lora(x) + self.linear(x)"
+        ],
+        "why": "동결된 원본 선형 계층의 출력 self.linear(x)와 학습 가능한 LoRA 어댑터의 출력 self.lora(x)를 원소별 덧셈으로 결합하여 반환합니다."
       }
     ]
   },
@@ -70,22 +81,30 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "soup = BeautifulSoup(html_text[\"page_result\"], features=\"lxml\")",
-        "alternatives": [],
-        "why": "page_result가 전체 HTML이고 BeautifulSoup이 구조를 분석합니다. get_text는 태그를 제거한 본문을 만들며 append로 문서 순서를 보존합니다.\n재도전: 입력 field, parser, text 추출, 저장 네 역할을 순서대로 확인하세요."
+        "alternatives": [
+          "soup = BeautifulSoup(html_text['page_result'], 'lxml')",
+          "soup = BeautifulSoup(html_text['page_result'], features='lxml')",
+          "soup = BeautifulSoup(html_text[\"page_result\"], \"html.parser\")"
+        ],
+        "why": "크롤링된 HTML 본문 문자열을 lxml 파서를 통해 파싱 가능한 BeautifulSoup DOM 구조로 변환합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "text = soup.get_text(\" \", strip=True)",
-        "alternatives": [],
-        "why": "page_result가 전체 HTML이고 BeautifulSoup이 구조를 분석합니다. get_text는 태그를 제거한 본문을 만들며 append로 문서 순서를 보존합니다.\n재도전: 입력 field, parser, text 추출, 저장 네 역할을 순서대로 확인하세요."
+        "alternatives": [
+          "text = soup.get_text(' ', strip=True)",
+          "text = soup.get_text(separator=\" \", strip=True)",
+          "text = soup.get_text(separator=' ', strip=True)"
+        ],
+        "why": "HTML 태그를 배제하고 순수 텍스트만 추출하되 단어 간 공백을 두고 앞뒤 불필요한 공백을 strip합니다."
       },
       {
         "key": "C",
         "points": 1,
         "answer": "all_documents.append(text)",
         "alternatives": [],
-        "why": "page_result가 전체 HTML이고 BeautifulSoup이 구조를 분석합니다. get_text는 태그를 제거한 본문을 만들며 append로 문서 순서를 보존합니다.\n재도전: 입력 field, parser, text 추출, 저장 네 역할을 순서대로 확인하세요."
+        "why": "정제된 순수 텍스트를 검색 대상 문서 리스트(all_documents)에 추가합니다."
       }
     ]
   },
@@ -101,22 +120,30 @@ window.EXAM=[
         "key": "A",
         "points": 3,
         "answer": "response = self.client.embeddings.create(model=embedding_model, input=texts)",
-        "alternatives": [],
-        "why": "embeddings.create는 입력마다 response.data 항목을 반환합니다. 각 item.embedding을 NumPy vector로 바꾸고 전체 목록을 [N,D] 배열로 묶습니다.\n재도전: API 호출 결과에서 목록과 개별 vector가 각각 어느 속성인지 구분하세요."
+        "alternatives": [
+          "response = self.client.embeddings.create(input=texts, model=embedding_model)"
+        ],
+        "why": "OpenAI 호환 클라이언트를 호출하여 지정된 모델로 텍스트 목록의 고밀도 임베딩을 요청합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "embeddings = [np.array(item.embedding) for item in response.data]",
-        "alternatives": [],
-        "why": "embeddings.create는 입력마다 response.data 항목을 반환합니다. 각 item.embedding을 NumPy vector로 바꾸고 전체 목록을 [N,D] 배열로 묶습니다.\n재도전: API 호출 결과에서 목록과 개별 vector가 각각 어느 속성인지 구분하세요."
+        "alternatives": [
+          "embeddings = [np.array(item.embedding, dtype=np.float32) for item in response.data]",
+          "embeddings = [item.embedding for item in response.data]"
+        ],
+        "why": "응답 데이터의 각 항목에서 임베딩 리스트(item.embedding)를 넘파이 배열(np.array)로 추출하여 모읍니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "return np.array(embeddings)",
-        "alternatives": [],
-        "why": "embeddings.create는 입력마다 response.data 항목을 반환합니다. 각 item.embedding을 NumPy vector로 바꾸고 전체 목록을 [N,D] 배열로 묶습니다.\n재도전: API 호출 결과에서 목록과 개별 vector가 각각 어느 속성인지 구분하세요."
+        "alternatives": [
+          "return np.asarray(embeddings)",
+          "return np.array(embeddings, dtype=np.float32)"
+        ],
+        "why": "추출된 개별 임베딩 리스트를 최종 [N, D] 2차원 넘파이 행렬로 결합하여 반환합니다."
       }
     ]
   },
@@ -132,22 +159,31 @@ window.EXAM=[
         "key": "A",
         "points": 3,
         "answer": "cosine_scores = np.dot(all_embeddings, query_embedding) / (\n    np.linalg.norm(all_embeddings, axis=1) * np.linalg.norm(query_embedding)\n)",
-        "alternatives": [],
-        "why": "[N,D]와 [D]의 dot은 [N] 분자를 만들고 각 chunk norm(axis=1)과 query norm으로 정규화합니다. argsort는 오름차순이므로 음수 점수를 정렬해 높은 원래 점수를 먼저 얻습니다.\n재도전: 분자, 분모, 정렬, indexing 네 단계를 따로 검산하세요."
+        "alternatives": [
+          "cosine_scores = (all_embeddings @ query_embedding) / (np.linalg.norm(all_embeddings, axis=1) * np.linalg.norm(query_embedding))",
+          "cosine_scores = np.dot(all_embeddings, query_embedding) / (np.linalg.norm(query_embedding) * np.linalg.norm(all_embeddings, axis=1))"
+        ],
+        "why": "문서 임베딩 행렬과 쿼리 벡터 간 내적을 L2 노름 곱으로 나누어 N개 문서에 대한 코사인 유사도 점수 [N]을 계산합니다."
       },
       {
         "key": "B",
         "points": 3,
         "answer": "top_k_indices = (-cosine_scores).argsort()[:topk]",
-        "alternatives": [],
-        "why": "[N,D]와 [D]의 dot은 [N] 분자를 만들고 각 chunk norm(axis=1)과 query norm으로 정규화합니다. argsort는 오름차순이므로 음수 점수를 정렬해 높은 원래 점수를 먼저 얻습니다.\n재도전: 분자, 분모, 정렬, indexing 네 단계를 따로 검산하세요."
+        "alternatives": [
+          "top_k_indices = np.argsort(-cosine_scores)[:topk]",
+          "top_k_indices = np.argsort(cosine_scores)[::-1][:topk]"
+        ],
+        "why": "코사인 점수를 음수 부호로 변환 후 argsort를 취해 점수가 가장 높은 상위 topk개의 인덱스를 추출합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "top_k_chunks = np.array(all_chunks)[top_k_indices]",
-        "alternatives": [],
-        "why": "[N,D]와 [D]의 dot은 [N] 분자를 만들고 각 chunk norm(axis=1)과 query norm으로 정규화합니다. argsort는 오름차순이므로 음수 점수를 정렬해 높은 원래 점수를 먼저 얻습니다.\n재도전: 분자, 분모, 정렬, indexing 네 단계를 따로 검산하세요."
+        "alternatives": [
+          "top_k_chunks = [all_chunks[i] for i in top_k_indices]",
+          "top_k_chunks = np.asarray(all_chunks)[top_k_indices]"
+        ],
+        "why": "추출된 상위 인덱스로 전체 청크 배열을 슬라이싱하여 가장 연관성 높은 텍스트 청크 목록을 구성합니다."
       }
     ]
   },
@@ -163,8 +199,13 @@ window.EXAM=[
         "key": "A",
         "points": 5,
         "answer": "norm = 1.0/torch.sqrt(deg[src]*deg[dst])",
-        "alternatives": [],
-        "why": "각 edge의 src와 dst degree를 곱한 뒤 제곱근의 역수를 취합니다. degree가 큰 node에서 오는 메시지를 줄여 graph 연결 수 차이를 보정합니다.\n재도전: norm의 shape가 node 수 V가 아니라 edge 수 E인 이유를 말해 보세요."
+        "alternatives": [
+          "norm = 1.0 / torch.sqrt(deg[src] * deg[dst])",
+          "norm = (deg[src] * deg[dst]).sqrt().pow(-1)",
+          "norm = 1 / torch.sqrt(deg[src] * deg[dst])",
+          "norm = 1.0 / (deg[src] * deg[dst]).sqrt()"
+        ],
+        "why": "GCN의 대칭 정규화 공식인 1 / sqrt(deg_src * deg_dst)를 계산하여 차수가 큰 노드의 메시지 과대 반영을 방지합니다."
       }
     ]
   },
@@ -180,15 +221,22 @@ window.EXAM=[
         "key": "A",
         "points": 4,
         "answer": "edge_messages_for_dst = self.W1(src_feat) + self.W2(src_feat*dst_feat)",
-        "alternatives": [],
-        "why": "목적지가 dst이므로 이웃 src_feat를 W1에 넣고, 사용자·아이템 원소곱을 W2에 넣습니다. norm은 [E,1]로 바꿔 feature별 broadcasting합니다.\n재도전: for_src 코드에서 src와 dst만 역할 교환해 다시 작성하세요."
+        "alternatives": [
+          "edge_messages_for_dst = self.W1(src_feat) + self.W2(src_feat * dst_feat)",
+          "edge_messages_for_dst = self.W2(src_feat * dst_feat) + self.W1(src_feat)"
+        ],
+        "why": "소스 노드의 자체 특징 변환 W1(e_u)과 유저-아이템 상호작용 특징 W2(e_u ⊙ e_i)를 합산하여 엣지 메시지를 생성합니다."
       },
       {
         "key": "B",
         "points": 3,
         "answer": "edge_messages_for_dst *= norm.unsqueeze(1)",
-        "alternatives": [],
-        "why": "목적지가 dst이므로 이웃 src_feat를 W1에 넣고, 사용자·아이템 원소곱을 W2에 넣습니다. norm은 [E,1]로 바꿔 feature별 broadcasting합니다.\n재도전: for_src 코드에서 src와 dst만 역할 교환해 다시 작성하세요."
+        "alternatives": [
+          "edge_messages_for_dst = edge_messages_for_dst * norm.unsqueeze(1)",
+          "edge_messages_for_dst = edge_messages_for_dst * norm.unsqueeze(-1)",
+          "edge_messages_for_dst *= norm.unsqueeze(-1)"
+        ],
+        "why": "1차원 대칭 정규화 계수 norm [E]에 차원을 추가해 [E, 1]로 만든 뒤 엣지 메시지 [E, D]에 브로드캐스팅 곱합니다."
       }
     ]
   },
@@ -204,15 +252,19 @@ window.EXAM=[
         "key": "A",
         "points": 4,
         "answer": "aggregated_messages.index_add_(0, dst, edge_messages_for_dst)",
-        "alternatives": [],
-        "why": "edge message는 destination인 dst 위치에 index_add_로 누적합니다. item node는 전체 node 배열의 user_num 이후 구간이므로 같은 slice에 W1(self)를 더합니다.\n재도전: user용 두 줄에서 src→dst, 앞 slice→뒤 slice로 바꿔 보세요."
+        "alternatives": [
+          "aggregated_messages.index_add_(dim=0, index=dst, source=edge_messages_for_dst)"
+        ],
+        "why": "index_add_를 통해 목적지 노드(dst) 인덱스 위치에 맞춰 정규화된 엣지 메시지들을 누적 합산합니다."
       },
       {
         "key": "B",
         "points": 4,
         "answer": "aggregated_messages[user_num:] += self.W1(node_features[user_num:])",
-        "alternatives": [],
-        "why": "edge message는 destination인 dst 위치에 index_add_로 누적합니다. item node는 전체 node 배열의 user_num 이후 구간이므로 같은 slice에 W1(self)를 더합니다.\n재도전: user용 두 줄에서 src→dst, 앞 slice→뒤 slice로 바꿔 보세요."
+        "alternatives": [
+          "aggregated_messages[user_num:] = aggregated_messages[user_num:] + self.W1(node_features[user_num:])"
+        ],
+        "why": "아이템 노드 영역(user_num부터 끝까지)에 아이템 자신의 기존 특징 변환값(Self-connection)을 가산합니다."
       }
     ]
   },
@@ -228,22 +280,31 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "x_c, y_c, w, h = x.unbind(1)",
-        "alternatives": [],
-        "why": "중심에서 절반 크기를 빼면 좌상단, 더하면 우하단입니다. 각 성분 [N]을 dim=1에 stack해 [N,4]를 복원합니다.\n재도전: cx=0.5,w=0.2의 xmin과 xmax를 계산하세요."
+        "alternatives": [
+          "x_c, y_c, w, h = x.unbind(dim=1)",
+          "x_c, y_c, w, h = x.unbind(-1)"
+        ],
+        "why": "바운딩 박스 텐서 [N, 4]를 1번 차원을 따라 중심x, 중심y, 너비, 높이 4개의 1차원 텐서로 분리(unbind)합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "b = [(x_c - 0.5 * w), (y_c - 0.5 * h),\n     (x_c + 0.5 * w), (y_c + 0.5 * h)]",
-        "alternatives": [],
-        "why": "중심에서 절반 크기를 빼면 좌상단, 더하면 우하단입니다. 각 성분 [N]을 dim=1에 stack해 [N,4]를 복원합니다.\n재도전: cx=0.5,w=0.2의 xmin과 xmax를 계산하세요."
+        "alternatives": [
+          "b = [x_c - 0.5 * w, y_c - 0.5 * h, x_c + 0.5 * w, y_c + 0.5 * h]",
+          "b = [(x_c - w / 2), (y_c - h / 2), (x_c + w / 2), (y_c + h / 2)]"
+        ],
+        "why": "중심과 크기 정보로부터 좌상단(x1, y1)과 우하단(x2, y2) 모서리 좌표를 계산하여 4원소 리스트로 묶습니다."
       },
       {
         "key": "C",
         "points": 1,
         "answer": "return torch.stack(b, dim=1)",
-        "alternatives": [],
-        "why": "중심에서 절반 크기를 빼면 좌상단, 더하면 우하단입니다. 각 성분 [N]을 dim=1에 stack해 [N,4]를 복원합니다.\n재도전: cx=0.5,w=0.2의 xmin과 xmax를 계산하세요."
+        "alternatives": [
+          "return torch.stack(b, dim=-1)",
+          "return torch.stack(b, 1)"
+        ],
+        "why": "4개의 1차원 좌표 텐서 리스트를 1번 차원을 따라 스택하여 [N, 4] xyxy 바운딩 박스 텐서로 반환합니다."
       }
     ]
   },
@@ -260,28 +321,32 @@ window.EXAM=[
         "points": 2,
         "answer": "img_w, img_h = size",
         "alternatives": [],
-        "why": "x 좌표에는 image width, y 좌표에는 height를 곱합니다. [4] scale Tensor가 [N,4] box 전체에 broadcasting됩니다.\n재도전: W와 H를 바꾸면 비정사각형 이미지에서 어떤 왜곡이 생기는지 설명하세요."
+        "why": "원본 이미지 크기 튜플 (너비, 높이)를 스칼라 변수로 언패킹합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "b = box_cxcywh_to_xyxy(out_bbox)",
         "alternatives": [],
-        "why": "x 좌표에는 image width, y 좌표에는 height를 곱합니다. [4] scale Tensor가 [N,4] box 전체에 broadcasting됩니다.\n재도전: W와 H를 바꾸면 비정사각형 이미지에서 어떤 왜곡이 생기는지 설명하세요."
+        "why": "정규화된 cxcywh 포맷 박스를 xyxy 모서리 좌표 포맷으로 변환합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "b = b * torch.tensor([img_w, img_h, img_w, img_h], dtype=torch.float32)",
-        "alternatives": [],
-        "why": "x 좌표에는 image width, y 좌표에는 height를 곱합니다. [4] scale Tensor가 [N,4] box 전체에 broadcasting됩니다.\n재도전: W와 H를 바꾸면 비정사각형 이미지에서 어떤 왜곡이 생기는지 설명하세요."
+        "alternatives": [
+          "b = b * torch.tensor([img_w, img_h, img_w, img_h], dtype=torch.float)",
+          "b = b * torch.tensor([img_w, img_h, img_w, img_h], device=b.device, dtype=torch.float32)",
+          "b = b * torch.tensor([img_w, img_h, img_w, img_h], dtype=torch.float32, device=b.device)"
+        ],
+        "why": "정규화 좌표 [x1, y1, x2, y2]에 [너비, 높이, 너비, 높이] 스케일을 곱하여 원본 이미지의 실제 픽셀 좌표계로 복원합니다."
       },
       {
         "key": "D",
         "points": 1,
         "answer": "return b",
         "alternatives": [],
-        "why": "x 좌표에는 image width, y 좌표에는 height를 곱합니다. [4] scale Tensor가 [N,4] box 전체에 broadcasting됩니다.\n재도전: W와 H를 바꾸면 비정사각형 이미지에서 어떤 왜곡이 생기는지 설명하세요."
+        "why": "스케일링이 완료된 실제 픽셀 단위 바운딩 박스 텐서를 반환합니다."
       }
     ]
   },
@@ -297,29 +362,41 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "outputs = model(img)",
-        "alternatives": [],
-        "why": "softmax는 class 축 마지막에 적용하고 batch 0, 모든 query, 마지막 class 제외를 선택합니다. query별 max value로 keep mask를 만들고 동일 mask를 box에 적용합니다.\n재도전: [:-1]을 query 축에 적용하면 어떤 오류가 생기는지 확인하세요."
+        "alternatives": [
+          "outputs = model.forward(img)"
+        ],
+        "why": "전처리된 이미지 텐서를 DETR 모델에 통과시켜 클래스 로짓과 예측 박스 딕셔너리를 출력합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "probas = outputs['pred_logits'].softmax(-1)[0, :, :-1]",
-        "alternatives": [],
-        "why": "softmax는 class 축 마지막에 적용하고 batch 0, 모든 query, 마지막 class 제외를 선택합니다. query별 max value로 keep mask를 만들고 동일 mask를 box에 적용합니다.\n재도전: [:-1]을 query 축에 적용하면 어떤 오류가 생기는지 확인하세요."
+        "alternatives": [
+          "probas = outputs[\"pred_logits\"].softmax(-1)[0, :, :-1]",
+          "probas = outputs['pred_logits'].softmax(dim=-1)[0, :, :-1]",
+          "probas = outputs[\"pred_logits\"].softmax(dim=-1)[0, :, :-1]"
+        ],
+        "why": "클래스 로짓에 softmax를 적용하고 첫 배치([0])에서 마지막 no-object 배경 클래스를 제외([..., :-1])한 유효 객체 확률을 추출합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "keep = probas.max(-1).values > 0.9",
-        "alternatives": [],
-        "why": "softmax는 class 축 마지막에 적용하고 batch 0, 모든 query, 마지막 class 제외를 선택합니다. query별 max value로 keep mask를 만들고 동일 mask를 box에 적용합니다.\n재도전: [:-1]을 query 축에 적용하면 어떤 오류가 생기는지 확인하세요."
+        "alternatives": [
+          "keep = probas.max(dim=-1).values > 0.9",
+          "keep = probas.max(-1)[0] > 0.9",
+          "keep = probas.max(dim=-1)[0] > 0.9"
+        ],
+        "why": "최대 객체 확률이 0.9 신뢰도 임계값을 초과하는 유효 탐지 쿼리를 필터링하는 불리언 마스크를 생성합니다."
       },
       {
         "key": "D",
         "points": 2,
         "answer": "bboxes_scaled = rescale_bboxes(outputs['pred_boxes'][0, keep], im.size)",
-        "alternatives": [],
-        "why": "softmax는 class 축 마지막에 적용하고 batch 0, 모든 query, 마지막 class 제외를 선택합니다. query별 max value로 keep mask를 만들고 동일 mask를 box에 적용합니다.\n재도전: [:-1]을 query 축에 적용하면 어떤 오류가 생기는지 확인하세요."
+        "alternatives": [
+          "bboxes_scaled = rescale_bboxes(outputs[\"pred_boxes\"][0, keep], im.size)"
+        ],
+        "why": "선별된 쿼리의 예측 박스들을 원본 이미지 해상도(im.size)에 맞춰 실제 픽셀 좌표로 스케일 복원합니다."
       }
     ]
   },
@@ -334,15 +411,20 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "if name in self.masks:",
-        "why": "mask가 있는 parameter만 선택합니다.",
-        "alternatives": []
+        "why": "파라미터 이름(name)이 미리 계산된 가지치기 마스크 딕셔너리(self.masks)에 등록되어 있는지 검사합니다.",
+        "alternatives": [
+          "if name in self.masks.keys():"
+        ]
       },
       {
         "key": "B",
         "points": 3,
         "answer": "param.mul_(self.masks[name])",
-        "why": "갱신으로 되살아난 pruned 위치를 0으로 되돌립니다.",
-        "alternatives": []
+        "why": "optimizer 가중치 갱신 후 다시 0이 아니게 된 위치를 기존 이진 마스크와 in-place 곱하여 지속적으로 0으로 유지합니다.",
+        "alternatives": [
+          "param.data.mul_(self.masks[name])",
+          "param *= self.masks[name]"
+        ]
       }
     ],
     "id": "5-1"
@@ -359,29 +441,40 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "importance = weight.abs().sum(dim=(2, 3), keepdim=True)",
-        "alternatives": [],
-        "why": "kernel pruning은 spatial KH·KW를 합쳐 [OC,IC,1,1] importance를 만들고, channel pruning과 달리 input channel 축은 남겨 개별 kernel을 비교합니다.\n재도전: input channel 전체를 제거하려면 sum dim을 어떻게 바꿔야 하는지 작성하세요."
+        "alternatives": [
+          "importance = weight.abs().sum(dim=[2, 3], keepdim=True)",
+          "importance = torch.abs(weight).sum(dim=(2, 3), keepdim=True)",
+          "importance = weight.abs().sum((2, 3), keepdim=True)"
+        ],
+        "why": "가중치 [OC, IC, KH, KW]에서 공간 축인 2, 3번 차원을 절댓값 합산하여 커널 단위 중요도 [OC, IC, 1, 1]를 구합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "threshold = torch.kthvalue(importance.flatten(), num_pruned_kernels)[0]",
-        "alternatives": [],
-        "why": "kernel pruning은 spatial KH·KW를 합쳐 [OC,IC,1,1] importance를 만들고, channel pruning과 달리 input channel 축은 남겨 개별 kernel을 비교합니다.\n재도전: input channel 전체를 제거하려면 sum dim을 어떻게 바꿔야 하는지 작성하세요."
+        "alternatives": [
+          "threshold = torch.kthvalue(importance.flatten(), num_pruned_kernels).values",
+          "threshold = torch.kthvalue(importance.view(-1), num_pruned_kernels)[0]"
+        ],
+        "why": "전체 커널 중요도 중 num_pruned_kernels번째로 작은 값을 추출하여 가지치기 경계 문턱값으로 설정합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "mask = importance > threshold",
-        "alternatives": [],
-        "why": "kernel pruning은 spatial KH·KW를 합쳐 [OC,IC,1,1] importance를 만들고, channel pruning과 달리 input channel 축은 남겨 개별 kernel을 비교합니다.\n재도전: input channel 전체를 제거하려면 sum dim을 어떻게 바꿔야 하는지 작성하세요."
+        "alternatives": [
+          "mask = threshold < importance"
+        ],
+        "why": "문턱값보다 큰 유의미한 커널 위치만 True로 설정하는 이진 마스크를 생성합니다."
       },
       {
         "key": "D",
         "points": 1,
         "answer": "mask = mask.expand_as(weight)",
-        "alternatives": [],
-        "why": "kernel pruning은 spatial KH·KW를 합쳐 [OC,IC,1,1] importance를 만들고, channel pruning과 달리 input channel 축은 남겨 개별 kernel을 비교합니다.\n재도전: input channel 전체를 제거하려면 sum dim을 어떻게 바꿔야 하는지 작성하세요."
+        "alternatives": [
+          "mask = mask.expand(weight.shape)"
+        ],
+        "why": "[OC, IC, 1, 1] 마스크를 원본 가중치 크기인 [OC, IC, KH, KW]로 공간 확장합니다."
       }
     ]
   },
@@ -397,36 +490,48 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "all_weights = torch.cat(parameters_to_prune)",
-        "alternatives": [],
-        "why": "전역 pruning은 모든 layer의 weight를 같은 importance ranking에 넣습니다. 따라서 작은 weight가 많은 layer는 더 많이 prune될 수 있습니다.\n재도전: layerwise pruning과 global pruning에서 layer별 실제 sparsity가 어떻게 달라질지 설명하세요."
+        "alternatives": [
+          "all_weights = torch.concat(parameters_to_prune)"
+        ],
+        "why": "모델 전체의 모든 파라미터 텐서 리스트를 하나의 거대한 1차원 텐서로 결합하여 전역 비교를 준비합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "num_elements = all_weights.numel()",
-        "alternatives": [],
-        "why": "전역 pruning은 모든 layer의 weight를 같은 importance ranking에 넣습니다. 따라서 작은 weight가 많은 layer는 더 많이 prune될 수 있습니다.\n재도전: layerwise pruning과 global pruning에서 layer별 실제 sparsity가 어떻게 달라질지 설명하세요."
+        "alternatives": [
+          "num_elements = len(all_weights)"
+        ],
+        "why": "전역 파라미터의 총 원소 수를 계산합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "num_zeros = round(num_elements * sparsity)",
-        "alternatives": [],
-        "why": "전역 pruning은 모든 layer의 weight를 같은 importance ranking에 넣습니다. 따라서 작은 weight가 많은 layer는 더 많이 prune될 수 있습니다.\n재도전: layerwise pruning과 global pruning에서 layer별 실제 sparsity가 어떻게 달라질지 설명하세요."
+        "alternatives": [
+          "num_zeros = int(round(num_elements * sparsity))",
+          "num_zeros = int(num_elements * sparsity)"
+        ],
+        "why": "총 원소 수에 목표 희소도(sparsity)를 곱해 제거할 전역 파라미터 개수를 정수로 산출합니다."
       },
       {
         "key": "D",
         "points": 1,
         "answer": "importance = torch.abs(all_weights)",
-        "alternatives": [],
-        "why": "전역 pruning은 모든 layer의 weight를 같은 importance ranking에 넣습니다. 따라서 작은 weight가 많은 layer는 더 많이 prune될 수 있습니다.\n재도전: layerwise pruning과 global pruning에서 layer별 실제 sparsity가 어떻게 달라질지 설명하세요."
+        "alternatives": [
+          "importance = all_weights.abs()"
+        ],
+        "why": "파라미터 가중치의 크기(절댓값)를 전역 중요도로 취합니다."
       },
       {
         "key": "E",
         "points": 1,
         "answer": "threshold = torch.kthvalue(importance, num_zeros)[0]",
-        "alternatives": [],
-        "why": "전역 pruning은 모든 layer의 weight를 같은 importance ranking에 넣습니다. 따라서 작은 weight가 많은 layer는 더 많이 prune될 수 있습니다.\n재도전: layerwise pruning과 global pruning에서 layer별 실제 sparsity가 어떻게 달라질지 설명하세요."
+        "alternatives": [
+          "threshold = torch.kthvalue(importance, num_zeros).values",
+          "threshold = torch.kthvalue(importance.flatten(), num_zeros)[0]"
+        ],
+        "why": "전역 중요도 텐서에서 num_zeros번째로 작은 값을 찾아 모델 전체에 공통 적용할 전역 문턱값을 구합니다."
       }
     ]
   }

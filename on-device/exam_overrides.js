@@ -1,106 +1,725 @@
 (() => {
   "use strict";
-  const course=window.LLM_COURSE,chapter=course.chapters.find(c=>c.file==="2. Quantization for CNN.ipynb");
-  if(!chapter)return;
-  chapter.notebook_goal="실수 Tensor를 affine 정수 좌표계로 변환하고, 정수 layer의 누산 결과를 출력 좌표계로 재양자화하며, codebook 기반 weight quantization을 구현한다.";
-  chapter.capability="Tensor shape와 scale 관계를 근거로 feature·weight·bias·Linear·Conv2d·K-means 양자화의 핵심 코드를 함수 문맥 안에서 복원할 수 있다.";
-  chapter.summary="양자화는 실수 값을 scale로 나누고 zero point로 이동해 정수로 저장합니다. 정수 layer는 input scale과 weight scale이 곱해진 누산값을 output scale로 나눠 다음 layer의 정수 좌표계로 변환합니다.";
-  chapter.key_points=[
-    {title:"Affine quantization",purpose:"실수 Tensor를 제한된 정수 격자에 대응시킵니다.",code:"q = round(x / scale) + zero_point",flow:"float x → scaled float → rounded integer → shifted integer",watch:"마지막에는 bitwidth 범위로 clamp해야 합니다."},
-    {title:"Range calibration",purpose:"실수의 min·max와 정수의 min·max가 양 끝에서 대응되도록 scale과 zero point를 구합니다.",code:"scale=(fp_max-fp_min)/(qmax-qmin)",flow:"two ranges → scale, zero_point",watch:"zero point는 정수 범위 안으로 자릅니다."},
-    {title:"Per-channel weight",purpose:"출력 channel마다 다른 weight 범위를 독립적으로 표현합니다.",code:"scale.view([-1,1,1,1])",flow:"weight [OC,...] → scale [OC,1,...]",watch:"broadcast 축은 output channel 0입니다."},
-    {title:"Integer layer requantization",purpose:"input×weight의 int32 누산값을 다음 output의 int8 좌표계로 옮깁니다.",code:"acc * input_scale * weight_scale / output_scale + output_zero_point",flow:"int32 accumulator → scaled float → output integer",watch:"Linear와 Conv2d의 weight_scale reshape가 다릅니다."},
-    {title:"K-means codebook",purpose:"weight 값을 2^bitwidth개 centroid 중 하나로 대체합니다.",code:"centroids[labels]",flow:"weights → cluster labels + centroids → quantized weights",watch:"학습 후 centroid를 갱신할 때 label별 평균을 사용합니다."}
+  const course = window.LLM_COURSE;
+  const chapter = course.chapters.find(c => c.file === "2. Quantization for CNN.ipynb");
+  if (!chapter) return;
+  chapter.notebook_goal = "실수 Tensor를 affine 정수 좌표계로 변환하고, 정수 layer의 누산 결과를 출력 좌표계로 재양자화하며, codebook 기반 weight quantization을 구현한다.";
+  chapter.capability = "Tensor shape와 scale 관계를 근거로 feature·weight·bias·Linear·Conv2d·K-means 양자화의 핵심 코드를 함수 문맥 안에서 복원할 수 있다.";
+  chapter.summary = "양자화는 실수 값을 scale로 나누고 zero point로 이동해 정수로 저장합니다. 정수 layer는 input scale과 weight scale이 곱해진 누산값을 output scale로 나눠 다음 layer의 정수 좌표계로 변환합니다.";
+  chapter.overview = {
+    title: "실수 텐서를 정수 좌표계로 변환하고 하드웨어 연산 후 역양자화하는 전 과정",
+    subtitle: "Affine 양자화 공식부터 Layer Requantization, K-means Codebook까지 정수 추론 파이프라인 완성",
+    steps: [
+      { label: "Affine Quantization", code: "round(x / scale) + zero_point", flow: "float x → scaled → rounded → shifted int" },
+      { label: "Calibration", code: "(fp_max - fp_min) / (qmax - qmin)", flow: "float range + int range → scale, zero_point" },
+      { label: "Per-channel Weight", code: "scale.view([OC, 1, 1, 1])", flow: "weight [OC, ...] → per-channel scale broadcast" },
+      { label: "Requantization", code: "acc * (s_x * s_w / s_y) + z_y", flow: "int32 acc → scale ratio adjust → int8 output" },
+      { label: "K-means Codebook", code: "centroids[labels]", flow: "weights → 2^b centroids + labels → decoded" }
+    ],
+    rules: [
+      "양자화 순서는 반드시 scale로 나누기 → round → zero_point 더하기 → clamp 순서를 지킨다.",
+      "Linear 누산 결과의 실수 단위는 input_scale * weight_scale이며, output_scale로 나누어 다음 layer 정수 단위로 환산한다.",
+      "Conv2d weight scale은 [OC, 1, 1, 1]로 view/reshape하여 4D feature map과 broadcast 호환성을 유지한다.",
+      "zero_point는 정수 범위 [quantized_min, quantized_max] 내로 clipping되어야 한다.",
+      "K-means codebook 업데이트 시 각 centroid k는 해당 label에 속하는 fp32 가중치들의 평균(torch.mean)으로 갱신한다."
+    ]
+  };
+  chapter.key_points = [
+    { title: "Affine quantization", purpose: "실수 Tensor를 제한된 정수 격자에 대응시킵니다.", code: "q = round(x / scale) + zero_point", flow: "float x → scaled float → rounded integer → shifted integer", watch: "마지막에는 bitwidth 범위로 clamp해야 합니다." },
+    { title: "Range calibration", purpose: "실수의 min·max와 정수의 min·max가 양 끝에서 대응되도록 scale과 zero point를 구합니다.", code: "scale=(fp_max-fp_min)/(qmax-qmin)", flow: "two ranges → scale, zero_point", watch: "zero point는 정수 범위 안으로 자릅니다." },
+    { title: "Per-channel weight", purpose: "출력 channel마다 다른 weight 범위를 독립적으로 표현합니다.", code: "scale.view([-1,1,1,1])", flow: "weight [OC,...] → scale [OC,1,...]", watch: "broadcast 축은 output channel 0입니다." },
+    { title: "Integer layer requantization", purpose: "input×weight의 int32 누산값을 다음 output의 int8 좌표계로 옮깁니다.", code: "acc * input_scale * weight_scale / output_scale + output_zero_point", flow: "int32 accumulator → scaled float → output integer", watch: "Linear와 Conv2d의 weight_scale reshape가 다릅니다." },
+    { title: "K-means codebook", purpose: "weight 값을 2^bitwidth개 centroid 중 하나로 대체합니다.", code: "centroids[labels]", flow: "weights → cluster labels + centroids → quantized weights", watch: "학습 후 centroid를 갱신할 때 label별 평균을 사용합니다." }
   ];
-  chapter.theory_guide=[
-    {title:"Scale과 zero point",concept:"scale은 정수 한 칸의 실수 간격이고 zero point는 실수 0이 놓일 정수 위치입니다.",flow:"x ≈ (q-z)·s ↔ q ≈ round(x/s)+z",code_signal:"quantized_min/max와 fp_min/max가 함께 보이면 두 범위의 폭과 시작점을 맞춥니다.",exam_clue:"나누기→반올림→이동→clamp 순서를 기억합니다."},
-    {title:"Scale의 곱",concept:"Linear·Conv 누산은 q_x q_w의 합이므로 실제 단위는 input_scale×weight_scale입니다.",flow:"real accumulator ≈ integer accumulator·s_x·s_w",code_signal:"output_scale이 주어지면 다음 layer의 단위로 바꾸기 위해 마지막에 나눕니다.",exam_clue:"누산값 × (입력 scale × weight scale ÷ 출력 scale)."},
-    {title:"Broadcasting",concept:"per-channel scale은 batch와 공간 위치에는 반복되고 output channel마다만 달라야 합니다.",flow:"Linear [OC]→[1,OC], Conv [OC]→[1,OC,1,1]",code_signal:"output Tensor shape를 보고 singleton 축을 배치합니다.",exam_clue:"Linear는 2차원, Conv2d는 4차원 output입니다."},
-    {title:"Codebook",concept:"label은 각 원소가 어느 centroid를 쓸지 나타내는 정수 index입니다.",flow:"labels same numel as weights; centroids length 2^b",code_signal:"복원은 centroid Tensor를 label Tensor로 advanced indexing합니다.",exam_clue:"cluster 수는 bit pattern 수 2^bitwidth입니다."}
+  chapter.theory_guide = [
+    { title: "Scale과 zero point", concept: "scale은 정수 한 칸의 실수 간격이고 zero point는 실수 0이 놓일 정수 위치입니다.", flow: "x ≈ (q-z)·s ↔ q ≈ round(x/s)+z", code_signal: "quantized_min/max와 fp_min/max가 함께 보이면 두 범위의 폭과 시작점을 맞춥니다.", exam_clue: "나누기→반올림→이동→clamp 순서를 기억합니다." },
+    { title: "Scale의 곱", concept: "Linear·Conv 누산은 q_x q_w의 합이므로 실제 단위는 input_scale×weight_scale입니다.", flow: "real accumulator ≈ integer accumulator·s_x·s_w", code_signal: "output_scale이 주어지면 다음 layer의 단위로 바꾸기 위해 마지막에 나눕니다.", exam_clue: "누산값 × (입력 scale × weight scale ÷ 출력 scale)." },
+    { title: "Broadcasting", concept: "per-channel scale은 batch와 공간 위치에는 반복되고 output channel마다만 달라야 합니다.", flow: "Linear [OC]→[1,OC], Conv [OC]→[1,OC,1,1]", code_signal: "output Tensor shape를 보고 singleton 축을 배치합니다.", exam_clue: "Linear는 2차원, Conv2d는 4차원 output입니다." },
+    { title: "Codebook", concept: "label은 각 원소가 어느 centroid를 쓸지 나타내는 정수 index입니다.", flow: "labels same numel as weights; centroids length 2^b", code_signal: "복원은 centroid Tensor를 label Tensor로 advanced indexing합니다.", exam_clue: "cluster 수는 bit pattern 수 2^bitwidth입니다." }
   ];
-  const cells={
-    "exam-od1-linear":`scaled_tensor = fp_tensor/scale\nrounded_tensor = torch.round(scaled_tensor)\nshifted_tensor = rounded_tensor + zero_point`,
-    "exam-od1-range":`scale = (fp_max - fp_min) / (quantized_max - quantized_min)\nzero_point = round(quantized_min - fp_min/scale)`,
-    "exam-od1-channel":`_subtensor = tensor.select(dim_output_channels, oc)\n_scale = get_quantization_scale_for_weight(_subtensor, bitwidth)\nscale[oc] = _scale\nscale_shape[dim_output_channels] = -1\nscale = scale.view(scale_shape)`,
-    "exam-od1-bias":`bias_scale = input_scale * weight_scale\nquantized_bias = linear_quantize(bias, 32, bias_scale, zero_point=0, dtype=torch.int32)`,
-    "exam-od1-linear-layer":`output = output*(input_scale * weight_scale / output_scale)\noutput = output + output_zero_point`,
-    "exam-od1-conv-layer":`input = torch.nn.functional.pad(input, padding, 'constant', input_zero_point)\noutput = torch.nn.functional.conv2d(input.to(torch.int32), weight.to(torch.int32), None, stride, 0, dilation, groups)\nif bias is not None:\n    output = output + bias.view(1, -1, 1, 1)`,
-    "exam-od1-codebook":`n_clusters = 2**bitwidth\nquantized_tensor = codebook.centroids[codebook.labels]`,
-    "exam-od1-update":`codebook.centroids[k] = torch.mean(fp32_tensor[codebook.labels==k])`
-  };Object.entries(cells).forEach(([id,source])=>course.cells[id]={source});
-  const base={subject:"On-device AI",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:true,source_type:"정답 노트북 함수 문맥 기반 예상문제"};
-  const Q=(id,topic,difficulty,sourceId,prompt,problem_context,explanation,tensor_flow,code_signal,retry)=>({...base,id,topic,difficulty,sourceId,prompt,answer:cells[sourceId],accepted_answers:[cells[sourceId]],problem_context,explanation,tensor_flow,code_signal,retry});
-  chapter.subjective=[
-    Q("exam-od1-01","Affine Quantization","2 · Completion","exam-od1-linear","주어진 공식과 단계 주석을 이용해 실수 Tensor를 scale, round, zero point 순으로 정수 좌표에 옮기는 세 줄을 작성하세요.",`# fp_tensor = (quantized_tensor - zero_point) * scale\n############### YOUR CODE STARTS HERE ###############\n# Step 1: fp_tensor를 scale 하세요.\nscaled_tensor = ????\n# Step 2: 가장 가까운 정수로 rounding 하세요.\nrounded_tensor = ????\n# Step 3: zero_point 만큼 shift하세요.\nshifted_tensor = ????\n############### YOUR CODE ENDS HERE #################`,`역양자화 식을 q에 대해 정리하면 나누기→반올림→zero point 더하기 순서가 됩니다. 이후 dtype 변환과 clamp가 정수 표현 범위를 보장합니다.`,`float [shape] → scaled float → rounded → shifted integer coordinates`,`주석의 동사 scale·round·shift와 함수 위 역공식이 각 연산을 직접 알려줍니다.`,`scale=0.5, zero_point=2, x=1.0일 때 세 중간값을 계산하세요.`),
-    Q("exam-od1-02","Calibration","2 · Formula","exam-od1-range","실수 범위의 양 끝을 정수 범위의 양 끝에 대응시키는 scale과 zero point 두 식을 작성하세요.",`quantized_min, quantized_max = get_quantized_range(bitwidth)\nfp_max = fp_tensor.max().item()\nfp_min = fp_tensor.min().item()\n############### YOUR CODE STARTS HERE ###############\nscale = ????\nzero_point = ????\n############### YOUR CODE ENDS HERE #################`,`두 구간의 폭 비율이 scale입니다. fp_min/scale을 q_min에서 빼면 fp_min이 q_min에 대응하는 정수 이동량이 됩니다.`,`fp range + q range → float scale + integer zero point`,`두 min·max와 qmax-qmin=2^bitwidth-1 힌트가 구간 기울기와 절편을 요구합니다.`,`fp=[10,20], q=[1000,2000]에서 scale과 zero point를 계산하세요.`),
-    Q("exam-od1-03","Per-channel Weight","3 · Shape","exam-od1-channel","output channel별 scale을 계산해 저장하고 weight 전체에 broadcast 가능한 shape로 바꾸는 다섯 줄을 작성하세요.",`for oc in range(num_output_channels):\n    ????\n    ????\n    ????\nscale_shape = [1] * tensor.dim()\n????\n????\nquantized_tensor = linear_quantize(tensor, bitwidth, scale, zero_point=0)`,`각 output channel subtensor에서 독립 scale을 구한 뒤 channel 축만 -1이고 나머지는 singleton인 shape로 바꾸면 weight Tensor에 broadcast됩니다.`,`weight [OC,IC,KH,KW] → scales [OC] → [OC,1,1,1]`,`dim_output_channels=0과 linear_quantize의 elementwise division이 select·view 축을 결정합니다.`,`Linear weight [OC,IC]일 때 최종 scale shape를 쓰세요.`),
-    Q("exam-od1-04","Bias Quantization","2 · Scale 연결","exam-od1-bias","정수 MAC 누산값과 단위를 맞추도록 bias scale을 만들고 int32로 양자화하는 두 줄을 작성하세요.",`# input q_x, weight q_w are multiplied and accumulated\n????\n????`,`bias는 input×weight 누산값에 더해지므로 같은 실수 단위 input_scale×weight_scale을 사용하고 overflow 여유가 큰 int32에 저장합니다.`,`bias [OC] / (s_x·s_w [OC]) → int32 [OC]`,`bias가 1차원이고 weight_scale이 output channel별이라는 assert가 곱과 int32 dtype을 지시합니다.`,`bias를 int8로 저장할 때 생길 수 있는 문제를 설명하세요.`),
-    Q("exam-od1-05","Linear Requantization","3 · Independent","exam-od1-linear-layer","int32 Linear 누산 결과를 output의 정수 좌표계로 바꾸는 scale 조정과 zero point 이동 두 줄을 작성하세요.",`weight_scale = weight_scale.flatten().view(1, -1)\noutput = output.float()\n############### YOUR CODE STARTS HERE ###############\noutput = ????\noutput = ????\n############### YOUR CODE ENDS HERE #################\noutput = output.round().clamp(*get_quantized_range(feature_bitwidth)).to(torch.int8)`,`누산 결과의 실제 단위는 input_scale×weight_scale입니다. 이를 output_scale로 나눠 output 정수 한 칸 단위로 환산한 뒤 output_zero_point를 더합니다.`,`int32 [B,OC] → float × [1,OC] ratio → shifted → int8`,`앞의 weight_scale reshape와 뒤의 round·clamp가 빈칸에서는 scale ratio와 zero point만 처리해야 함을 알려줍니다.`,`Conv2d output [B,OC,H,W]에서는 weight_scale을 어떤 shape로 바꿀지 쓰세요.`),
-    Q("exam-od1-06","Quantized Conv2d","3 · Function Context","exam-od1-conv-layer","입력 바깥을 input zero point로 pad하고 CPU int32 convolution을 수행한 뒤 channel별 bias를 더하는 핵심 네 줄을 작성하세요.",`# padding has [left,right,top,bottom]\n????\n# CPU: 8-bit multiplication with 32-bit accumulation\n????\n????\n    ????`,`실수 0에 해당하는 정수는 input_zero_point이므로 padding도 그 값이어야 합니다. bias [OC]는 [1,OC,1,1]로 바꿔 모든 batch와 공간 위치에 더합니다.`,`int8 input/weight → padded int8 → int32 [B,OC,H,W] → bias broadcast`,`F.pad의 constant 값, CPU int32 assert, Conv 출력 shape가 함수와 bias view를 결정합니다.`,`padding을 정수 0으로 채우면 zero_point가 0이 아닐 때 실제로 어떤 값이 들어가는지 설명하세요.`),
-    Q("exam-od1-07","K-means Quantization","2 · Codebook","exam-od1-codebook","bitwidth로 centroid 수를 정하고 label을 이용해 각 weight 위치의 centroid를 조회하는 두 줄을 작성하세요.",`if codebook is None:\n    # bitwidth에 따라 클러스터 수를 설정하세요.\n    n_clusters = ????\n    # KMeans가 centroids와 labels를 생성합니다.\n\n# 추론에서 사용할 quantized tensor를 구하기 위해 코드북을 디코딩하세요.\nquantized_tensor = ????`,`b bit는 2^b개의 index를 표현합니다. labels는 원소별 centroid index이므로 centroids[labels]가 weight와 같은 원소 수의 양자화 값을 만듭니다.`,`weights N → labels N + centroids 2^b → decoded N`,`bitwidth와 Codebook(centroids,labels) 구조가 지수 연산과 advanced indexing을 알려줍니다.`,`bitwidth=4일 때 centroid 수와 label 값 범위를 쓰세요.`),
-    Q("exam-od1-08","Centroid Update","3 · Transfer","exam-od1-update","weight가 학습으로 바뀐 뒤 기존 label k에 속한 값들의 평균으로 centroid k를 갱신하는 한 줄을 작성하세요.",`fp32_tensor = fp32_tensor.view(-1)\nfor k in range(n_clusters):\n    # hint: torch.mean() 함수를 이용하세요.\n    ????`,`boolean mask로 label k인 weight만 고른 뒤 평균을 계산하면 고정 assignment에서 제곱 오차를 최소화하는 centroid가 됩니다.`,`fp32 weights [N] + labels [N] → selected values → scalar centroid[k]`,`loop 변수 k, labels==k, torch.mean 힌트가 indexing과 대입 대상을 결정합니다.`,`어떤 cluster에도 원소가 없을 때 mean 결과와 방어 방법을 말하세요.`)
+  const cells = {
+    "exam-od1-linear": "scaled_tensor = fp_tensor/scale\nrounded_tensor = torch.round(scaled_tensor)\nshifted_tensor = rounded_tensor + zero_point",
+    "exam-od1-range": "scale = (fp_max - fp_min) / (quantized_max - quantized_min)\nzero_point = round(quantized_min - fp_min/scale)",
+    "exam-od1-channel": "_subtensor = tensor.select(dim_output_channels, oc)\n_scale = get_quantization_scale_for_weight(_subtensor, bitwidth)\nscale[oc] = _scale\nscale_shape[dim_output_channels] = -1\nscale = scale.view(scale_shape)",
+    "exam-od1-bias": "bias_scale = input_scale * weight_scale\nquantized_bias = linear_quantize(bias, 32, bias_scale, zero_point=0, dtype=torch.int32)",
+    "exam-od1-linear-layer": "output = output*(input_scale * weight_scale / output_scale)\noutput = output + output_zero_point",
+    "exam-od1-conv-layer": "input = torch.nn.functional.pad(input, padding, 'constant', input_zero_point)\noutput = torch.nn.functional.conv2d(input.to(torch.int32), weight.to(torch.int32), None, stride, 0, dilation, groups)\nif bias is not None:\n    output = output + bias.view(1, -1, 1, 1)",
+    "exam-od1-codebook": "n_clusters = 2**bitwidth\nquantized_tensor = codebook.centroids[codebook.labels]",
+    "exam-od1-update": "codebook.centroids[k] = torch.mean(fp32_tensor[codebook.labels==k])"
+  };
+  Object.entries(cells).forEach(([id, source]) => course.cells[id] = { source });
+  const base = { subject: "On-device AI", chapterId: chapter.id, chapterNumber: chapter.number, chapterTitle: chapter.title, file: chapter.file, occurrence: 0, isSourceBlank: true, source_type: "정답 노트북 함수 문맥 기반 예상문제" };
+  const Q = (id, topic, difficulty, sourceId, prompt, problem_context, explanation, tensor_flow, code_signal, retry, accepted_answers) => ({
+    ...base, id, topic, difficulty, sourceId, prompt, answer: cells[sourceId],
+    accepted_answers: accepted_answers || [cells[sourceId]],
+    problem_context, explanation, tensor_flow, code_signal, retry
+  });
+  chapter.subjective = [
+    Q("exam-od1-01", "Affine Quantization", "2 · Completion", "exam-od1-linear", "주어진 공식과 단계 주석을 이용해 실수 Tensor를 scale, round, zero point 순으로 정수 좌표에 옮기는 세 줄을 작성하세요.",
+      "# fp_tensor = (quantized_tensor - zero_point) * scale\n############### YOUR CODE STARTS HERE ###############\n# Step 1: fp_tensor를 scale 하세요.\nscaled_tensor = ????\n# Step 2: 가장 가까운 정수로 rounding 하세요.\nrounded_tensor = ????\n# Step 3: zero_point 만큼 shift하세요.\nshifted_tensor = ????\n############### YOUR CODE ENDS HERE #################",
+      "역양자화 식을 q에 대해 정리하면 나누기→반올림→zero point 더하기 순서가 됩니다. 이후 dtype 변환과 clamp가 정수 표현 범위를 보장합니다.",
+      "float [shape] → scaled float → rounded → shifted integer coordinates",
+      "주석의 동사 scale·round·shift와 함수 위 역공식이 각 연산을 직접 알려줍니다.",
+      "scale=0.5, zero_point=2, x=1.0일 때 세 중간값을 계산하세요.",
+      [
+        "scaled_tensor = fp_tensor/scale\nrounded_tensor = torch.round(scaled_tensor)\nshifted_tensor = rounded_tensor + zero_point",
+        "scaled_tensor = fp_tensor / scale\nrounded_tensor = torch.round(scaled_tensor)\nshifted_tensor = rounded_tensor + zero_point",
+        "scaled_tensor = fp_tensor / scale\nrounded_tensor = scaled_tensor.round()\nshifted_tensor = rounded_tensor + zero_point",
+        "scaled_tensor = fp_tensor / scale\nrounded_tensor = torch.round(scaled_tensor)\nshifted_tensor = zero_point + rounded_tensor",
+        "fp_tensor / scale\ntorch.round(scaled_tensor)\nrounded_tensor + zero_point",
+        "fp_tensor/scale\ntorch.round(scaled_tensor)\nrounded_tensor + zero_point",
+        "fp_tensor / scale\nscaled_tensor.round()\nrounded_tensor + zero_point",
+        "fp_tensor / scale\ntorch.round(scaled_tensor)\nzero_point + rounded_tensor"
+      ]),
+    Q("exam-od1-02", "Calibration", "2 · Formula", "exam-od1-range", "실수 범위의 양 끝을 정수 범위의 양 끝에 대응시키는 scale과 zero point 두 식을 작성하세요.",
+      "quantized_min, quantized_max = get_quantized_range(bitwidth)\nfp_max = fp_tensor.max().item()\nfp_min = fp_tensor.min().item()\n############### YOUR CODE STARTS HERE ###############\nscale = ????\nzero_point = ????\n############### YOUR CODE ENDS HERE #################",
+      "두 구간의 폭 비율이 scale입니다. fp_min/scale을 q_min에서 빼면 fp_min이 q_min에 대응하는 정수 이동량이 됩니다.",
+      "fp range + q range → float scale + integer zero point",
+      "두 min·max와 qmax-qmin=2^bitwidth-1 힌트가 구간 기울기와 절편을 요구합니다.",
+      "fp=[10,20], q=[1000,2000]에서 scale과 zero point를 계산하세요.",
+      [
+        "scale = (fp_max - fp_min) / (quantized_max - quantized_min)\nzero_point = round(quantized_min - fp_min/scale)",
+        "scale = (fp_max - fp_min) / (quantized_max - quantized_min)\nzero_point = round(quantized_min - fp_min / scale)",
+        "scale = (fp_max - fp_min) / (quantized_max - quantized_min)\nzero_point = int(round(quantized_min - fp_min / scale))",
+        "scale = (fp_max - fp_min) / (quantized_max - quantized_min)\nzero_point = round(quantized_min - (fp_min / scale))",
+        "(fp_max - fp_min) / (quantized_max - quantized_min)\nround(quantized_min - fp_min / scale)",
+        "(fp_max - fp_min) / (quantized_max - quantized_min)\nround(quantized_min - fp_min/scale)",
+        "(fp_max - fp_min) / (quantized_max - quantized_min)\nint(round(quantized_min - fp_min / scale))"
+      ]),
+    Q("exam-od1-03", "Per-channel Weight", "3 · Shape", "exam-od1-channel", "output channel별 scale을 계산해 저장하고 weight 전체에 broadcast 가능한 shape로 바꾸는 다섯 줄을 작성하세요.",
+      "for oc in range(num_output_channels):\n    ????\n    ????\n    ????\nscale_shape = [1] * tensor.dim()\n????\n????\nquantized_tensor = linear_quantize(tensor, bitwidth, scale, zero_point=0)",
+      "각 output channel subtensor에서 독립 scale을 구한 뒤 channel 축만 -1이고 나머지는 singleton인 shape로 바꾸면 weight Tensor에 broadcast됩니다.",
+      "weight [OC,IC,KH,KW] → scales [OC] → [OC,1,1,1]",
+      "dim_output_channels=0과 linear_quantize의 elementwise division이 select·view 축을 결정합니다.",
+      "Linear weight [OC,IC]일 때 최종 scale shape를 쓰세요.",
+      [
+        "_subtensor = tensor.select(dim_output_channels, oc)\n_scale = get_quantization_scale_for_weight(_subtensor, bitwidth)\nscale[oc] = _scale\nscale_shape[dim_output_channels] = -1\nscale = scale.view(scale_shape)",
+        "_subtensor = tensor.select(dim_output_channels, oc)\n_scale = get_quantization_scale_for_weight(_subtensor, bitwidth)\nscale[oc] = _scale\nscale_shape[dim_output_channels] = -1\nscale = scale.reshape(scale_shape)"
+      ]),
+    Q("exam-od1-04", "Bias Quantization", "2 · Scale 연결", "exam-od1-bias", "정수 MAC 누산값과 단위를 맞추도록 bias scale을 만들고 int32로 양자화하는 두 줄을 작성하세요.",
+      "# input q_x, weight q_w are multiplied and accumulated\n????\n????",
+      "bias는 input×weight 누산값에 더해지므로 같은 실수 단위 input_scale×weight_scale을 사용하고 overflow 여유가 큰 int32에 저장합니다.",
+      "bias [OC] / (s_x·s_w [OC]) → int32 [OC]",
+      "bias가 1차원이고 weight_scale이 output channel별이라는 assert가 곱과 int32 dtype을 지시합니다.",
+      "bias를 int8로 저장할 때 생길 수 있는 문제를 설명하세요.",
+      [
+        "bias_scale = input_scale * weight_scale\nquantized_bias = linear_quantize(bias, 32, bias_scale, zero_point=0, dtype=torch.int32)",
+        "bias_scale = weight_scale * input_scale\nquantized_bias = linear_quantize(bias, 32, bias_scale, zero_point=0, dtype=torch.int32)",
+        "bias_scale = input_scale * weight_scale\nquantized_bias = linear_quantize(bias, 32, bias_scale, 0, dtype=torch.int32)",
+        "bias_scale = weight_scale * input_scale\nquantized_bias = linear_quantize(bias, 32, bias_scale, 0, dtype=torch.int32)",
+        "bias_scale = input_scale * weight_scale\nquantized_bias = linear_quantize(bias, 32, bias_scale, zero_point=0, dtype=torch.int32)"
+      ]),
+    Q("exam-od1-05", "Linear Requantization", "3 · Independent", "exam-od1-linear-layer", "int32 Linear 누산 결과를 output의 정수 좌표계로 바꾸는 scale 조정과 zero point 이동 두 줄을 작성하세요.",
+      "weight_scale = weight_scale.flatten().view(1, -1)\noutput = output.float()\n############### YOUR CODE STARTS HERE ###############\noutput = ????\noutput = ????\n############### YOUR CODE ENDS HERE #################\noutput = output.round().clamp(*get_quantized_range(feature_bitwidth)).to(torch.int8)",
+      "누산 결과의 실제 단위는 input_scale×weight_scale입니다. 이를 output_scale로 나눠 output 정수 한 칸 단위로 환산한 뒤 output_zero_point를 더합니다.",
+      "int32 [B,OC] → float × [1,OC] ratio → shifted → int8",
+      "앞의 weight_scale reshape와 뒤의 round·clamp가 빈칸에서는 scale ratio와 zero point만 처리해야 함을 알려줍니다.",
+      "Conv2d output [B,OC,H,W]에서는 weight_scale을 어떤 shape로 바꿀지 쓰세요.",
+      [
+        "output = output*(input_scale * weight_scale / output_scale)\noutput = output + output_zero_point",
+        "output = output * (input_scale * weight_scale / output_scale)\noutput = output + output_zero_point",
+        "output = output * (weight_scale * input_scale / output_scale)\noutput = output + output_zero_point",
+        "output = output * (input_scale * weight_scale / output_scale)\noutput += output_zero_point",
+        "output = output * (input_scale * weight_scale / output_scale)\noutput = output_zero_point + output",
+        "output * (input_scale * weight_scale / output_scale)\noutput + output_zero_point",
+        "output * (weight_scale * input_scale / output_scale)\noutput + output_zero_point",
+        "output*(input_scale * weight_scale / output_scale)\noutput + output_zero_point"
+      ]),
+    Q("exam-od1-06", "Quantized Conv2d", "3 · Function Context", "exam-od1-conv-layer", "입력 바깥을 input zero point로 pad하고 CPU int32 convolution을 수행한 뒤 channel별 bias를 더하는 핵심 네 줄을 작성하세요.",
+      "# padding has [left,right,top,bottom]\n????\n# CPU: 8-bit multiplication with 32-bit accumulation\n????\n????\n    ????",
+      "실수 0에 해당하는 정수는 input_zero_point이므로 padding도 그 값이어야 합니다. bias [OC]는 [1,OC,1,1]로 바꿔 모든 batch와 공간 위치에 더합니다.",
+      "int8 input/weight → padded int8 → int32 [B,OC,H,W] → bias broadcast",
+      "F.pad의 constant 값, CPU int32 assert, Conv 출력 shape가 함수와 bias view를 결정합니다.",
+      "padding을 정수 0으로 채우면 zero_point가 0이 아닐 때 실제로 어떤 값이 들어가는지 설명하세요.",
+      [
+        "input = torch.nn.functional.pad(input, padding, 'constant', input_zero_point)\noutput = torch.nn.functional.conv2d(input.to(torch.int32), weight.to(torch.int32), None, stride, 0, dilation, groups)\nif bias is not None:\n    output = output + bias.view(1, -1, 1, 1)",
+        "input = F.pad(input, padding, 'constant', input_zero_point)\noutput = F.conv2d(input.to(torch.int32), weight.to(torch.int32), None, stride, 0, dilation, groups)\nif bias is not None:\n    output = output + bias.view(1, -1, 1, 1)",
+        "input = torch.nn.functional.pad(input, padding, 'constant', input_zero_point)\noutput = torch.nn.functional.conv2d(input.to(torch.int32), weight.to(torch.int32), None, stride, 0, dilation, groups)\nif bias is not None:\n    output = output + bias.reshape(1, -1, 1, 1)",
+        "input = F.pad(input, padding, 'constant', input_zero_point)\noutput = F.conv2d(input.to(torch.int32), weight.to(torch.int32), None, stride, 0, dilation, groups)\nif bias is not None:\n    output = output + bias.reshape(1, -1, 1, 1)"
+      ]),
+    Q("exam-od1-07", "K-means Quantization", "2 · Codebook", "exam-od1-codebook", "bitwidth로 centroid 수를 정하고 label을 이용해 각 weight 위치의 centroid를 조회하는 두 줄을 작성하세요.",
+      "if codebook is None:\n    # bitwidth에 따라 클러스터 수를 설정하세요.\n    n_clusters = ????\n    # KMeans가 centroids와 labels를 생성합니다.\n\n# 추론에서 사용할 quantized tensor를 구하기 위해 코드북을 디코딩하세요.\nquantized_tensor = ????",
+      "b bit는 2^b개의 index를 표현합니다. labels는 원소별 centroid index이므로 centroids[labels]가 weight와 같은 원소 수의 양자화 값을 만듭니다.",
+      "weights N → labels N + centroids 2^b → decoded N",
+      "bitwidth와 Codebook(centroids,labels) 구조가 지수 연산과 advanced indexing을 알려줍니다.",
+      "bitwidth=4일 때 centroid 수와 label 값 범위를 쓰세요.",
+      [
+        "n_clusters = 2**bitwidth\nquantized_tensor = codebook.centroids[codebook.labels]",
+        "n_clusters = 2 ** bitwidth\nquantized_tensor = codebook.centroids[codebook.labels]",
+        "2**bitwidth\ncodebook.centroids[codebook.labels]",
+        "2 ** bitwidth\ncodebook.centroids[codebook.labels]",
+        "n_clusters = 1 << bitwidth\nquantized_tensor = codebook.centroids[codebook.labels]"
+      ]),
+    Q("exam-od1-08", "Centroid Update", "3 · Transfer", "exam-od1-update", "weight가 학습으로 바뀐 뒤 기존 label k에 속한 값들의 평균으로 centroid k를 갱신하는 한 줄을 작성하세요.",
+      "fp32_tensor = fp32_tensor.view(-1)\nfor k in range(n_clusters):\n    # hint: torch.mean() 함수를 이용하세요.\n    ????",
+      "boolean mask로 label k인 weight만 고른 뒤 평균을 계산하면 고정 assignment에서 제곱 오차를 최소화하는 centroid가 됩니다.",
+      "fp32 weights [N] + labels [N] → selected values → scalar centroid[k]",
+      "loop 변수 k, labels==k, torch.mean 힌트가 indexing과 대입 대상을 결정합니다.",
+      "어떤 cluster에도 원소가 없을 때 mean 결과와 방어 방법을 말하세요.",
+      [
+        "codebook.centroids[k] = torch.mean(fp32_tensor[codebook.labels==k])",
+        "codebook.centroids[k] = torch.mean(fp32_tensor[codebook.labels == k])",
+        "codebook.centroids[k] = fp32_tensor[codebook.labels == k].mean()",
+        "codebook.centroids[k] = fp32_tensor[codebook.labels==k].mean()"
+      ])
   ];
-  chapter.mcq=[
-    {id:"exam-od1-m1",source_question_id:"exam-od1-01",topic:"연산 순서",prompt:"Affine quantization의 올바른 순서는?",answer_index:1,explanation:"실수 단위를 정수 칸으로 환산하고 반올림한 뒤 영점을 이동합니다.",choices:[{text:"zero point를 빼고 scale을 곱함",why:"이는 역양자화 방향입니다."},{text:"scale로 나누고 round 후 zero point를 더함",why:"정답입니다."},{text:"round 후 scale을 곱함",why:"정수 좌표 변환이 아닙니다."},{text:"scale과 zero point를 모두 곱함",why:"zero point는 절편입니다."},{text:"softmax 후 clamp",why:"확률 변환과 무관합니다."}]},
-    {id:"exam-od1-m2",source_question_id:"exam-od1-03",topic:"Broadcast Shape",prompt:"Conv weight [OC,IC,KH,KW]의 per-channel scale shape는?",answer_index:3,explanation:"output channel만 달라지고 나머지 축에는 broadcast됩니다.",choices:[{text:"[IC,1,1,1]",why:"입력 channel 기준입니다."},{text:"[1,1,1,OC]",why:"channel 위치가 마지막이 아닙니다."},{text:"[OC,IC,1,1]",why:"입력 channel마다 별도 scale이 됩니다."},{text:"[OC,1,1,1]",why:"정답입니다."},{text:"[1,OC]",why:"Linear output용 모양입니다."}]},
-    {id:"exam-od1-m3",source_question_id:"exam-od1-05",topic:"Scale Ratio",prompt:"int32 누산 결과를 output 좌표계로 옮기는 배율은?",answer_index:4,explanation:"누산의 실제 단위를 곱하고 output 정수 한 칸 단위로 나눕니다.",choices:[{text:"output_scale",why:"입력·weight 단위가 빠졌습니다."},{text:"input_scale/output_scale",why:"weight 단위가 빠졌습니다."},{text:"output_scale/(input_scale*weight_scale)",why:"비율이 역방향입니다."},{text:"input_scale+weight_scale",why:"곱셈 결과 단위는 scale의 곱입니다."},{text:"input_scale*weight_scale/output_scale",why:"정답입니다."}]},
-    {id:"exam-od1-m4",source_question_id:"exam-od1-06",topic:"Padding",prompt:"양자화 Conv 입력 padding을 input_zero_point로 채우는 이유는?",answer_index:0,explanation:"실수 공간의 0이 정수 공간에서는 zero point에 해당합니다.",choices:[{text:"실수 0에 대응하는 정수 값이기 때문",why:"정답입니다."},{text:"항상 최댓값이기 때문",why:"zero point는 범위 안의 영점 위치입니다."},{text:"bias를 제거하기 위해",why:"bias는 별도로 더합니다."},{text:"출력 channel을 늘리기 위해",why:"padding은 공간 축입니다."},{text:"float16으로 바꾸기 위해",why:"정수 padding입니다."}]},
-    {id:"exam-od1-m5",source_question_id:"exam-od1-07",topic:"Codebook",prompt:"4-bit K-means quantization의 centroid 수는?",answer_index:2,explanation:"4 bit가 표현하는 서로 다른 bit pattern은 2^4=16개입니다.",choices:[{text:"4",why:"bit 수 자체입니다."},{text:"8",why:"2×bitwidth가 아닙니다."},{text:"16",why:"정답입니다."},{text:"15",why:"최대 unsigned index는 15지만 개수는 16입니다."},{text:"32",why:"2^(bitwidth+1)이 아닙니다."}]}
-  ];chapter.questionCount=chapter.subjective.length;chapter.exam_design={version:2,style:"원본 함수 전체 문맥형",difficulty:["formula completion","shape reasoning","independent implementation"],excluded:["URL·경로","고정 실험 수치","의미 없는 단일 token 암기"]};
+  chapter.mcq = [
+    { id: "exam-od1-m1", source_question_id: "exam-od1-01", topic: "연산 순서", prompt: "Affine quantization의 올바른 순서는?", answer_index: 1, explanation: "실수 단위를 정수 칸으로 환산하고 반올림한 뒤 영점을 이동합니다.", choices: [{ text: "zero point를 빼고 scale을 곱함", why: "이는 역양자화 방향입니다." }, { text: "scale로 나누고 round 후 zero point를 더함", why: "정답입니다." }, { text: "round 후 scale을 곱함", why: "정수 좌표 변환이 아닙니다." }, { text: "scale과 zero point를 모두 곱함", why: "zero point는 절편입니다." }, { text: "softmax 후 clamp", why: "확률 변환과 무관합니다." }] },
+    { id: "exam-od1-m2", source_question_id: "exam-od1-03", topic: "Broadcast Shape", prompt: "Conv weight [OC,IC,KH,KW]의 per-channel scale shape는?", answer_index: 3, explanation: "output channel만 달라지고 나머지 축에는 broadcast됩니다.", choices: [{ text: "[IC,1,1,1]", why: "입력 channel 기준입니다." }, { text: "[1,1,1,OC]", why: "channel 위치가 마지막이 아닙니다." }, { text: "[OC,IC,1,1]", why: "입력 channel마다 별도 scale이 됩니다." }, { text: "[OC,1,1,1]", why: "정답입니다." }, { text: "[1,OC]", why: "Linear output용 모양입니다." }] },
+    { id: "exam-od1-m3", source_question_id: "exam-od1-05", topic: "Scale Ratio", prompt: "int32 누산 결과를 output 좌표계로 옮기는 배율은?", answer_index: 4, explanation: "누산의 실제 단위를 곱하고 output 정수 한 칸 단위로 나눕니다.", choices: [{ text: "output_scale", why: "입력·weight 단위가 빠졌습니다." }, { text: "input_scale/output_scale", why: "weight 단위가 빠졌습니다." }, { text: "output_scale/(input_scale*weight_scale)", why: "비율이 역방향입니다." }, { text: "input_scale+weight_scale", why: "곱셈 결과 단위는 scale의 곱입니다." }, { text: "input_scale*weight_scale/output_scale", why: "정답입니다." }] },
+    { id: "exam-od1-m4", source_question_id: "exam-od1-06", topic: "Padding", prompt: "양자화 Conv 입력 padding을 input_zero_point로 채우는 이유는?", answer_index: 0, explanation: "실수 공간의 0이 정수 공간에서는 zero point에 해당합니다.", choices: [{ text: "실수 0에 대응하는 정수 값이기 때문", why: "정답입니다." }, { text: "항상 최댓값이기 때문", why: "zero point는 범위 안의 영점 위치입니다." }, { text: "bias를 제거하기 위해", why: "bias는 별도로 더합니다." }, { text: "출력 channel을 늘리기 위해", why: "padding은 공간 축입니다." }, { text: "float16으로 바꾸기 위해", why: "정수 padding입니다." }] },
+    { id: "exam-od1-m5", source_question_id: "exam-od1-07", topic: "Codebook", prompt: "4-bit K-means quantization의 centroid 수는?", answer_index: 2, explanation: "4 bit가 표현하는 서로 다른 bit pattern은 2^4=16개입니다.", choices: [{ text: "4", why: "bit 수 자체입니다." }, { text: "8", why: "2×bitwidth가 아닙니다." }, { text: "16", why: "정답입니다." }, { text: "15", why: "최대 unsigned index는 15지만 개수는 16입니다." }, { text: "32", why: "2^(bitwidth+1)이 아닙니다." }] }
+  ];
+  chapter.questionCount = chapter.subjective.length;
+  chapter.exam_design = { version: 2, style: "원본 함수 전체 문맥형", difficulty: ["formula completion", "shape reasoning", "independent implementation"], excluded: ["URL·경로", "고정 실험 수치", "의미 없는 단일 token 암기"] };
 })();
-
-queueMicrotask(() => {const course=window.LLM_COURSE;if(course.chapters.some(c=>c.id==='on-device-final-review'))return;const pick=[['2. Quantization for CNN.ipynb','exam-od1-05'],['1. Pruning for CNN.ipynb','exam-od2-01'],['3. Knowledge Distillation.ipynb','exam-od3-02'],['4. Pruning for LLM.ipynb','exam-od4-03'],['5. Quantization for LLM.ipynb','exam-od5-03']];const subjective=pick.map(([file,id],i)=>{const s=course.chapters.find(c=>c.file===file).subjective.find(q=>q.id===id);return {...s,id:`on-device-review-${i+1}`,chapterId:'on-device-final-review',chapterNumber:'FINAL',chapterTitle:'On-device AI 종합 구현 모의고사',file:'ON_DEVICE_FINAL_REVIEW',topic:`${i+1}. ${s.topic}`,source_type:`${file} 핵심 구현 혼합문제`}});const mcq=pick.map(([file,id],i)=>{const original=course.chapters.find(c=>c.file===file).mcq.find(q=>q.source_question_id===id);return {...original,id:`on-device-review-m${i+1}`,source_question_id:`on-device-review-${i+1}`}});course.chapters.push({id:'on-device-final-review',number:'FINAL',title:'On-device AI 종합 구현 모의고사',file:'ON_DEVICE_FINAL_REVIEW',subject:'On-device AI',notebook_goal:'양자화·pruning·distillation 코드에서 Tensor 흐름과 학습 목표를 보고 필요한 구현을 선택한다.',capability:'처음 보는 on-device 코드 문맥에서 scale/mask/Teacher target/activation importance를 구분해 1~5줄 구현을 복원한다.',summary:'다섯 노트북의 핵심을 섞은 누적 실전입니다. 먼저 입력·출력 Tensor와 학습 목적을 읽고 어떤 기술인지 판단한 뒤 답을 작성하세요.',key_points:[{title:'Quantization',purpose:'실수↔정수 좌표계와 scale 보상',code:'round(x/s)+z',flow:'float→int→float'},{title:'Pruning',purpose:'importance ranking과 mask 유지',code:'abs→kthvalue→mask',flow:'weights→sparse weights'},{title:'Distillation',purpose:'Teacher signal과 label signal 결합',code:'KD/feature loss + CE',flow:'inputs→Teacher/Student→Student loss'}],theory_guide:[],full_code_cells:[],subjective,mcq,questionCount:subjective.length,exam_design:{version:2,style:'과목 누적·교차 구현 모의고사'}});});
-
-(() => {"use strict";const course=window.LLM_COURSE,chapter=course.chapters.find(c=>c.file==="5. Quantization for LLM.ipynb");if(!chapter)return;chapter.notebook_goal="LLM Linear layer를 group/pseudo quantization하고 activation outlier와 LayerNorm–FC scale을 보정해 오차를 줄인다.";chapter.capability="bitwidth·group scale·outlier channel·SmoothQuant scale을 근거로 LLM quantization 코드를 함수 문맥에서 복원할 수 있다.";chapter.summary="LLM quantization은 group별 min/max scale로 weight를 pseudo-quantize하고, activation outlier를 보정하거나 LN과 FC 사이 scale을 재분배해 양자화 오차를 줄입니다.";chapter.key_points=[{title:"Pseudo quantization",purpose:"정수 격자로 round한 뒤 실수로 복원해 오차를 모사합니다.",code:"round(w/scales)+zeros → (q-zeros)*scales",flow:"float → simulated int → float",watch:"group size가 양자화 단위를 정합니다."},{title:"Outlier scale-up",purpose:"중요 activation channel을 양자화 전 확대하고 후에 복원합니다.",code:"topk(importance,...)[1]",flow:"activation stats → outlier indices → scale up/down",watch:"같은 index와 역연산을 사용합니다."},{title:"SmoothQuant",purpose:"LN과 다음 FC의 scale을 상쇄 이동해 activation outlier를 완화합니다.",code:"act_scales**alpha / weight_scales**(1-alpha)",flow:"activation/weight scales → balancing scale",watch:"LN은 divide, FC는 multiply입니다."}];
-const cells={"exam-od5-q":`max_int = 2 ** n_bit - 1\nscales = (max_val - min_val).clamp(min=1e-5) / max_int\nzeros = (-torch.round(min_val / scales)).clamp_(0, max_int)\nw = torch.clamp(torch.round(w / scales) + zeros, 0, max_int)\nw = (w - zeros) * scales`,"exam-od5-outlier":`outlier_mask = torch.topk(importance, int(len(importance) * 0.01))[1]\nm.weight.data[:, outlier_mask] *= scale_factor\nm.weight.data = pseudo_quantize_tensor(m.weight.data, n_bit=w_bit, q_group_size=q_group_size)\nm.weight.data[:, outlier_mask] /= scale_factor`,"exam-od5-smooth":`scales = act_scales.pow(alpha) / weight_scales.pow(1 - alpha)\nln.weight.div_(scales)\nln.bias.div_(scales)\nfc.weight.mul_(scales.view(1, -1))`};Object.entries(cells).forEach(([id,source])=>course.cells[id]={source});const base={subject:"On-device AI",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:true,source_type:"정답 노트북 함수 문맥 기반 예상문제"};const Q=(id,topic,difficulty,sourceId,prompt,problem_context,explanation,tensor_flow,code_signal,retry)=>({...base,id,topic,difficulty,sourceId,prompt,answer:cells[sourceId],accepted_answers:[cells[sourceId]],problem_context,explanation,tensor_flow,code_signal,retry});chapter.subjective=[Q("exam-od5-01","Group Pseudo Quantization","3 · Independent","exam-od5-q","group별 max/min에서 scale·zero를 구하고 정수 격자로 round한 뒤 dequantize하는 다섯 줄을 작성하세요.",`max_val = w.amax(dim=1, keepdim=True)\nmin_val = w.amin(dim=1, keepdim=True)\n????\n????\n????\n????\n????`,`unsigned 정수 범위 0~2^b-1에 실수 group 범위를 대응시킨 뒤 round하고 다시 scale 단위로 복원합니다.`,`w group → scales/zeros → q integer range → pseudo float`,`n_bit, max/min, clamp, round가 range calibration과 Q/DQ 순서를 지시합니다.`,`n_bit가 줄면 max_int와 quantization step이 어떻게 달라지는지 말하세요.`),Q("exam-od5-02","Outlier Channel Scale-up","3 · Transfer","exam-od5-outlier","상위 1% activation channel index를 찾고 scale-up→pseudo quantize→역 scale 세 단계를 작성하세요.",`importance = sum(input_feat[n]).float()\n????\n????\n????\n????`,`outlier channel은 작은 bitwidth에서 큰 오차를 만들 수 있어 양자화 전 확대하고 후에 같은 비율로 되돌립니다.`,`importance [hidden] → indices → selected weight columns → restored weights`,`topk의 [1]은 indices이며 weight[:,indices]가 input channel column을 선택합니다.`,`확대 후 되돌리지 않으면 layer 출력에 어떤 변화가 생기는지 설명하세요.`),Q("exam-od5-03","SmoothQuant Scale","3 · Formula","exam-od5-smooth","activation/weight scale과 alpha로 balancing scale을 만들고 LN은 나누고 FC는 broadcast multiply하는 네 줄을 작성하세요.",`weight_scales = ...\n????\n????\n????\n????`,`LN 출력 scale을 줄인 만큼 다음 FC weight input column을 키워 forward 전체 scale을 보존하면서 activation outlier를 weight 쪽으로 옮깁니다.`,`act scale [in] + weight scale [in] → balance [in] → LN/FC compensated parameters`,`pow(alpha), pow(1-alpha), LN div_, FC weight [out,in]의 view(1,-1)가 단서입니다.`,`alpha=1과 0이 각각 어느 scale만 따르는지 말하세요.`)];chapter.mcq=[{id:"exam-od5-m1",source_question_id:"exam-od5-01",topic:"Bitwidth",prompt:"n_bit=3의 unsigned max_int는?",answer_index:2,explanation:"2^3-1=7입니다.",choices:[{text:"3",why:"bit 수입니다."},{text:"6",why:"2×bit가 아닙니다."},{text:"7",why:"정답입니다."},{text:"8",why:"표현 개수입니다."},{text:"15",why:"4-bit max입니다."}]},{id:"exam-od5-m2",source_question_id:"exam-od5-02",topic:"topk",prompt:"torch.topk(...)[1]이 반환하는 것은?",answer_index:1,explanation:"상위 값의 index입니다.",choices:[{text:"상위 importance 값",why:"[0]입니다."},{text:"상위 channel index",why:"정답입니다."},{text:"scale Tensor",why:"별도 계산합니다."},{text:"boolean mask",why:"index를 mask처럼 사용합니다."},{text:"loss",why:"무관합니다."}]},{id:"exam-od5-m3",source_question_id:"exam-od5-03",topic:"Scale 보상",prompt:"SmoothQuant에서 LN을 scale로 나눈 뒤 FC weight에 scale을 곱하는 이유는?",answer_index:4,explanation:"두 연결 layer 사이의 전체 forward scale을 보존합니다.",choices:[{text:"parameter 수를 줄임",why:"shape는 같습니다."},{text:"Teacher를 고정",why:"distillation이 아닙니다."},{text:"gradient를 제거",why:"no_grad는 별도입니다."},{text:"softmax를 안정화",why:"직접 목적이 아닙니다."},{text:"LN–FC 연결의 scale 상쇄",why:"정답입니다."}]}];chapter.questionCount=3;chapter.exam_design={version:2,style:"LLM group·outlier·SmoothQuant 구현형"};})();
-
-(() => {"use strict";const course=window.LLM_COURSE,chapter=course.chapters.find(c=>c.file==="4. Pruning for LLM.ipynb");if(!chapter)return;
-chapter.notebook_goal="LLM Linear layer의 magnitude와 calibration activation을 이용해 전역·Wanda pruning mask를 계산한다.";chapter.capability="Transformer Linear weight의 shape와 calibration feature를 근거로 magnitude·Wanda importance 및 row-wise mask를 구현한다.";chapter.summary="LLM pruning도 기본은 magnitude threshold지만, Wanda는 입력 activation norm을 곱해 실제 활성화될 가능성이 큰 column의 중요도를 반영합니다.";
-chapter.key_points=[{title:"Magnitude",purpose:"작은 Linear weight를 제거합니다.",code:"abs(W) → kthvalue → mask",flow:"W → importance → global threshold",watch:"lm_head는 제외합니다."},{title:"Calibration",purpose:"대표 입력에서 각 hidden dimension의 activation 크기를 수집합니다.",code:"norm(x,p=2,dim=1)**2",flow:"activation → feature norm [hidden]",watch:"hook은 수집 후 remove합니다."},{title:"Wanda",purpose:"weight와 input activation을 함께 고려해 각 row에서 prune합니다.",code:"abs(W)*input_feat[n]",flow:"[out,in] × [in] → row-wise importance",watch:"threshold [out]은 [out,1]로 reshape합니다."}];
-const cells={"exam-od4-mag":`num_elements = W.numel()\nnum_zeros = round(num_elements * sparsity)\nimportance = torch.abs(W)\nthreshold = torch.kthvalue(importance.flatten(), num_zeros)[0]\nmask = importance > threshold`,"exam-od4-act":`activation_norm = torch.norm(x, p=2, dim=1) ** 2`,"exam-od4-wanda":`row, col = W.shape\nnum_zeros_per_row = round(col * sparsity)\nimportance = torch.abs(W) * input_feat[n]\nthreshold = torch.kthvalue(importance, num_zeros_per_row, dim=1)[0]\nmask = importance > threshold.reshape(row, 1)`};Object.entries(cells).forEach(([id,source])=>course.cells[id]={source});const base={subject:"On-device AI",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:true,source_type:"정답 노트북 함수 문맥 기반 예상문제"};const Q=(id,topic,difficulty,sourceId,prompt,problem_context,explanation,tensor_flow,code_signal,retry)=>({...base,id,topic,difficulty,sourceId,prompt,answer:cells[sourceId],accepted_answers:[cells[sourceId]],problem_context,explanation,tensor_flow,code_signal,retry});
-chapter.subjective=[Q("exam-od4-01","LLM Magnitude","3 · Independent","exam-od4-mag","각 Transformer Linear weight에서 목표 sparsity의 magnitude mask를 만드는 다섯 줄을 작성하세요.",`W = m.weight.data\nnum_elements = ????\nnum_zeros = ????\nimportance = ????\nthreshold = ????\nmask = ????\nW.mul_(mask)`,`CNN과 동일하게 절댓값이 작은 weight를 제거하되 모든 Linear layer에 적용합니다.`,`W [out,in] → flat importance → scalar threshold → mask`,`numel·sparsity·abs·kthvalue·mul_이 순서 단서입니다.`,`lm_head를 제외하는 이유를 설명하세요.`),Q("exam-od4-02","Calibration Activation","2 · Formula","exam-od4-act","hook 입력 x가 [hidden,batch]일 때 hidden dimension별 squared L2 activation norm 한 줄을 작성하세요.",`# x.shape: (hidden_size, batch_size)\nactivation_norm = ????`,`각 input feature가 calibration set에서 얼마나 활성화되는지 squared L2 norm으로 측정합니다.`,`x [hidden,N] → activation norm [hidden]`,`shape 주석과 norm p=2, dim=1 힌트가 축을 결정합니다.`,`dim=0을 쓰면 무엇의 norm이 되는지 말하세요.`),Q("exam-od4-03","Wanda Row Mask","3 · Shape","exam-od4-wanda","Wanda importance를 만들고 각 output row별 threshold를 [row,1]로 broadcast하는 다섯 줄을 작성하세요.",`W = m.weight.data\nrow, col = ????\nnum_zeros_per_row = ????\nimportance = ????\nthreshold = ????\nmask = ????`,`Wanda는 input feature norm을 곱해 실제 activation에 민감한 column을 중요하게 보고, output row마다 같은 개수만 제거합니다.`,`W [row,col] × input_feat [col] → importance [row,col] → threshold [row] → mask [row,col]`,`dim=1 kthvalue와 reshape(row,1)가 row-wise threshold임을 알려줍니다.`,`global magnitude와 Wanda가 서로 다르게 남길 수 있는 weight를 설명하세요.`)];chapter.mcq=[{id:"exam-od4-m1",source_question_id:"exam-od4-03",topic:"Wanda",prompt:"Wanda importance의 핵심 추가 정보는?",answer_index:2,explanation:"입력 activation norm을 weight magnitude에 곱합니다.",choices:[{text:"label class",why:"pruning score가 아닙니다."},{text:"learning rate",why:"optimizer 설정입니다."},{text:"input activation feature norm",why:"정답입니다."},{text:"output perplexity",why:"평가 결과입니다."},{text:"token id",why:"직접 곱하지 않습니다."}]},{id:"exam-od4-m2",source_question_id:"exam-od4-03",topic:"Broadcast",prompt:"threshold.reshape(row,1)의 목적은?",answer_index:1,explanation:"각 row threshold를 모든 column에 비교하도록 broadcast합니다.",choices:[{text:"weight를 flatten",why:"반대입니다."},{text:"row별 threshold broadcast",why:"정답입니다."},{text:"batch 축 생성",why:"weight에는 batch가 없습니다."},{text:"gradient 차단",why:"shape 연산입니다."},{text:"cluster 생성",why:"quantization이 아닙니다."}]},{id:"exam-od4-m3",source_question_id:"exam-od4-02",topic:"Hook",prompt:"calibration hook을 제거하는 이유는?",answer_index:4,explanation:"수집 후 계속 실행되면 불필요한 계산과 메모리가 생깁니다.",choices:[{text:"Teacher를 학습",why:"distillation과 다릅니다."},{text:"weight를 0으로",why:"mask가 담당합니다."},{text:"softmax를 계산",why:"무관합니다."},{text:"모델을 CPU로",why:"device와 무관합니다."},{text:"불필요한 forward hook 종료",why:"정답입니다."}]}];chapter.questionCount=3;chapter.exam_design={version:2,style:"LLM importance·activation 문맥 구현형"};})();
 
 (() => {
   "use strict";
-  const course=window.LLM_COURSE,chapter=course.chapters.find(c=>c.file==="3. Knowledge Distillation.ipynb");if(!chapter)return;
-  chapter.notebook_goal="큰 Teacher의 soft prediction·hidden representation을 작은 Student의 hard-label 학습과 결합해 지식증류를 구현한다.";
-  chapter.capability="Teacher gradient를 차단하고 temperature soft target, CE label loss, cosine/MSE representation loss를 목적에 맞게 조합할 수 있다.";
-  chapter.summary="KD는 정답 label만 맞히는 CE에 Teacher의 부드러운 class 분포 또는 중간 feature를 추가합니다. Teacher는 고정하고 Student만 update하며, 모든 loss는 Student 출력에 연결됩니다.";
-  chapter.key_points=[{title:"Teacher 고정",purpose:"Teacher를 supervision source로만 씁니다.",code:"with torch.no_grad(): teacher_logits=teacher(inputs)",flow:"inputs → frozen Teacher output",watch:"Teacher 출력에는 gradient가 필요 없습니다."},{title:"Soft target KD",purpose:"Temperature로 부드럽게 만든 class 분포를 Student가 모방합니다.",code:"softmax(logits/T); KL-like loss × T**2",flow:"logits → probabilities → distribution loss",watch:"Teacher와 Student 모두 같은 T를 사용합니다."},{title:"Hard-label CE",purpose:"실제 labels와 Student logits를 연결합니다.",code:"ce_loss(student_logits, labels)",flow:"Student logits + labels → scalar",watch:"Teacher logits가 CE에 들어가지 않습니다."},{title:"Feature distillation",purpose:"hidden representation 또는 feature map을 Teacher와 가깝게 만듭니다.",code:"CosineEmbeddingLoss / MSELoss",flow:"Student feature + Teacher feature → auxiliary loss",watch:"두 feature의 shape가 맞아야 합니다."}];
-  chapter.theory_guide=[{title:"Temperature",concept:"T가 커지면 softmax 분포가 평평해져 Teacher의 class 간 상대 정보를 더 드러냅니다.",flow:"logits/T → soft probabilities",code_signal:"teacher_logits와 student_logits에 같은 /T가 보입니다.",exam_clue:"soft target은 softmax, hard label은 CrossEntropyLoss입니다."},{title:"Loss 결합",concept:"Student는 soft supervision과 정답 supervision을 동시에 받아 두 loss의 가중합을 최소화합니다.",flow:"KD loss + CE loss → total loss → student gradient",code_signal:"soft_target_loss_weight와 ce_loss_weight가 보이면 마지막은 weighted sum입니다.",exam_clue:"Teacher forward는 no_grad, backward는 total loss에 한 번만 합니다."},{title:"Representation target",concept:"분포 대신 hidden vector 방향은 cosine, 값 자체는 MSE로 맞춥니다.",flow:"student feature ↔ teacher feature",code_signal:"teacher(inputs)의 두 번째 반환값과 cosine/MSE loss가 짝입니다.",exam_clue:"CosineEmbeddingLoss의 positive target은 ones batch vector입니다."}];
-  const cells={"exam-od3-kd":`with torch.no_grad():\n    teacher_logits = teacher(inputs)\nstudent_logits = student(inputs)\nsoft_targets = nn.functional.softmax(teacher_logits / T, dim=-1)\nstudent_prob = nn.functional.softmax(student_logits / T, dim=-1)`,"exam-od3-kdloss":`soft_targets_loss = torch.sum(soft_targets * (soft_targets.log() - student_prob.log())) / student_prob.size(0) * (T**2)\nlabel_loss = ce_loss(student_logits, labels)\nloss = soft_target_loss_weight * soft_targets_loss + ce_loss_weight * label_loss`,"exam-od3-cosine":`with torch.no_grad():\n    _, teacher_hidden_representation = teacher(inputs)\nstudent_logits, student_hidden_representation = student(inputs)\nhidden_rep_loss = cosine_loss(student_hidden_representation, teacher_hidden_representation,\n                              target=torch.ones(inputs.size(0)).cuda())`,"exam-od3-cosine-total":`label_loss = ce_loss(student_logits, labels)\nloss = hidden_rep_loss_weight * hidden_rep_loss + ce_loss_weight * label_loss`,"exam-od3-mse":`with torch.no_grad():\n    _, teacher_feature_map = teacher(inputs)\nstudent_logits, regressor_feature_map = student(inputs)\nhidden_rep_loss = mse_loss(regressor_feature_map, teacher_feature_map)`,"exam-od3-mse-total":`label_loss = ce_loss(student_logits, labels)\nloss = feature_map_weight * hidden_rep_loss + ce_loss_weight * label_loss`};Object.entries(cells).forEach(([id,source])=>course.cells[id]={source});
-  const base={subject:"On-device AI",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:true,source_type:"정답 노트북 함수 문맥 기반 예상문제"};const Q=(id,topic,difficulty,sourceId,prompt,problem_context,explanation,tensor_flow,code_signal,retry)=>({...base,id,topic,difficulty,sourceId,prompt,answer:cells[sourceId],accepted_answers:[cells[sourceId]],problem_context,explanation,tensor_flow,code_signal,retry});
-  chapter.subjective=[Q("exam-od3-01","Soft Target 생성","3 · Completion","exam-od3-kd","Teacher는 gradient 없이 실행하고, Teacher·Student logits를 같은 temperature T로 softmax하는 다섯 줄을 작성하세요.",`optimizer.zero_grad()\n????\n????\n????\n????\n????`,`Teacher는 고정된 기준이고 Student만 학습합니다. 같은 T로 만든 두 확률분포를 비교해야 soft target loss가 의미를 갖습니다.`,`inputs → teacher logits/student logits [B,C] → soft probabilities [B,C]`,`no_grad, teacher/student 호출, logits/T, dim=-1이 연속된 단서입니다.`,`T를 1보다 크게 하면 확률분포가 어떻게 변하는지 말하세요.`),Q("exam-od3-02","KD + CE Loss","3 · Independent","exam-od3-kdloss","soft distribution loss, hard label CE, 두 loss의 가중합을 만드는 세 줄을 작성하세요.",`# soft_targets and student_prob are [B,C]\nsoft_targets_loss = ????\nlabel_loss = ????\nloss = ????`,`soft loss는 Teacher·Student 분포 차이를 batch 평균으로 계산하고 T²로 보정합니다. CE는 실제 label을 사용하며 둘 모두 Student를 update합니다.`,`[B,C] distributions → KD scalar; logits [B,C]+labels [B] → CE scalar → total`,`soft_target_loss_weight와 ce_loss_weight가 있으면 마지막은 두 scalar의 weighted sum입니다.`,`soft target loss만 사용했을 때 실제 정답 label 정보에서 잃는 것을 말하세요.`),Q("exam-od3-03","Cosine Representation","3 · Function Context","exam-od3-cosine","Teacher hidden vector를 gradient 없이 얻고 Student hidden vector와 cosine similarity가 커지도록 loss를 만드는 다섯 줄을 작성하세요.",`# teacher and student return (logits, hidden_representation)\n????\n????\n????\n????\n    ????`,`CosineEmbeddingLoss에서 target +1은 두 vector 방향의 cosine similarity를 높이는 목표입니다. Teacher hidden은 fixed target이고 Student hidden만 gradient를 받습니다.`,`inputs → teacher/student hidden [B,D] → cosine loss scalar`,`tuple unpacking의 _와 torch.ones(inputs.size(0)).cuda() 힌트가 반환값과 target shape를 결정합니다.`,`cosine loss와 MSE loss가 각각 feature의 무엇을 맞추는지 비교하세요.`),Q("exam-od3-04","Cosine + CE 결합","2 · Completion","exam-od3-cosine-total","representation cosine loss와 실제 label CE를 Student 학습 loss로 결합하는 두 줄을 작성하세요.",`hidden_rep_loss = cosine_loss(...)\nlabel_loss = ????\nloss = ????`,`representation을 닮게 하는 보조 loss만으로는 class 정답을 직접 보장하지 않으므로 CE와 가중합합니다.`,`hidden scalar + CE scalar → total scalar`,`student_logits와 labels, 두 weight 변수 이름이 그대로 단서입니다.`,`hidden_rep_loss_weight를 0으로 하면 어떤 학습이 되는지 말하세요.`),Q("exam-od3-05","Feature-map MSE","3 · Transfer","exam-od3-mse","Teacher feature map과 Student regressor output을 MSE로 맞추는 네 줄을 작성하세요.",`# teacher returns (logits, feature_map)\n????\n????\n????\n????`,`feature 값 자체를 맞추려면 같은 shape의 Student regressor output과 Teacher feature map에 MSE를 적용합니다.`,`inputs → feature maps [B,...] → MSE scalar`,`teacher의 두 번째 반환값, student의 regressor_feature_map, mse_loss가 연결됩니다.`,`feature map shape가 다르면 왜 MSE가 실패하는지 설명하세요.`),Q("exam-od3-06","MSE + CE 결합","2 · Completion","exam-od3-mse-total","feature map MSE와 hard-label CE를 feature_map_weight로 결합하는 두 줄을 작성하세요.",`hidden_rep_loss = mse_loss(...)\nlabel_loss = ????\nloss = ????`,`feature matching과 분류 정답은 다른 supervision이므로 각각의 비중을 조절해 Student loss를 만듭니다.`,`feature scalar + label scalar → total scalar`,`feature_map_weight와 ce_loss_weight는 두 loss의 계수입니다.`,`두 weight의 합을 1로 고정하지 않아도 되는 이유를 설명하세요.`)];
-  chapter.mcq=[{id:"exam-od3-m1",source_question_id:"exam-od3-01",topic:"Teacher gradient",prompt:"Teacher forward를 torch.no_grad()로 감싸는 이유는?",answer_index:1,explanation:"Teacher weight는 update하지 않으므로 gradient graph와 메모리가 불필요합니다.",choices:[{text:"Teacher output을 0으로 만들기 위해",why:"output 값은 그대로 계산합니다."},{text:"Teacher gradient 계산을 막기 위해",why:"정답입니다."},{text:"Student optimizer를 초기화하기 위해",why:"optimizer.zero_grad와 다릅니다."},{text:"temperature를 1로 만들기 위해",why:"T와 무관합니다."},{text:"CE loss를 제거하기 위해",why:"CE는 Student logits에 적용합니다."}]},{id:"exam-od3-m2",source_question_id:"exam-od3-02",topic:"Hard Label",prompt:"true label loss의 올바른 입력은?",answer_index:3,explanation:"Student logits와 dataset labels입니다.",choices:[{text:"teacher_logits, labels",why:"Teacher는 학습 대상이 아닙니다."},{text:"soft_targets, labels",why:"soft target은 KD distribution입니다."},{text:"student_prob, teacher_logits",why:"CE API와 목적이 다릅니다."},{text:"student_logits, labels",why:"정답입니다."},{text:"teacher_hidden, student_hidden",why:"representation loss입니다."}]},{id:"exam-od3-m3",source_question_id:"exam-od3-03",topic:"Cosine Target",prompt:"CosineEmbeddingLoss에서 target이 모두 1인 의미는?",answer_index:0,explanation:"두 hidden vector의 cosine similarity를 높이는 positive pair입니다.",choices:[{text:"두 representation 방향을 가깝게",why:"정답입니다."},{text:"feature 값을 모두 1로",why:"target은 class/feature 값이 아닙니다."},{text:"Teacher gradient를 켬",why:"no_grad와 반대입니다."},{text:"class가 하나뿐임",why:"batch별 pair 표식입니다."},{text:"MSE를 계산",why:"다른 loss입니다."}]},{id:"exam-od3-m4",source_question_id:"exam-od3-05",topic:"MSE",prompt:"MSE representation distillation이 직접 맞추는 것은?",answer_index:4,explanation:"Teacher와 Student의 feature map 값 차이입니다.",choices:[{text:"class index",why:"CE가 담당합니다."},{text:"softmax 순위",why:"KD soft loss입니다."},{text:"optimizer state",why:"학습 설정입니다."},{text:"image pixel",why:"모델 중간 표현입니다."},{text:"feature map 수치",why:"정답입니다."}]},{id:"exam-od3-m5",source_question_id:"exam-od3-02",topic:"Temperature",prompt:"KD에서 Teacher와 Student에 같은 T를 적용하는 이유는?",answer_index:2,explanation:"동일한 부드러운 분포 공간에서 차이를 비교해야 합니다.",choices:[{text:"둘의 모델 크기를 같게",why:"architecture와 무관합니다."},{text:"labels를 one-hot으로",why:"softmax logits에 적용합니다."},{text:"같은 temperature distribution을 비교",why:"정답입니다."},{text:"Teacher를 학습 가능하게",why:"Teacher는 고정입니다."},{text:"batch size를 고정",why:"T는 batch size가 아닙니다."}]}];chapter.questionCount=chapter.subjective.length;chapter.exam_design={version:2,style:"Teacher–Student loss 연결 구현형",difficulty:["completion","loss discrimination","independent transfer"],excluded:["고정 epoch·learning rate","URL·경로","정답 없는 단일 token 암기"]};
+  const course = window.LLM_COURSE;
+  const chapter = course.chapters.find(c => c.file === "1. Pruning for CNN.ipynb");
+  if (!chapter) return;
+  chapter.notebook_goal = "가중치 magnitude를 중요도로 사용해 fine-grained·구조화·전역 pruning mask를 만들고, sparse fine-tuning 동안 mask를 재적용한다.";
+  chapter.capability = "weight Tensor의 축과 목표 sparsity를 보고 importance aggregation, kth threshold, broadcast mask, global threshold 및 schedule 코드를 함수 문맥 안에서 복원할 수 있다.";
+  chapter.summary = "Pruning은 절댓값이 작은 가중치를 제거하는 방식입니다. threshold는 목표 개수의 kth importance로 정하고, mask를 training 뒤에도 반복 적용해야 0이 된 weight가 다시 자라지 않습니다.";
+  chapter.overview = {
+    title: "CNN 가중치 중요도 계산부터 Fine-grained / 구조화 마스크 생성 및 재적용",
+    subtitle: "가중치 절댓값 기반 ranking, kthvalue 임계값, 축별 합산을 통한 채널/커널 가지치기",
+    steps: [
+      { label: "Fine-grained Pruning", code: "importance = abs(w); kthvalue", flow: "weight → |w| ranking → threshold → bool mask" },
+      { label: "Structured Pruning", code: "abs().sum(dim=..., keepdim=True)", flow: "weight [OC,IC,H,W] → group score → expand_as" },
+      { label: "Mask Reapplication", code: "param *= mask (in-place)", flow: "optimizer step → mask multiply → prevent regrowth" },
+      { label: "Global Pruning", code: "torch.cat(params) → one threshold", flow: "all weights → global vector → single threshold" },
+      { label: "Sparsity Schedule", code: "s_end + (s_start - s_end) * (1 - progress)^p", flow: "epoch → scheduled sparsity ratio" }
+    ],
+    rules: [
+      "마스크는 strictly greater(>) 조건을 사용하며, importance <= threshold인 가중치는 0으로 제거된다.",
+      "구조화 가지치기 시 sum dim: vector=(3,), kernel=(2,3), channel=(0,2,3)을 정확히 지정하고 keepdim=True를 쓴다.",
+      "생성된 구조화 mask는 반드시 mask.expand_as(weight)로 원본 weight 크기와 일치시킨다.",
+      "학습 진행 중 optimizer가 0으로 가지치기된 가중치를 갱신하므로 매 step 후 mask를 재적용(apply)한다.",
+      "Global pruning은 모든 대상 layer의 가중치를 flatten 후 concat하여 단일 threshold를 도출한다."
+    ]
+  };
+  chapter.key_points = [
+    { title: "Fine-grained magnitude", purpose: "원소별 절댓값이 작은 weight를 제거합니다.", code: "importance=abs(weight); threshold=kthvalue(...) ; mask=importance>threshold", flow: "weight → importance → threshold → boolean mask", watch: "동일 threshold 값은 strict > 조건에서 함께 제거될 수 있습니다." },
+    { title: "Structured pruning", purpose: "vector·kernel·channel 전체를 한 번에 제거해 실제 연산 감소 가능성을 만듭니다.", code: "weight.abs().sum(dim=...,keepdim=True)", flow: "weight [OC,IC,H,W] → group importance → expanded mask", watch: "합산하는 축이 남기려는 구조를 결정합니다." },
+    { title: "Layerwise vs global", purpose: "각 layer별 threshold 또는 모든 weight를 합친 하나의 threshold를 선택합니다.", code: "all_weights=torch.cat(parameters_to_prune)", flow: "layer tensors → global vector → one threshold", watch: "global pruning은 layer별 sparsity가 균일하지 않습니다." },
+    { title: "Mask 유지", purpose: "optimizer update 뒤 zero weight가 다시 값이 되는 것을 막습니다.", code: "callbacks=[lambda: pruner.apply(model)]", flow: "gradient update → mask multiply → sparse weights", watch: "apply는 학습 후 반복 실행되어야 합니다." }
+  ];
+  chapter.theory_guide = [
+    { title: "Magnitude importance", concept: "가중치 절댓값이 작을수록 출력에 주는 영향이 작다고 가정해 제거 후보로 삼습니다.", flow: "|w| rank → bottom k prune", code_signal: "sparsity와 numel이 함께 보이면 제거 개수를 계산한 뒤 kthvalue로 경계값을 찾습니다.", exam_clue: "importance는 abs, threshold는 flatten 후 kthvalue, mask는 > threshold입니다." },
+    { title: "구조 단위", concept: "구조화 pruning은 연결된 원소 묶음을 함께 없애 Tensor shape 자체를 줄일 수 있게 합니다.", flow: "group sum → group mask → expand_as(weight)", code_signal: "sum(dim=..., keepdim=True)의 남는 축이 vector/kernel/channel 단위를 표시합니다.", exam_clue: "mask shape가 weight와 다르면 expand_as가 필요합니다." },
+    { title: "전역 threshold", concept: "전역 pruning은 모든 layer의 magnitude를 한 ranking에 넣어 같은 중요도 기준을 씁니다.", flow: "all parameters → concat → one threshold → per-layer masks", code_signal: "view(-1) list와 torch.cat이 보이면 global threshold입니다.", exam_clue: "global mode에서는 각 layer가 아니라 all_weights에 kthvalue를 적용합니다." }
+  ];
+  const cells = {
+    "exam-od2-fine": "num_pruned_elements = round(weight.numel() * sparsity)\nimportance = torch.abs(weight)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_elements)[0]\nmask = importance > threshold",
+    "exam-od2-vector": "importance = weight.abs().sum(dim=(3,), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_vectors)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
+    "exam-od2-kernel": "importance = weight.abs().sum(dim=(2, 3), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_kernels)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
+    "exam-od2-channel": "importance = weight.abs().sum(dim=(0, 2, 3), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_channels)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
+    "exam-od2-apply": "for name, param in model.named_parameters():\n    if name in self.masks:\n        param *= self.masks[name]",
+    "exam-od2-global": "all_weights = torch.cat(parameters_to_prune)\nnum_elements = all_weights.numel()\nnum_zeros = round(num_elements * sparsity)\nimportance = torch.abs(all_weights)\nthreshold = torch.kthvalue(importance, num_zeros)[0]",
+    "exam-od2-schedule": "sparsity = sparsity_end + (sparsity_start - sparsity_end) * (1 - (epoch - epoch_start) / (epoch_end - epoch_start)) ** exponent"
+  };
+  Object.entries(cells).forEach(([id, source]) => course.cells[id] = { source });
+  const base = { subject: "On-device AI", chapterId: chapter.id, chapterNumber: chapter.number, chapterTitle: chapter.title, file: chapter.file, occurrence: 0, isSourceBlank: true, source_type: "정답 노트북 함수 문맥 기반 예상문제" };
+  const Q = (id, topic, difficulty, sourceId, prompt, problem_context, explanation, tensor_flow, code_signal, retry, accepted_answers) => ({
+    ...base, id, topic, difficulty, sourceId, prompt, answer: cells[sourceId],
+    accepted_answers: accepted_answers || [cells[sourceId]],
+    problem_context, explanation, tensor_flow, code_signal, retry
+  });
+  chapter.subjective = [
+    Q("exam-od2-01", "Fine-grained Magnitude", "3 · Independent", "exam-od2-fine", "목표 sparsity만큼 가장 작은 원소를 제거하도록 제거 개수, 절댓값 importance, kth threshold, boolean mask 네 줄을 작성하세요.",
+      "# weight: any shape, sparsity: 0~1\n############### YOUR CODE STARTS HERE ###############\nnum_pruned_elements = ????\nimportance = ????\nthreshold = ????\nmask = ????\n############### YOUR CODE ENDS HERE #################\nweight.mul_(mask)",
+      "전체 원소 수의 sparsity 비율만큼 제거 개수를 정하고 절댓값을 작은 순으로 정렬했을 때 kth 값을 경계로 사용합니다. mask를 곱하면 제거 위치가 0이 됩니다.",
+      "weight [any] → |weight| [any] → flat ranking → mask [any]",
+      "numel·sparsity·abs·kthvalue·mul_이 네 단계의 직접 단서입니다.",
+      "weight=[-3,-1,2,4], sparsity=0.5에서 threshold와 mask를 계산하세요.",
+      [
+        "num_pruned_elements = round(weight.numel() * sparsity)\nimportance = torch.abs(weight)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_elements)[0]\nmask = importance > threshold",
+        "num_pruned_elements = round(weight.numel() * sparsity)\nimportance = weight.abs()\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_elements)[0]\nmask = importance > threshold",
+        "num_pruned_elements = int(round(weight.numel() * sparsity))\nimportance = torch.abs(weight)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_elements)[0]\nmask = importance > threshold",
+        "num_pruned_elements = round(weight.numel() * sparsity)\nimportance = torch.abs(weight)\nthreshold = torch.kthvalue(importance.view(-1), num_pruned_elements)[0]\nmask = importance > threshold",
+        "round(weight.numel() * sparsity)\ntorch.abs(weight)\ntorch.kthvalue(importance.flatten(), num_pruned_elements)[0]\nimportance > threshold",
+        "round(weight.numel() * sparsity)\nweight.abs()\ntorch.kthvalue(importance.flatten(), num_pruned_elements)[0]\nimportance > threshold"
+      ]),
+    Q("exam-od2-02", "Vector-level Pruning", "3 · Shape", "exam-od2-vector", "Conv weight의 마지막 축을 하나의 vector로 보고 vector importance·threshold·broadcast mask를 만드는 네 줄을 작성하세요.",
+      "# weight [OC, IC, KH, KW], vector axis=KW\nimportance = ????\nthreshold = ????\nmask = ????\nmask = ????",
+      "마지막 width 축을 합치면 [OC,IC,KH,1]의 vector score가 되며, threshold mask를 weight 전체 shape로 확장해 vector의 모든 원소를 함께 제거합니다.",
+      "[OC,IC,KH,KW] → [OC,IC,KH,1] → expanded [OC,IC,KH,KW]",
+      "vector 수가 OC×IC×KH이고 keepdim=True가 보이면 dim=(3,)와 expand_as를 선택합니다.",
+      "kernel 단위로 바꾸려면 어느 두 축을 sum해야 하는지 쓰세요.",
+      [
+        "importance = weight.abs().sum(dim=(3,), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_vectors)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
+        "importance = torch.abs(weight).sum(dim=(3,), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_vectors)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
+        "importance = weight.abs().sum(dim=3, keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_vectors)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
+        "weight.abs().sum(dim=(3,), keepdim=True)\ntorch.kthvalue(importance.flatten(), num_pruned_vectors)[0]\nimportance > threshold\nmask.expand_as(weight)"
+      ]),
+    Q("exam-od2-03", "Kernel·Channel 구분", "3 · Discrimination", "exam-od2-kernel", "[OC,IC,KH,KW]에서 kernel 하나(OC,IC 쌍) 전체를 제거하는 importance부터 expanded mask까지 네 줄을 작성하세요.",
+      "# kernel index is (out_channel, in_channel)\nimportance = ????\nthreshold = ????\nmask = ????\nmask = ????",
+      "kernel pruning은 spatial KH·KW를 합쳐 [OC,IC,1,1] importance를 만들고, channel pruning과 달리 input channel 축은 남겨 개별 kernel을 비교합니다.",
+      "[OC,IC,KH,KW] → [OC,IC,1,1] → mask → expanded weight",
+      "kernel의 정의가 두 channel 축을 보존하고 spatial 두 축을 합산하도록 결정합니다.",
+      "input channel 전체를 제거하려면 sum dim을 어떻게 바꿔야 하는지 작성하세요.",
+      [
+        "importance = weight.abs().sum(dim=(2, 3), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_kernels)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
+        "importance = torch.abs(weight).sum(dim=(2, 3), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_kernels)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
+        "importance = weight.abs().sum(dim=[2, 3], keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_kernels)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
+        "weight.abs().sum(dim=(2, 3), keepdim=True)\ntorch.kthvalue(importance.flatten(), num_pruned_kernels)[0]\nimportance > threshold\nmask.expand_as(weight)"
+      ]),
+    Q("exam-od2-04", "Mask 재적용", "2 · Function Context", "exam-od2-apply", "저장해 둔 레이어별 mask를 이름으로 찾아 모델 parameter에 in-place 적용하는 세 줄을 작성하세요.",
+      "@torch.no_grad()\ndef apply(self, model):\n    ????\n        ????\n            ????",
+      "optimizer가 gradient update로 0이던 weight를 다시 바꿀 수 있으므로 parameter 이름과 mask dictionary를 대응시켜 학습 후 곱합니다.",
+      "named parameters → matching masks → sparse parameters",
+      "self.masks의 key가 parameter name이며 gradient를 만들 필요 없는 유지 작업이라는 단서입니다.",
+      "apply를 fine-tuning callback으로 매 batch 뒤 호출하는 이유를 말하세요.",
+      [
+        "for name, param in model.named_parameters():\n    if name in self.masks:\n        param *= self.masks[name]",
+        "for name, param in model.named_parameters():\n    if name in self.masks:\n        param.mul_(self.masks[name])",
+        "for name, param in model.named_parameters():\n    if name in self.masks:\n        param.data.mul_(self.masks[name])",
+        "for name, param in model.named_parameters():\n    if name in self.masks:\n        param.data *= self.masks[name]"
+      ]),
+    Q("exam-od2-05", "Global Magnitude Pruning", "3 · Independent", "exam-od2-global", "여러 layer weight를 하나의 vector로 결합한 뒤 전역 제거 개수와 magnitude threshold를 만드는 다섯 줄을 작성하세요.",
+      "# parameters_to_prune contains param.view(-1) for each Conv/FC layer\n############### YOUR CODE STARTS HERE ###############\nall_weights = ????\nnum_elements = ????\nnum_zeros = ????\nimportance = ????\nthreshold = ????\n############### YOUR CODE ENDS HERE #################",
+      "전역 pruning은 모든 layer의 weight를 같은 importance ranking에 넣습니다. 따라서 작은 weight가 많은 layer는 더 많이 prune될 수 있습니다.",
+      "per-layer flat vectors → all [N] → |w| [N] → scalar threshold",
+      "view(-1) list와 global_prune branch가 torch.cat, numel, abs, kthvalue를 순서대로 요구합니다.",
+      "layerwise pruning과 global pruning에서 layer별 실제 sparsity가 어떻게 달라질지 설명하세요.",
+      [
+        "all_weights = torch.cat(parameters_to_prune)\nnum_elements = all_weights.numel()\nnum_zeros = round(num_elements * sparsity)\nimportance = torch.abs(all_weights)\nthreshold = torch.kthvalue(importance, num_zeros)[0]",
+        "all_weights = torch.cat(parameters_to_prune)\nnum_elements = all_weights.numel()\nnum_zeros = round(num_elements * sparsity)\nimportance = all_weights.abs()\nthreshold = torch.kthvalue(importance, num_zeros)[0]",
+        "all_weights = torch.cat(parameters_to_prune)\nnum_elements = all_weights.numel()\nnum_zeros = int(round(num_elements * sparsity))\nimportance = torch.abs(all_weights)\nthreshold = torch.kthvalue(importance, num_zeros)[0]",
+        "torch.cat(parameters_to_prune)\nall_weights.numel()\nround(num_elements * sparsity)\ntorch.abs(all_weights)\ntorch.kthvalue(importance, num_zeros)[0]"
+      ]),
+    Q("exam-od2-06", "Sparsity Schedule", "3 · Formula", "exam-od2-schedule", "시작·종료 구간은 이미 처리됐다고 할 때, 중간 epoch에서 exponent를 적용한 gradual sparsity 식 한 줄을 작성하세요.",
+      "for epoch in range(num_epochs):\n    if epoch < epoch_start:\n        sparsity = 0\n    elif epoch >= epoch_end:\n        sparsity = sparsity_end\n    else:\n        ????",
+      "스케줄 전에는 pruning하지 않고 종료 이후에는 목표 sparsity를 고정합니다. 중간 구간은 정규화된 진행률에 exponent를 적용해 linear 또는 cubic 변화를 만듭니다.",
+      "epoch scalar → sparsity scalar → pruner mask ratio",
+      "epoch_start/end와 sparsity_start/end, exponent가 중간 구간 수식을 결정합니다.",
+      "exponent=1과 3에서 초반 sparsity 증가 속도를 비교하세요.",
+      [
+        "sparsity = sparsity_end + (sparsity_start - sparsity_end) * (1 - (epoch - epoch_start) / (epoch_end - epoch_start)) ** exponent",
+        "sparsity_end + (sparsity_start - sparsity_end) * (1 - (epoch - epoch_start) / (epoch_end - epoch_start)) ** exponent",
+        "sparsity = sparsity_end + (sparsity_start - sparsity_end) * ((1 - (epoch - epoch_start) / (epoch_end - epoch_start)) ** exponent)",
+        "sparsity_end + (sparsity_start - sparsity_end) * ((1 - (epoch - epoch_start) / (epoch_end - epoch_start)) ** exponent)"
+      ]),
+    Q("exam-od2-07", "Channel-level Pruning", "3 · Shape", "exam-od2-channel", "입력 channel 하나 전체를 제거하도록 output channel·spatial 축을 합산한 importance부터 expanded mask까지 네 줄을 작성하세요.",
+      "# retain only input-channel axis in group importance\nimportance = ????\nthreshold = ????\nmask = ????\nmask = ????",
+      "input channel pruning은 [1,IC,1,1] score를 만들어 모든 output filter와 spatial 위치에서 같은 input channel을 함께 제거합니다.",
+      "[OC,IC,KH,KW] → [1,IC,1,1] → expanded weight",
+      "num_channels=weight.shape[1]과 output·spatial에 대한 주석이 dim=(0,2,3)을 가리킵니다.",
+      "output channel pruning이라면 retain/sum 축을 어떻게 바꿀지 쓰세요.",
+      [
+        "importance = weight.abs().sum(dim=(0, 2, 3), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_channels)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
+        "importance = torch.abs(weight).sum(dim=(0, 2, 3), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_channels)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
+        "importance = weight.abs().sum(dim=[0, 2, 3], keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_channels)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
+        "weight.abs().sum(dim=(0, 2, 3), keepdim=True)\ntorch.kthvalue(importance.flatten(), num_pruned_channels)[0]\nimportance > threshold\nmask.expand_as(weight)"
+      ])
+  ];
+  chapter.mcq = [
+    { id: "exam-od2-m1", source_question_id: "exam-od2-01", topic: "Threshold", prompt: "importance.flatten()에 kthvalue를 적용하는 목적은?", answer_index: 3, explanation: "모든 원소를 하나의 ranking으로 보고 목표 제거 개수의 경계값을 얻습니다.", choices: [{ text: "weight shape를 복원", why: "복원은 view/expand가 담당합니다." }, { text: "gradient를 계산", why: "no_grad pruning입니다." }, { text: "최댓값만 선택", why: "k번째 작은 값입니다." }, { text: "목표 sparsity의 magnitude 경계값 선택", why: "정답입니다." }, { text: "0이 아닌 원소 수 계산", why: "count_nonzero와 다릅니다." }] },
+    { id: "exam-od2-m2", source_question_id: "exam-od2-02", topic: "Vector 축", prompt: "vector-level pruning에서 weight.abs().sum(dim=(3,), keepdim=True)가 의미하는 것은?", answer_index: 1, explanation: "마지막 spatial 축의 원소를 한 vector group으로 묶습니다.", choices: [{ text: "output channel 전체를 하나로 합침", why: "OC 축 0은 남습니다." }, { text: "마지막 축 vector의 절댓값 합", why: "정답입니다." }, { text: "모든 weight를 scalar로 합침", why: "다른 축이 남습니다." }, { text: "batch 차원을 제거", why: "weight에는 batch가 없습니다." }, { text: "threshold를 직접 계산", why: "importance 계산 단계입니다." }] },
+    { id: "exam-od2-m3", source_question_id: "exam-od2-04", topic: "Sparse Fine-tuning", prompt: "학습 중 mask를 매번 다시 적용하는 이유는?", answer_index: 4, explanation: "optimizer update 뒤 0이었던 weight가 다시 0이 아닐 수 있습니다.", choices: [{ text: "dropout을 켜기 위해", why: "dropout과 별개입니다." }, { text: "새 mask를 무작위 생성", why: "기존 mask를 유지합니다." }, { text: "learning rate를 변경", why: "scheduler 역할입니다." }, { text: "weight shape를 변경", why: "값만 0으로 만듭니다." }, { text: "pruned weight의 재성장을 막기 위해", why: "정답입니다." }] },
+    { id: "exam-od2-m4", source_question_id: "exam-od2-05", topic: "Global vs Layerwise", prompt: "global pruning의 올바른 설명은?", answer_index: 0, explanation: "전체 layer weight의 한 ranking에서 threshold 하나를 구합니다.", choices: [{ text: "모든 layer를 합쳐 하나의 threshold를 사용", why: "정답입니다." }, { text: "각 layer가 반드시 같은 sparsity", why: "전역 ranking에서는 다를 수 있습니다." }, { text: "bias만 prune", why: "2D 이상 Conv/FC weight가 대상입니다." }, { text: "threshold 없이 random mask", why: "magnitude threshold입니다." }, { text: "channel 단위만 사용", why: "fine-grained global mask입니다." }] },
+    { id: "exam-od2-m5", source_question_id: "exam-od2-06", topic: "Schedule", prompt: "sparsity schedule에서 epoch >= epoch_end일 때 값은?", answer_index: 2, explanation: "목표 sparsity에 도달한 뒤에는 끝값을 유지합니다.", choices: [{ text: "0", why: "시작 전 구간입니다." }, { text: "sparsity_start", why: "시작값이 아닙니다." }, { text: "sparsity_end", why: "정답입니다." }, { text: "epoch/num_epochs", why: "완료 이후 고정이 아닙니다." }, { text: "무작위값", why: "결정적 schedule입니다." }] }
+  ];
+  chapter.questionCount = chapter.subjective.length;
+  chapter.exam_design = { version: 2, style: "중요도·축·mask 문맥 구현형", difficulty: ["completion", "shape discrimination", "independent transfer"], excluded: ["고정 layer sparsity 수치", "URL·경로", "의미 없는 token 암기"] };
 })();
 
 (() => {
   "use strict";
-  const course=window.LLM_COURSE,chapter=course.chapters.find(c=>c.file==="1. Pruning for CNN.ipynb");if(!chapter)return;
-  chapter.notebook_goal="가중치 magnitude를 중요도로 사용해 fine-grained·구조화·전역 pruning mask를 만들고, sparse fine-tuning 동안 mask를 재적용한다.";
-  chapter.capability="weight Tensor의 축과 목표 sparsity를 보고 importance aggregation, kth threshold, broadcast mask, global threshold 및 schedule 코드를 함수 문맥 안에서 복원할 수 있다.";
-  chapter.summary="Pruning은 절댓값이 작은 가중치를 제거하는 방식입니다. threshold는 목표 개수의 kth importance로 정하고, mask를 training 뒤에도 반복 적용해야 0이 된 weight가 다시 자라지 않습니다.";
-  chapter.key_points=[{title:"Fine-grained magnitude",purpose:"원소별 절댓값이 작은 weight를 제거합니다.",code:"importance=abs(weight); threshold=kthvalue(...) ; mask=importance>threshold",flow:"weight → importance → threshold → boolean mask",watch:"동일 threshold 값은 strict > 조건에서 함께 제거될 수 있습니다."},{title:"Structured pruning",purpose:"vector·kernel·channel 전체를 한 번에 제거해 실제 연산 감소 가능성을 만듭니다.",code:"weight.abs().sum(dim=...,keepdim=True)",flow:"weight [OC,IC,H,W] → group importance → expanded mask",watch:"합산하는 축이 남기려는 구조를 결정합니다."},{title:"Layerwise vs global",purpose:"각 layer별 threshold 또는 모든 weight를 합친 하나의 threshold를 선택합니다.",code:"all_weights=torch.cat(parameters_to_prune)",flow:"layer tensors → global vector → one threshold",watch:"global pruning은 layer별 sparsity가 균일하지 않습니다."},{title:"Mask 유지",purpose:"optimizer update 뒤 zero weight가 다시 값이 되는 것을 막습니다.",code:"callbacks=[lambda: pruner.apply(model)]",flow:"gradient update → mask multiply → sparse weights",watch:"apply는 학습 후 반복 실행되어야 합니다."}];
-  chapter.theory_guide=[{title:"Magnitude importance",concept:"가중치 절댓값이 작을수록 출력에 주는 영향이 작다고 가정해 제거 후보로 삼습니다.",flow:"|w| rank → bottom k prune",code_signal:"sparsity와 numel이 함께 보이면 제거 개수를 계산한 뒤 kthvalue로 경계값을 찾습니다.",exam_clue:"importance는 abs, threshold는 flatten 후 kthvalue, mask는 > threshold입니다."},{title:"구조 단위",concept:"구조화 pruning은 연결된 원소 묶음을 함께 없애 Tensor shape 자체를 줄일 수 있게 합니다.",flow:"group sum → group mask → expand_as(weight)",code_signal:"sum(dim=..., keepdim=True)의 남는 축이 vector/kernel/channel 단위를 표시합니다.",exam_clue:"mask shape가 weight와 다르면 expand_as가 필요합니다."},{title:"전역 threshold",concept:"전역 pruning은 모든 layer의 magnitude를 한 ranking에 넣어 같은 중요도 기준을 씁니다.",flow:"all parameters → concat → one threshold → per-layer masks",code_signal:"view(-1) list와 torch.cat이 보이면 global threshold입니다.",exam_clue:"global mode에서는 각 layer가 아니라 all_weights에 kthvalue를 적용합니다."}];
-  const cells={
-    "exam-od2-fine":`num_pruned_elements = round(weight.numel() * sparsity)\nimportance = torch.abs(weight)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_elements)[0]\nmask = importance > threshold`,
-    "exam-od2-vector":`importance = weight.abs().sum(dim=(3,), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_vectors)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)`,
-    "exam-od2-kernel":`importance = weight.abs().sum(dim=(2, 3), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_kernels)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)`,
-    "exam-od2-channel":`importance = weight.abs().sum(dim=(0, 2, 3), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_channels)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)`,
-    "exam-od2-apply":`for name, param in model.named_parameters():\n    if name in self.masks:\n        param *= self.masks[name]`,
-    "exam-od2-global":`all_weights = torch.cat(parameters_to_prune)\nnum_elements = all_weights.numel()\nnum_zeros = round(num_elements * sparsity)\nimportance = torch.abs(all_weights)\nthreshold = torch.kthvalue(importance, num_zeros)[0]`,
-    "exam-od2-schedule":`sparsity = sparsity_end + (sparsity_start - sparsity_end) * (1 - (epoch - epoch_start) / (epoch_end - epoch_start)) ** exponent`
-  };Object.entries(cells).forEach(([id,source])=>course.cells[id]={source});
-  const base={subject:"On-device AI",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:true,source_type:"정답 노트북 함수 문맥 기반 예상문제"};
-  const Q=(id,topic,difficulty,sourceId,prompt,problem_context,explanation,tensor_flow,code_signal,retry)=>({...base,id,topic,difficulty,sourceId,prompt,answer:cells[sourceId],accepted_answers:[cells[sourceId]],problem_context,explanation,tensor_flow,code_signal,retry});
-  chapter.subjective=[
-    Q("exam-od2-01","Fine-grained Magnitude","3 · Independent","exam-od2-fine","목표 sparsity만큼 가장 작은 원소를 제거하도록 제거 개수, 절댓값 importance, kth threshold, boolean mask 네 줄을 작성하세요.",`# weight: any shape, sparsity: 0~1\n############### YOUR CODE STARTS HERE ###############\nnum_pruned_elements = ????\nimportance = ????\nthreshold = ????\nmask = ????\n############### YOUR CODE ENDS HERE #################\nweight.mul_(mask)`,`전체 원소 수의 sparsity 비율만큼 제거 개수를 정하고 절댓값을 작은 순으로 정렬했을 때 kth 값을 경계로 사용합니다. mask를 곱하면 제거 위치가 0이 됩니다.`,`weight [any] → |weight| [any] → flat ranking → mask [any]`,`numel·sparsity·abs·kthvalue·mul_이 네 단계의 직접 단서입니다.`,`weight=[-3,-1,2,4], sparsity=0.5에서 threshold와 mask를 계산하세요.`),
-    Q("exam-od2-02","Vector-level Pruning","3 · Shape","exam-od2-vector","Conv weight의 마지막 축을 하나의 vector로 보고 vector importance·threshold·broadcast mask를 만드는 네 줄을 작성하세요.",`# weight [OC, IC, KH, KW], vector axis=KW\nimportance = ????\nthreshold = ????\nmask = ????\nmask = ????`,`마지막 width 축을 합치면 [OC,IC,KH,1]의 vector score가 되며, threshold mask를 weight 전체 shape로 확장해 vector의 모든 원소를 함께 제거합니다.`,`[OC,IC,KH,KW] → [OC,IC,KH,1] → expanded [OC,IC,KH,KW]`,`vector 수가 OC×IC×KH이고 keepdim=True가 보이면 dim=(3,)와 expand_as를 선택합니다.`,`kernel 단위로 바꾸려면 어느 두 축을 sum해야 하는지 쓰세요.`),
-    Q("exam-od2-03","Kernel·Channel 구분","3 · Discrimination","exam-od2-kernel","[OC,IC,KH,KW]에서 kernel 하나(OC,IC 쌍) 전체를 제거하는 importance부터 expanded mask까지 네 줄을 작성하세요.",`# kernel index is (out_channel, in_channel)\nimportance = ????\nthreshold = ????\nmask = ????\nmask = ????`,`kernel pruning은 spatial KH·KW를 합쳐 [OC,IC,1,1] importance를 만들고, channel pruning과 달리 input channel 축은 남겨 개별 kernel을 비교합니다.`,`[OC,IC,KH,KW] → [OC,IC,1,1] → mask → expanded weight`,`kernel의 정의가 두 channel 축을 보존하고 spatial 두 축을 합산하도록 결정합니다.`,`input channel 전체를 제거하려면 sum dim을 어떻게 바꿔야 하는지 작성하세요.`),
-    Q("exam-od2-04","Mask 재적용","2 · Function Context","exam-od2-apply","저장해 둔 레이어별 mask를 이름으로 찾아 모델 parameter에 in-place 적용하는 세 줄을 작성하세요.",`@torch.no_grad()\ndef apply(self, model):\n    ????\n        ????\n            ????`,`optimizer가 gradient update로 0이던 weight를 다시 바꿀 수 있으므로 parameter 이름과 mask dictionary를 대응시켜 학습 후 곱합니다.`,`named parameters → matching masks → sparse parameters`,`self.masks의 key가 parameter name이며 gradient를 만들 필요 없는 유지 작업이라는 단서입니다.`,`apply를 fine-tuning callback으로 매 batch 뒤 호출하는 이유를 말하세요.`),
-    Q("exam-od2-05","Global Magnitude Pruning","3 · Independent","exam-od2-global","여러 layer weight를 하나의 vector로 결합한 뒤 전역 제거 개수와 magnitude threshold를 만드는 다섯 줄을 작성하세요.",`# parameters_to_prune contains param.view(-1) for each Conv/FC layer\n############### YOUR CODE STARTS HERE ###############\nall_weights = ????\nnum_elements = ????\nnum_zeros = ????\nimportance = ????\nthreshold = ????\n############### YOUR CODE ENDS HERE #################`,`전역 pruning은 모든 layer의 weight를 같은 importance ranking에 넣습니다. 따라서 작은 weight가 많은 layer는 더 많이 prune될 수 있습니다.`,`per-layer flat vectors → all [N] → |w| [N] → scalar threshold`,`view(-1) list와 global_prune branch가 torch.cat, numel, abs, kthvalue를 순서대로 요구합니다.`,`layerwise pruning과 global pruning에서 layer별 실제 sparsity가 어떻게 달라질지 설명하세요.`),
-    Q("exam-od2-06","Sparsity Schedule","3 · Formula","exam-od2-schedule","시작·종료 구간은 이미 처리됐다고 할 때, 중간 epoch에서 exponent를 적용한 gradual sparsity 식 한 줄을 작성하세요.",`for epoch in range(num_epochs):\n    if epoch < epoch_start:\n        sparsity = 0\n    elif epoch >= epoch_end:\n        sparsity = sparsity_end\n    else:\n        ????`,`스케줄 전에는 pruning하지 않고 종료 이후에는 목표 sparsity를 고정합니다. 중간 구간은 정규화된 진행률에 exponent를 적용해 linear 또는 cubic 변화를 만듭니다.`,`epoch scalar → sparsity scalar → pruner mask ratio`,`epoch_start/end와 sparsity_start/end, exponent가 중간 구간 수식을 결정합니다.`,`exponent=1과 3에서 초반 sparsity 증가 속도를 비교하세요.`),
-    Q("exam-od2-07","Channel-level Pruning","3 · Shape","exam-od2-channel","입력 channel 하나 전체를 제거하도록 output channel·spatial 축을 합산한 importance부터 expanded mask까지 네 줄을 작성하세요.",`# retain only input-channel axis in group importance\nimportance = ????\nthreshold = ????\nmask = ????\nmask = ????`,`input channel pruning은 [1,IC,1,1] score를 만들어 모든 output filter와 spatial 위치에서 같은 input channel을 함께 제거합니다.`,`[OC,IC,KH,KW] → [1,IC,1,1] → expanded weight`,`num_channels=weight.shape[1]과 output·spatial에 대한 주석이 dim=(0,2,3)을 가리킵니다.`,`output channel pruning이라면 retain/sum 축을 어떻게 바꿀지 쓰세요.`)
+  const course = window.LLM_COURSE;
+  const chapter = course.chapters.find(c => c.file === "3. Knowledge Distillation.ipynb");
+  if (!chapter) return;
+  chapter.notebook_goal = "큰 Teacher의 soft prediction·hidden representation을 작은 Student의 hard-label 학습과 결합해 지식증류를 구현한다.";
+  chapter.capability = "Teacher gradient를 차단하고 temperature soft target, CE label loss, cosine/MSE representation loss를 목적에 맞게 조합할 수 있다.";
+  chapter.summary = "KD는 정답 label만 맞히는 CE에 Teacher의 부드러운 class 분포 또는 중간 feature를 추가합니다. Teacher는 고정하고 Student만 update하며, 모든 loss는 Student 출력에 연결됩니다.";
+  chapter.overview = {
+    title: "Teacher 모델의 Soft / Feature 지식을 Student 모델로 전이하는 전체 흐름",
+    subtitle: "Temperature scaling 기반 soft target KL loss와 representation 매칭 및 CrossEntropy 결합",
+    steps: [
+      { label: "Teacher Forward", code: "with torch.no_grad(): teacher(x)", flow: "inputs → frozen Teacher logits/features" },
+      { label: "Temperature Softmax", code: "softmax(logits / T, dim=-1)", flow: "logits → softened probability distributions" },
+      { label: "Soft Target Loss", code: "KL(soft_t || student_p) * T^2", flow: "Teacher/Student probs → distribution loss" },
+      { label: "Hard Label Loss", code: "ce_loss(student_logits, labels)", flow: "Student logits + ground truth → task CE loss" },
+      { label: "Representation Loss", code: "CosineEmbeddingLoss / MSELoss", flow: "Student hidden ↔ Teacher hidden vector/map" }
+    ],
+    rules: [
+      "Teacher 모델은 학습되지 않으므로 반드시 with torch.no_grad(): 블록 내에서 실행한다.",
+      "Soft target 계산 시 Teacher와 Student는 반드시 동일한 temperature T로 나눈 후 softmax를 취한다.",
+      "Soft target loss에는 gradient 크기 보전을 위해 반드시 T^2 (T**2)를 곱해주어야 한다.",
+      "CrossEntropyLoss(label_loss)에는 Teacher logits가 아닌 Student logits와 원본 labels가 들어간다.",
+      "최종 loss는 soft_targets_loss와 label_loss의 가중합(weighted sum)으로 구성된다."
+    ]
+  };
+  chapter.key_points = [
+    { title: "Teacher 고정", purpose: "Teacher를 supervision source로만 씁니다.", code: "with torch.no_grad(): teacher_logits=teacher(inputs)", flow: "inputs → frozen Teacher output", watch: "Teacher 출력에는 gradient가 필요 없습니다." },
+    { title: "Soft target KD", purpose: "Temperature로 부드럽게 만든 class 분포를 Student가 모방합니다.", code: "softmax(logits/T); KL-like loss × T**2", flow: "logits → probabilities → distribution loss", watch: "Teacher와 Student 모두 같은 T를 사용합니다." },
+    { title: "Hard-label CE", purpose: "실제 labels와 Student logits를 연결합니다.", code: "ce_loss(student_logits, labels)", flow: "Student logits + labels → scalar", watch: "Teacher logits가 CE에 들어가지 않습니다." },
+    { title: "Feature distillation", purpose: "hidden representation 또는 feature map을 Teacher와 가깝게 만듭니다.", code: "CosineEmbeddingLoss / MSELoss", flow: "Student feature + Teacher feature → auxiliary loss", watch: "두 feature의 shape가 맞아야 합니다." }
   ];
-  chapter.mcq=[{id:"exam-od2-m1",source_question_id:"exam-od2-01",topic:"Threshold",prompt:"importance.flatten()에 kthvalue를 적용하는 목적은?",answer_index:3,explanation:"모든 원소를 하나의 ranking으로 보고 목표 제거 개수의 경계값을 얻습니다.",choices:[{text:"weight shape를 복원",why:"복원은 view/expand가 담당합니다."},{text:"gradient를 계산",why:"no_grad pruning입니다."},{text:"최댓값만 선택",why:"k번째 작은 값입니다."},{text:"목표 sparsity의 magnitude 경계값 선택",why:"정답입니다."},{text:"0이 아닌 원소 수 계산",why:"count_nonzero와 다릅니다."}]},{id:"exam-od2-m2",source_question_id:"exam-od2-02",topic:"Vector 축",prompt:"vector-level pruning에서 weight.abs().sum(dim=(3,), keepdim=True)가 의미하는 것은?",answer_index:1,explanation:"마지막 spatial 축의 원소를 한 vector group으로 묶습니다.",choices:[{text:"output channel 전체를 하나로 합침",why:"OC 축 0은 남습니다."},{text:"마지막 축 vector의 절댓값 합",why:"정답입니다."},{text:"모든 weight를 scalar로 합침",why:"다른 축이 남습니다."},{text:"batch 차원을 제거",why:"weight에는 batch가 없습니다."},{text:"threshold를 직접 계산",why:"importance 계산 단계입니다."}]},{id:"exam-od2-m3",source_question_id:"exam-od2-04",topic:"Sparse Fine-tuning",prompt:"학습 중 mask를 매번 다시 적용하는 이유는?",answer_index:4,explanation:"optimizer update 뒤 0이었던 weight가 다시 0이 아닐 수 있습니다.",choices:[{text:"dropout을 켜기 위해",why:"dropout과 별개입니다."},{text:"새 mask를 무작위 생성",why:"기존 mask를 유지합니다."},{text:"learning rate를 변경",why:"scheduler 역할입니다."},{text:"weight shape를 변경",why:"값만 0으로 만듭니다."},{text:"pruned weight의 재성장을 막기 위해",why:"정답입니다."}]},{id:"exam-od2-m4",source_question_id:"exam-od2-05",topic:"Global vs Layerwise",prompt:"global pruning의 올바른 설명은?",answer_index:0,explanation:"전체 layer weight의 한 ranking에서 threshold 하나를 구합니다.",choices:[{text:"모든 layer를 합쳐 하나의 threshold를 사용",why:"정답입니다."},{text:"각 layer가 반드시 같은 sparsity",why:"전역 ranking에서는 다를 수 있습니다."},{text:"bias만 prune",why:"2D 이상 Conv/FC weight가 대상입니다."},{text:"threshold 없이 random mask",why:"magnitude threshold입니다."},{text:"channel 단위만 사용",why:"fine-grained global mask입니다."}]},{id:"exam-od2-m5",source_question_id:"exam-od2-06",topic:"Schedule",prompt:"sparsity schedule에서 epoch >= epoch_end일 때 값은?",answer_index:2,explanation:"목표 sparsity에 도달한 뒤에는 끝값을 유지합니다.",choices:[{text:"0",why:"시작 전 구간입니다."},{text:"sparsity_start",why:"시작값이 아닙니다."},{text:"sparsity_end",why:"정답입니다."},{text:"epoch/num_epochs",why:"완료 이후 고정이 아닙니다."},{text:"무작위값",why:"결정적 schedule입니다."}]}];chapter.questionCount=chapter.subjective.length;chapter.exam_design={version:2,style:"중요도·축·mask 문맥 구현형",difficulty:["completion","shape discrimination","independent transfer"],excluded:["고정 layer sparsity 수치","URL·경로","의미 없는 token 암기"]};
+  chapter.theory_guide = [
+    { title: "Temperature", concept: "T가 커지면 softmax 분포가 평평해져 Teacher의 class 간 상대 정보를 더 드러냅니다.", flow: "logits/T → soft probabilities", code_signal: "teacher_logits와 student_logits에 같은 /T가 보입니다.", exam_clue: "soft target은 softmax, hard label은 CrossEntropyLoss입니다." },
+    { title: "Loss 결합", concept: "Student는 soft supervision과 정답 supervision을 동시에 받아 두 loss의 가중합을 최소화합니다.", flow: "KD loss + CE loss → total loss → student gradient", code_signal: "soft_target_loss_weight와 ce_loss_weight가 보이면 마지막은 weighted sum입니다.", exam_clue: "Teacher forward는 no_grad, backward는 total loss에 한 번만 합니다." },
+    { title: "Representation target", concept: "분포 대신 hidden vector 방향은 cosine, 값 자체는 MSE로 맞춥니다.", flow: "student feature ↔ teacher feature", code_signal: "teacher(inputs)의 두 번째 반환값과 cosine/MSE loss가 짝입니다.", exam_clue: "CosineEmbeddingLoss의 positive target은 ones batch vector입니다." }
+  ];
+  const cells = {
+    "exam-od3-kd": "with torch.no_grad():\n    teacher_logits = teacher(inputs)\nstudent_logits = student(inputs)\nsoft_targets = nn.functional.softmax(teacher_logits / T, dim=-1)\nstudent_prob = nn.functional.softmax(student_logits / T, dim=-1)",
+    "exam-od3-kdloss": "soft_targets_loss = torch.sum(soft_targets * (soft_targets.log() - student_prob.log())) / student_prob.size(0) * (T**2)\nlabel_loss = ce_loss(student_logits, labels)\nloss = soft_target_loss_weight * soft_targets_loss + ce_loss_weight * label_loss",
+    "exam-od3-cosine": "with torch.no_grad():\n    _, teacher_hidden_representation = teacher(inputs)\nstudent_logits, student_hidden_representation = student(inputs)\nhidden_rep_loss = cosine_loss(student_hidden_representation, teacher_hidden_representation,\n                              target=torch.ones(inputs.size(0)).cuda())",
+    "exam-od3-cosine-total": "label_loss = ce_loss(student_logits, labels)\nloss = hidden_rep_loss_weight * hidden_rep_loss + ce_loss_weight * label_loss",
+    "exam-od3-mse": "with torch.no_grad():\n    _, teacher_feature_map = teacher(inputs)\nstudent_logits, regressor_feature_map = student(inputs)\nhidden_rep_loss = mse_loss(regressor_feature_map, teacher_feature_map)",
+    "exam-od3-mse-total": "label_loss = ce_loss(student_logits, labels)\nloss = feature_map_weight * hidden_rep_loss + ce_loss_weight * label_loss"
+  };
+  Object.entries(cells).forEach(([id, source]) => course.cells[id] = { source });
+  const base = { subject: "On-device AI", chapterId: chapter.id, chapterNumber: chapter.number, chapterTitle: chapter.title, file: chapter.file, occurrence: 0, isSourceBlank: true, source_type: "정답 노트북 함수 문맥 기반 예상문제" };
+  const Q = (id, topic, difficulty, sourceId, prompt, problem_context, explanation, tensor_flow, code_signal, retry, accepted_answers) => ({
+    ...base, id, topic, difficulty, sourceId, prompt, answer: cells[sourceId],
+    accepted_answers: accepted_answers || [cells[sourceId]],
+    problem_context, explanation, tensor_flow, code_signal, retry
+  });
+  chapter.subjective = [
+    Q("exam-od3-01", "Soft Target 생성", "3 · Completion", "exam-od3-kd", "Teacher는 gradient 없이 실행하고, Teacher·Student logits를 같은 temperature T로 softmax하는 다섯 줄을 작성하세요.",
+      "optimizer.zero_grad()\n????\n????\n????\n????\n????",
+      "Teacher는 고정된 기준이고 Student만 학습합니다. 같은 T로 만든 두 확률분포를 비교해야 soft target loss가 의미를 갖습니다.",
+      "inputs → teacher logits/student logits [B,C] → soft probabilities [B,C]",
+      "no_grad, teacher/student 호출, logits/T, dim=-1이 연속된 단서입니다.",
+      "T를 1보다 크게 하면 확률분포가 어떻게 변하는지 말하세요.",
+      [
+        "with torch.no_grad():\n    teacher_logits = teacher(inputs)\nstudent_logits = student(inputs)\nsoft_targets = nn.functional.softmax(teacher_logits / T, dim=-1)\nstudent_prob = nn.functional.softmax(student_logits / T, dim=-1)",
+        "with torch.no_grad():\n    teacher_logits = teacher(inputs)\nstudent_logits = student(inputs)\nsoft_targets = F.softmax(teacher_logits / T, dim=-1)\nstudent_prob = F.softmax(student_logits / T, dim=-1)",
+        "with torch.no_grad():\n    teacher_logits = teacher(inputs)\nstudent_logits = student(inputs)\nsoft_targets = nn.functional.softmax(teacher_logits / T, dim=1)\nstudent_prob = nn.functional.softmax(student_logits / T, dim=1)",
+        "with torch.no_grad():\n    teacher_logits = teacher(inputs)\nstudent_logits = student(inputs)\nsoft_targets = torch.softmax(teacher_logits / T, dim=-1)\nstudent_prob = torch.softmax(student_logits / T, dim=-1)",
+        "with torch.no_grad():\n    teacher_logits = teacher(inputs)\nstudent_logits = student(inputs)\nsoft_targets = F.softmax(teacher_logits / T, dim=1)\nstudent_prob = F.softmax(student_logits / T, dim=1)"
+      ]),
+    Q("exam-od3-02", "KD + CE Loss", "3 · Independent", "exam-od3-kdloss", "soft distribution loss, hard label CE, 두 loss의 가중합을 만드는 세 줄을 작성하세요.",
+      "# soft_targets and student_prob are [B,C]\nsoft_targets_loss = ????\nlabel_loss = ????\nloss = ????",
+      "soft loss는 Teacher·Student 분포 차이를 batch 평균으로 계산하고 T²로 보정합니다. CE는 실제 label을 사용하며 둘 모두 Student를 update합니다.",
+      "[B,C] distributions → KD scalar; logits [B,C]+labels [B] → CE scalar → total",
+      "soft_target_loss_weight와 ce_loss_weight가 있으면 마지막은 두 scalar의 weighted sum입니다.",
+      "soft target loss만 사용했을 때 실제 정답 label 정보에서 잃는 것을 말하세요.",
+      [
+        "soft_targets_loss = torch.sum(soft_targets * (soft_targets.log() - student_prob.log())) / student_prob.size(0) * (T**2)\nlabel_loss = ce_loss(student_logits, labels)\nloss = soft_target_loss_weight * soft_targets_loss + ce_loss_weight * label_loss",
+        "soft_targets_loss = torch.sum(soft_targets * (soft_targets.log() - student_prob.log())) / student_prob.size(0) * (T ** 2)\nlabel_loss = ce_loss(student_logits, labels)\nloss = soft_target_loss_weight * soft_targets_loss + ce_loss_weight * label_loss",
+        "soft_targets_loss = torch.sum(soft_targets * (soft_targets.log() - student_prob.log())) / student_prob.size(0) * (T**2)\nlabel_loss = ce_loss(student_logits, labels)\nloss = ce_loss_weight * label_loss + soft_target_loss_weight * soft_targets_loss",
+        "torch.sum(soft_targets * (soft_targets.log() - student_prob.log())) / student_prob.size(0) * (T**2)\nce_loss(student_logits, labels)\nsoft_target_loss_weight * soft_targets_loss + ce_loss_weight * label_loss",
+        "torch.sum(soft_targets * (soft_targets.log() - student_prob.log())) / student_prob.size(0) * (T ** 2)\nce_loss(student_logits, labels)\nsoft_target_loss_weight * soft_targets_loss + ce_loss_weight * label_loss"
+      ]),
+    Q("exam-od3-03", "Cosine Representation", "3 · Function Context", "exam-od3-cosine", "Teacher hidden vector를 gradient 없이 얻고 Student hidden vector와 cosine similarity가 커지도록 loss를 만드는 다섯 줄을 작성하세요.",
+      "# teacher and student return (logits, hidden_representation)\n????\n????\n????\n????\n    ????",
+      "CosineEmbeddingLoss에서 target +1은 두 vector 방향의 cosine similarity를 높이는 목표입니다. Teacher hidden은 fixed target이고 Student hidden만 gradient를 받습니다.",
+      "inputs → teacher/student hidden [B,D] → cosine loss scalar",
+      "tuple unpacking의 _와 torch.ones(inputs.size(0)).cuda() 힌트가 반환값과 target shape를 결정합니다.",
+      "cosine loss와 MSE loss가 각각 feature의 무엇을 맞추는지 비교하세요.",
+      [
+        "with torch.no_grad():\n    _, teacher_hidden_representation = teacher(inputs)\nstudent_logits, student_hidden_representation = student(inputs)\nhidden_rep_loss = cosine_loss(student_hidden_representation, teacher_hidden_representation,\n                              target=torch.ones(inputs.size(0)).cuda())",
+        "with torch.no_grad():\n    _, teacher_hidden_representation = teacher(inputs)\nstudent_logits, student_hidden_representation = student(inputs)\nhidden_rep_loss = cosine_loss(student_hidden_representation, teacher_hidden_representation, target=torch.ones(inputs.size(0)).cuda())",
+        "with torch.no_grad():\n    _, teacher_hidden_representation = teacher(inputs)\nstudent_logits, student_hidden_representation = student(inputs)\nhidden_rep_loss = cosine_loss(student_hidden_representation, teacher_hidden_representation, target=torch.ones(inputs.shape[0]).cuda())"
+      ]),
+    Q("exam-od3-04", "Cosine + CE 결합", "2 · Completion", "exam-od3-cosine-total", "representation cosine loss와 실제 label CE를 Student 학습 loss로 결합하는 두 줄을 작성하세요.",
+      "hidden_rep_loss = cosine_loss(...)\nlabel_loss = ????\nloss = ????",
+      "representation을 닮게 하는 보조 loss만으로는 class 정답을 직접 보장하지 않으므로 CE와 가중합합니다.",
+      "hidden scalar + CE scalar → total scalar",
+      "student_logits와 labels, 두 weight 변수 이름이 그대로 단서입니다.",
+      "hidden_rep_loss_weight를 0으로 하면 어떤 학습이 되는지 말하세요.",
+      [
+        "label_loss = ce_loss(student_logits, labels)\nloss = hidden_rep_loss_weight * hidden_rep_loss + ce_loss_weight * label_loss",
+        "label_loss = ce_loss(student_logits, labels)\nloss = ce_loss_weight * label_loss + hidden_rep_loss_weight * hidden_rep_loss",
+        "ce_loss(student_logits, labels)\nhidden_rep_loss_weight * hidden_rep_loss + ce_loss_weight * label_loss",
+        "ce_loss(student_logits, labels)\nce_loss_weight * label_loss + hidden_rep_loss_weight * hidden_rep_loss"
+      ]),
+    Q("exam-od3-05", "Feature-map MSE", "3 · Transfer", "exam-od3-mse", "Teacher feature map과 Student regressor output을 MSE로 맞추는 네 줄을 작성하세요.",
+      "# teacher returns (logits, feature_map)\n????\n????\n????\n????",
+      "feature 값 자체를 맞추려면 같은 shape의 Student regressor output과 Teacher feature map에 MSE를 적용합니다.",
+      "inputs → feature maps [B,...] → MSE scalar",
+      "teacher의 두 번째 반환값, student의 regressor_feature_map, mse_loss가 연결됩니다.",
+      "feature map shape가 다르면 왜 MSE가 실패하는지 설명하세요.",
+      [
+        "with torch.no_grad():\n    _, teacher_feature_map = teacher(inputs)\nstudent_logits, regressor_feature_map = student(inputs)\nhidden_rep_loss = mse_loss(regressor_feature_map, teacher_feature_map)",
+        "with torch.no_grad():\n    _, teacher_feature_map = teacher(inputs)\nstudent_logits, regressor_feature_map = student(inputs)\nhidden_rep_loss = mse_loss(teacher_feature_map, regressor_feature_map)"
+      ]),
+    Q("exam-od3-06", "MSE + CE 결합", "2 · Completion", "exam-od3-mse-total", "feature map MSE와 hard-label CE를 feature_map_weight로 결합하는 두 줄을 작성하세요.",
+      "hidden_rep_loss = mse_loss(...)\nlabel_loss = ????\nloss = ????",
+      "feature matching과 분류 정답은 다른 supervision이므로 각각의 비중을 조절해 Student loss를 만듭니다.",
+      "feature scalar + label scalar → total scalar",
+      "feature_map_weight와 ce_loss_weight는 두 loss의 계수입니다.",
+      "두 weight의 합을 1로 고정하지 않아도 되는 이유를 설명하세요.",
+      [
+        "label_loss = ce_loss(student_logits, labels)\nloss = feature_map_weight * hidden_rep_loss + ce_loss_weight * label_loss",
+        "label_loss = ce_loss(student_logits, labels)\nloss = ce_loss_weight * label_loss + feature_map_weight * hidden_rep_loss",
+        "ce_loss(student_logits, labels)\nfeature_map_weight * hidden_rep_loss + ce_loss_weight * label_loss",
+        "ce_loss(student_logits, labels)\nce_loss_weight * label_loss + feature_map_weight * hidden_rep_loss"
+      ])
+  ];
+  chapter.mcq = [
+    { id: "exam-od3-m1", source_question_id: "exam-od3-01", topic: "Teacher gradient", prompt: "Teacher forward를 torch.no_grad()로 감싸는 이유는?", answer_index: 1, explanation: "Teacher weight는 update하지 않으므로 gradient graph와 메모리가 불필요합니다.", choices: [{ text: "Teacher output을 0으로 만들기 위해", why: "output 값은 그대로 계산합니다." }, { text: "Teacher gradient 계산을 막기 위해", why: "정답입니다." }, { text: "Student optimizer를 초기화하기 위해", why: "optimizer.zero_grad와 다릅니다." }, { text: "temperature를 1로 만들기 위해", why: "T와 무관합니다." }, { text: "CE loss를 제거하기 위해", why: "CE는 Student logits에 적용합니다." }] },
+    { id: "exam-od3-m2", source_question_id: "exam-od3-02", topic: "Hard Label", prompt: "true label loss의 올바른 입력은?", answer_index: 3, explanation: "Student logits와 dataset labels입니다.", choices: [{ text: "teacher_logits, labels", why: "Teacher는 학습 대상이 아닙니다." }, { text: "soft_targets, labels", why: "soft target은 KD distribution입니다." }, { text: "student_prob, teacher_logits", why: "CE API와 목적이 다릅니다." }, { text: "student_logits, labels", why: "정답입니다." }, { text: "teacher_hidden, student_hidden", why: "representation loss입니다." }] },
+    { id: "exam-od3-m3", source_question_id: "exam-od3-03", topic: "Cosine Target", prompt: "CosineEmbeddingLoss에서 target이 모두 1인 의미는?", answer_index: 0, explanation: "두 hidden vector의 cosine similarity를 높이는 positive pair입니다.", choices: [{ text: "두 representation 방향을 가깝게", why: "정답입니다." }, { text: "feature 값을 모두 1로", why: "target은 class/feature 값이 아닙니다." }, { text: "Teacher gradient를 켬", why: "no_grad와 반대입니다." }, { text: "class가 하나뿐임", why: "batch별 pair 표식입니다." }, { text: "MSE를 계산", why: "다른 loss입니다." }] },
+    { id: "exam-od3-m4", source_question_id: "exam-od3-05", topic: "MSE", prompt: "MSE representation distillation이 직접 맞추는 것은?", answer_index: 4, explanation: "Teacher와 Student의 feature map 값 차이입니다.", choices: [{ text: "class index", why: "CE가 담당합니다." }, { text: "softmax 순위", why: "KD soft loss입니다." }, { text: "optimizer state", why: "학습 설정입니다." }, { text: "image pixel", why: "모델 중간 표현입니다." }, { text: "feature map 수치", why: "정답입니다." }] },
+    { id: "exam-od3-m5", source_question_id: "exam-od3-02", topic: "Temperature", prompt: "KD에서 Teacher와 Student에 같은 T를 적용하는 이유는?", answer_index: 2, explanation: "동일한 부드러운 분포 공간에서 차이를 비교해야 합니다.", choices: [{ text: "둘의 모델 크기를 같게", why: "architecture와 무관합니다." }, { text: "labels를 one-hot으로", why: "softmax logits에 적용합니다." }, { text: "같은 temperature distribution을 비교", why: "정답입니다." }, { text: "Teacher를 학습 가능하게", why: "Teacher는 고정입니다." }, { text: "batch size를 고정", why: "T는 batch size가 아닙니다." }] }
+  ];
+  chapter.questionCount = chapter.subjective.length;
+  chapter.exam_design = { version: 2, style: "Teacher–Student loss 연결 구현형", difficulty: ["completion", "loss discrimination", "independent transfer"], excluded: ["고정 epoch·learning rate", "URL·경로", "정답 없는 단일 token 암기"] };
 })();
+
+(() => {
+  "use strict";
+  const course = window.LLM_COURSE;
+  const chapter = course.chapters.find(c => c.file === "4. Pruning for LLM.ipynb");
+  if (!chapter) return;
+  chapter.notebook_goal = "LLM Linear layer의 magnitude와 calibration activation을 이용해 전역·Wanda pruning mask를 계산한다.";
+  chapter.capability = "Transformer Linear weight의 shape와 calibration feature를 근거로 magnitude·Wanda importance 및 row-wise mask를 구현한다.";
+  chapter.summary = "LLM pruning도 기본은 magnitude threshold지만, Wanda는 입력 activation norm을 곱해 실제 활성화될 가능성이 큰 column의 중요도를 반영합니다.";
+  chapter.overview = {
+    title: "LLM Transformer 선형 계층의 Magnitude 및 Wanda 가지치기",
+    subtitle: "가중치 크기뿐만 아니라 입력 activation의 norm을 결합한 Row-wise Wanda pruning",
+    steps: [
+      { label: "Linear Magnitude", code: "kthvalue(abs(W).flatten(), k)", flow: "W [out, in] → flat rank → scalar threshold → mask" },
+      { label: "Calibration Norm", code: "torch.norm(x, p=2, dim=1)**2", flow: "calibration inputs → hidden dimension feature norm" },
+      { label: "Wanda Importance", code: "abs(W) * input_feat[n]", flow: "weight [out, in] × act [in] → row-wise importance" },
+      { label: "Row-wise Threshold", code: "kthvalue(importance, k, dim=1)", flow: "dim=1 kthvalue → threshold [out, 1] broadcast" }
+    ],
+    rules: [
+      "LLM magnitude 가지치기 시 lm_head는 언어 모델 출력에 결정적이므로 가지치기 대상에서 제외한다.",
+      "Wanda는 입력 activation의 L2 norm을 가중치 절댓값에 곱해 실제 활성화 기여도를 반영한다.",
+      "Wanda threshold는 dim=1 축으로 구한 뒤 reshape(row, 1)로 브로드캐스팅하여 각 row별로 독립 적용한다.",
+      "Calibration activation 수집용 forward hook은 수집 완료 후 반드시 hook.remove()로 해제한다."
+    ]
+  };
+  chapter.key_points = [
+    { title: "Magnitude", purpose: "작은 Linear weight를 제거합니다.", code: "abs(W) → kthvalue → mask", flow: "W → importance → global threshold", watch: "lm_head는 제외합니다." },
+    { title: "Calibration", purpose: "대표 입력에서 각 hidden dimension의 activation 크기를 수집합니다.", code: "norm(x,p=2,dim=1)**2", flow: "activation → feature norm [hidden]", watch: "hook은 수집 후 remove합니다." },
+    { title: "Wanda", purpose: "weight와 input activation을 함께 고려해 각 row에서 prune합니다.", code: "abs(W)*input_feat[n]", flow: "[out,in] × [in] → row-wise importance", watch: "threshold [out]은 [out,1]로 reshape합니다." }
+  ];
+  chapter.theory_guide = [
+    { title: "Wanda의 원리", concept: "가중치 크기뿐만 아니라 해당 가중치가 곱해지는 activation의 평균 크기가 커야 실제 출력에 큰 영향을 줍니다.", flow: "|W| × ||X|| → Wanda score", code_signal: "torch.abs(W) * input_feat[n] 형태의 브로드캐스트 곱셈", exam_clue: "row별 pruning을 위해 dim=1에서 kthvalue를 구하고 reshape(row, 1)합니다." }
+  ];
+  const cells = {
+    "exam-od4-mag": "num_elements = W.numel()\nnum_zeros = round(num_elements * sparsity)\nimportance = torch.abs(W)\nthreshold = torch.kthvalue(importance.flatten(), num_zeros)[0]\nmask = importance > threshold",
+    "exam-od4-act": "activation_norm = torch.norm(x, p=2, dim=1) ** 2",
+    "exam-od4-wanda": "row, col = W.shape\nnum_zeros_per_row = round(col * sparsity)\nimportance = torch.abs(W) * input_feat[n]\nthreshold = torch.kthvalue(importance, num_zeros_per_row, dim=1)[0]\nmask = importance > threshold.reshape(row, 1)"
+  };
+  Object.entries(cells).forEach(([id, source]) => course.cells[id] = { source });
+  const base = { subject: "On-device AI", chapterId: chapter.id, chapterNumber: chapter.number, chapterTitle: chapter.title, file: chapter.file, occurrence: 0, isSourceBlank: true, source_type: "정답 노트북 함수 문맥 기반 예상문제" };
+  const Q = (id, topic, difficulty, sourceId, prompt, problem_context, explanation, tensor_flow, code_signal, retry, accepted_answers) => ({
+    ...base, id, topic, difficulty, sourceId, prompt, answer: cells[sourceId],
+    accepted_answers: accepted_answers || [cells[sourceId]],
+    problem_context, explanation, tensor_flow, code_signal, retry
+  });
+  chapter.subjective = [
+    Q("exam-od4-01", "LLM Magnitude", "3 · Independent", "exam-od4-mag", "각 Transformer Linear weight에서 목표 sparsity의 magnitude mask를 만드는 다섯 줄을 작성하세요.",
+      "W = m.weight.data\nnum_elements = ????\nnum_zeros = ????\nimportance = ????\nthreshold = ????\nmask = ????\nW.mul_(mask)",
+      "CNN과 동일하게 절댓값이 작은 weight를 제거하되 모든 Linear layer에 적용합니다.",
+      "W [out,in] → flat importance → scalar threshold → mask",
+      "numel·sparsity·abs·kthvalue·mul_이 순서 단서입니다.",
+      "lm_head를 제외하는 이유를 설명하세요.",
+      [
+        "num_elements = W.numel()\nnum_zeros = round(num_elements * sparsity)\nimportance = torch.abs(W)\nthreshold = torch.kthvalue(importance.flatten(), num_zeros)[0]\nmask = importance > threshold",
+        "num_elements = W.numel()\nnum_zeros = round(num_elements * sparsity)\nimportance = W.abs()\nthreshold = torch.kthvalue(importance.flatten(), num_zeros)[0]\nmask = importance > threshold",
+        "num_elements = W.numel()\nnum_zeros = int(round(num_elements * sparsity))\nimportance = torch.abs(W)\nthreshold = torch.kthvalue(importance.flatten(), num_zeros)[0]\nmask = importance > threshold",
+        "num_elements = W.numel()\nnum_zeros = round(num_elements * sparsity)\nimportance = torch.abs(W)\nthreshold = torch.kthvalue(importance.view(-1), num_zeros)[0]\nmask = importance > threshold",
+        "W.numel()\nround(num_elements * sparsity)\ntorch.abs(W)\ntorch.kthvalue(importance.flatten(), num_zeros)[0]\nimportance > threshold",
+        "W.numel()\nround(num_elements * sparsity)\nW.abs()\ntorch.kthvalue(importance.flatten(), num_zeros)[0]\nimportance > threshold"
+      ]),
+    Q("exam-od4-02", "Calibration Activation", "2 · Formula", "exam-od4-act", "hook 입력 x가 [hidden,batch]일 때 hidden dimension별 squared L2 activation norm 한 줄을 작성하세요.",
+      "# x.shape: (hidden_size, batch_size)\nactivation_norm = ????",
+      "각 input feature가 calibration set에서 얼마나 활성화되는지 squared L2 norm으로 측정합니다.",
+      "x [hidden,N] → activation norm [hidden]",
+      "shape 주석과 norm p=2, dim=1 힌트가 축을 결정합니다.",
+      "dim=0을 쓰면 무엇의 norm이 되는지 말하세요.",
+      [
+        "activation_norm = torch.norm(x, p=2, dim=1) ** 2",
+        "torch.norm(x, p=2, dim=1) ** 2",
+        "activation_norm = torch.norm(x, p=2, dim=1).pow(2)",
+        "torch.norm(x, p=2, dim=1).pow(2)",
+        "activation_norm = torch.norm(x, 2, 1) ** 2",
+        "torch.norm(x, 2, 1) ** 2"
+      ]),
+    Q("exam-od4-03", "Wanda Row Mask", "3 · Shape", "exam-od4-wanda", "Wanda importance를 만들고 각 output row별 threshold를 [row,1]로 broadcast하는 다섯 줄을 작성하세요.",
+      "W = m.weight.data\nrow, col = ????\nnum_zeros_per_row = ????\nimportance = ????\nthreshold = ????\nmask = ????",
+      "Wanda는 input feature norm을 곱해 실제 activation에 민감한 column을 중요하게 보고, output row마다 같은 개수만 제거합니다.",
+      "W [row,col] × input_feat [col] → importance [row,col] → threshold [row] → mask [row,col]",
+      "dim=1 kthvalue와 reshape(row,1)가 row-wise threshold임을 알려줍니다.",
+      "global magnitude와 Wanda가 서로 다르게 남길 수 있는 weight를 설명하세요.",
+      [
+        "row, col = W.shape\nnum_zeros_per_row = round(col * sparsity)\nimportance = torch.abs(W) * input_feat[n]\nthreshold = torch.kthvalue(importance, num_zeros_per_row, dim=1)[0]\nmask = importance > threshold.reshape(row, 1)",
+        "row, col = W.shape\nnum_zeros_per_row = round(col * sparsity)\nimportance = W.abs() * input_feat[n]\nthreshold = torch.kthvalue(importance, num_zeros_per_row, dim=1)[0]\nmask = importance > threshold.reshape(row, 1)",
+        "row, col = W.shape\nnum_zeros_per_row = round(col * sparsity)\nimportance = torch.abs(W) * input_feat[n]\nthreshold = torch.kthvalue(importance, num_zeros_per_row, dim=1)[0]\nmask = importance > threshold.view(row, 1)",
+        "row, col = W.shape\nnum_zeros_per_row = int(round(col * sparsity))\nimportance = torch.abs(W) * input_feat[n]\nthreshold = torch.kthvalue(importance, num_zeros_per_row, dim=1)[0]\nmask = importance > threshold.reshape(row, 1)",
+        "W.shape\nround(col * sparsity)\ntorch.abs(W) * input_feat[n]\ntorch.kthvalue(importance, num_zeros_per_row, dim=1)[0]\nimportance > threshold.reshape(row, 1)"
+      ])
+  ];
+  chapter.mcq = [
+    { id: "exam-od4-m1", source_question_id: "exam-od4-03", topic: "Wanda", prompt: "Wanda importance의 핵심 추가 정보는?", answer_index: 2, explanation: "입력 activation norm을 weight magnitude에 곱합니다.", choices: [{ text: "label class", why: "pruning score가 아닙니다." }, { text: "learning rate", why: "optimizer 설정입니다." }, { text: "input activation feature norm", why: "정답입니다." }, { text: "output perplexity", why: "평가 결과입니다." }, { text: "token id", why: "직접 곱하지 않습니다." }] },
+    { id: "exam-od4-m2", source_question_id: "exam-od4-03", topic: "Broadcast", prompt: "threshold.reshape(row,1)의 목적은?", answer_index: 1, explanation: "각 row threshold를 모든 column에 비교하도록 broadcast합니다.", choices: [{ text: "weight를 flatten", why: "반대입니다." }, { text: "row별 threshold broadcast", why: "정답입니다." }, { text: "batch 축 생성", why: "weight에는 batch가 없습니다." }, { text: "gradient 차단", why: "shape 연산입니다." }, { text: "cluster 생성", why: "quantization이 아닙니다." }] },
+    { id: "exam-od4-m3", source_question_id: "exam-od4-02", topic: "Hook", prompt: "calibration hook을 제거하는 이유는?", answer_index: 4, explanation: "수집 후 계속 실행되면 불필요한 계산과 메모리가 생깁니다.", choices: [{ text: "Teacher를 학습", why: "distillation과 다릅니다." }, { text: "weight를 0으로", why: "mask가 담당합니다." }, { text: "softmax를 계산", why: "무관합니다." }, { text: "모델을 CPU로", why: "device와 무관합니다." }, { text: "불필요한 forward hook 종료", why: "정답입니다." }] }
+  ];
+  chapter.questionCount = 3;
+  chapter.exam_design = { version: 2, style: "LLM importance·activation 문맥 구현형" };
+})();
+
+(() => {
+  "use strict";
+  const course = window.LLM_COURSE;
+  const chapter = course.chapters.find(c => c.file === "5. Quantization for LLM.ipynb");
+  if (!chapter) return;
+  chapter.notebook_goal = "LLM Linear layer를 group/pseudo quantization하고 activation outlier와 LayerNorm–FC scale을 보정해 오차를 줄인다.";
+  chapter.capability = "bitwidth·group scale·outlier channel·SmoothQuant scale을 근거로 LLM quantization 코드를 함수 문맥에서 복원할 수 있다.";
+  chapter.summary = "LLM quantization은 group별 min/max scale로 weight를 pseudo-quantize하고, activation outlier를 보정하거나 LN과 FC 사이 scale을 재분배해 양자화 오차를 줄입니다.";
+  chapter.overview = {
+    title: "LLM 선형 계층 Group Pseudo Quantization 및 SmoothQuant",
+    subtitle: "Activation outlier 채널 스케일링과 LayerNorm-FC 간 스케일 재분배를 통한 오차 완화",
+    steps: [
+      { label: "Group Calibration", code: "scales = (max - min) / max_int", flow: "group max/min → scale and zero point" },
+      { label: "Pseudo Quantize", code: "round(w / s) + z → (q - z) * s", flow: "float w → simulated integer → restored float" },
+      { label: "Outlier Scaling", code: "topk(importance, k)[1]", flow: "top 1% activation channels → scale up → Q → scale down" },
+      { label: "SmoothQuant", code: "s = act_s^alpha / weight_s^(1-alpha)", flow: "balancing scale → LN div_(s) → FC mul_(s)" }
+    ],
+    rules: [
+      "Pseudo quantization은 정수 격자로 반올림(round)한 뒤 다시 실수로 복원하여 하드웨어 양자화 오차를 시뮬레이션한다.",
+      "Outlier 채널은 양자화 전 scale_factor를 곱하고, pseudo_quantize 후 반드시 동일한 scale_factor로 나눈다.",
+      "SmoothQuant의 balancing scale은 LN weight/bias에는 나누고(div_), FC weight에는 행렬 곱 형태로 곱한다(mul_).",
+      "alpha=0.5는 activation과 weight에 양자화 난이도를 균등 분배하는 기본값이다."
+    ]
+  };
+  chapter.key_points = [
+    { title: "Pseudo quantization", purpose: "정수 격자로 round한 뒤 실수로 복원해 오차를 모사합니다.", code: "round(w/scales)+zeros → (q-zeros)*scales", flow: "float → simulated int → float", watch: "group size가 양자화 단위를 정합니다." },
+    { title: "Outlier scale-up", purpose: "중요 activation channel을 양자화 전 확대하고 후에 복원합니다.", code: "topk(importance,...)[1]", flow: "activation stats → outlier indices → scale up/down", watch: "같은 index와 역연산을 사용합니다." },
+    { title: "SmoothQuant", purpose: "LN과 다음 FC의 scale을 상쇄 이동해 activation outlier를 완화합니다.", code: "act_scales**alpha / weight_scales**(1-alpha)", flow: "activation/weight scales → balancing scale", watch: "LN은 divide, FC는 multiply입니다." }
+  ];
+  chapter.theory_guide = [
+    { title: "SmoothQuant 원리", concept: "Activation의 이상치(outlier)는 양자화하기 어렵지만 가중치는 균일하므로, LN을 스케일 s로 나누고 다음 FC 가중치에 s를 곱해 activation의 이상치를 가중치 쪽으로 흡수시킵니다.", flow: "LN / s  →  FC × s", code_signal: "ln.weight.div_(scales) 및 fc.weight.mul_(scales.view(1, -1))", exam_clue: "LN은 div_, FC는 mul_입니다." }
+  ];
+  const cells = {
+    "exam-od5-q": "max_int = 2 ** n_bit - 1\nscales = (max_val - min_val).clamp(min=1e-5) / max_int\nzeros = (-torch.round(min_val / scales)).clamp_(0, max_int)\nw = torch.clamp(torch.round(w / scales) + zeros, 0, max_int)\nw = (w - zeros) * scales",
+    "exam-od5-outlier": "outlier_mask = torch.topk(importance, int(len(importance) * 0.01))[1]\nm.weight.data[:, outlier_mask] *= scale_factor\nm.weight.data = pseudo_quantize_tensor(m.weight.data, n_bit=w_bit, q_group_size=q_group_size)\nm.weight.data[:, outlier_mask] /= scale_factor",
+    "exam-od5-smooth": "scales = act_scales.pow(alpha) / weight_scales.pow(1 - alpha)\nln.weight.div_(scales)\nln.bias.div_(scales)\nfc.weight.mul_(scales.view(1, -1))"
+  };
+  Object.entries(cells).forEach(([id, source]) => course.cells[id] = { source });
+  const base = { subject: "On-device AI", chapterId: chapter.id, chapterNumber: chapter.number, chapterTitle: chapter.title, file: chapter.file, occurrence: 0, isSourceBlank: true, source_type: "정답 노트북 함수 문맥 기반 예상문제" };
+  const Q = (id, topic, difficulty, sourceId, prompt, problem_context, explanation, tensor_flow, code_signal, retry, accepted_answers) => ({
+    ...base, id, topic, difficulty, sourceId, prompt, answer: cells[sourceId],
+    accepted_answers: accepted_answers || [cells[sourceId]],
+    problem_context, explanation, tensor_flow, code_signal, retry
+  });
+  chapter.subjective = [
+    Q("exam-od5-01", "Group Pseudo Quantization", "3 · Independent", "exam-od5-q", "group별 max/min에서 scale·zero를 구하고 정수 격자로 round한 뒤 dequantize하는 다섯 줄을 작성하세요.",
+      "max_val = w.amax(dim=1, keepdim=True)\nmin_val = w.amin(dim=1, keepdim=True)\n????\n????\n????\n????\n????",
+      "unsigned 정수 범위 0~2^b-1에 실수 group 범위를 대응시킨 뒤 round하고 다시 scale 단위로 복원합니다.",
+      "w group → scales/zeros → q integer range → pseudo float",
+      "n_bit, max/min, clamp, round가 range calibration과 Q/DQ 순서를 지시합니다.",
+      "n_bit가 줄면 max_int와 quantization step이 어떻게 달라지는지 말하세요.",
+      [
+        "max_int = 2 ** n_bit - 1\nscales = (max_val - min_val).clamp(min=1e-5) / max_int\nzeros = (-torch.round(min_val / scales)).clamp_(0, max_int)\nw = torch.clamp(torch.round(w / scales) + zeros, 0, max_int)\nw = (w - zeros) * scales",
+        "max_int = 2**n_bit - 1\nscales = (max_val - min_val).clamp(min=1e-5) / max_int\nzeros = (-torch.round(min_val / scales)).clamp_(0, max_int)\nw = torch.clamp(torch.round(w / scales) + zeros, 0, max_int)\nw = (w - zeros) * scales",
+        "max_int = 2 ** n_bit - 1\nscales = (max_val - min_val).clamp(min=1e-5) / max_int\nzeros = (-torch.round(min_val / scales)).clamp_(0, max_int)\nw = torch.clamp(torch.round(w / scales) + zeros, 0, max_int)\nw = scales * (w - zeros)"
+      ]),
+    Q("exam-od5-02", "Outlier Channel Scale-up", "3 · Transfer", "exam-od5-outlier", "상위 1% activation channel index를 찾고 scale-up→pseudo quantize→역 scale 세 단계를 작성하세요.",
+      "importance = sum(input_feat[n]).float()\n????\n????\n????\n????",
+      "outlier channel은 작은 bitwidth에서 큰 오차를 만들 수 있어 양자화 전 확대하고 후에 같은 비율로 되돌립니다.",
+      "importance [hidden] → indices → selected weight columns → restored weights",
+      "topk의 [1]은 indices이며 weight[:,indices]가 input channel column을 선택합니다.",
+      "확대 후 되돌리지 않으면 layer 출력에 어떤 변화가 생기는지 설명하세요.",
+      [
+        "outlier_mask = torch.topk(importance, int(len(importance) * 0.01))[1]\nm.weight.data[:, outlier_mask] *= scale_factor\nm.weight.data = pseudo_quantize_tensor(m.weight.data, n_bit=w_bit, q_group_size=q_group_size)\nm.weight.data[:, outlier_mask] /= scale_factor",
+        "outlier_mask = torch.topk(importance, int(importance.size(0) * 0.01))[1]\nm.weight.data[:, outlier_mask] *= scale_factor\nm.weight.data = pseudo_quantize_tensor(m.weight.data, n_bit=w_bit, q_group_size=q_group_size)\nm.weight.data[:, outlier_mask] /= scale_factor",
+        "outlier_mask = torch.topk(importance, int(importance.shape[0] * 0.01))[1]\nm.weight.data[:, outlier_mask] *= scale_factor\nm.weight.data = pseudo_quantize_tensor(m.weight.data, n_bit=w_bit, q_group_size=q_group_size)\nm.weight.data[:, outlier_mask] /= scale_factor"
+      ]),
+    Q("exam-od5-03", "SmoothQuant Scale", "3 · Formula", "exam-od5-smooth", "activation/weight scale과 alpha로 balancing scale을 만들고 LN은 나누고 FC는 broadcast multiply하는 네 줄을 작성하세요.",
+      "weight_scales = ...\n????\n????\n????\n????",
+      "LN 출력 scale을 줄인 만큼 다음 FC weight input column을 키워 forward 전체 scale을 보존하면서 activation outlier를 weight 쪽으로 옮깁니다.",
+      "act scale [in] + weight scale [in] → balance [in] → LN/FC compensated parameters",
+      "pow(alpha), pow(1-alpha), LN div_, FC weight [out,in]의 view(1,-1)가 단서입니다.",
+      "alpha=1과 0이 각각 어느 scale만 따르는지 말하세요.",
+      [
+        "scales = act_scales.pow(alpha) / weight_scales.pow(1 - alpha)\nln.weight.div_(scales)\nln.bias.div_(scales)\nfc.weight.mul_(scales.view(1, -1))",
+        "scales = (act_scales ** alpha) / (weight_scales ** (1 - alpha))\nln.weight.div_(scales)\nln.bias.div_(scales)\nfc.weight.mul_(scales.view(1, -1))",
+        "scales = act_scales ** alpha / weight_scales ** (1 - alpha)\nln.weight.div_(scales)\nln.bias.div_(scales)\nfc.weight.mul_(scales.view(1, -1))",
+        "scales = act_scales.pow(alpha) / weight_scales.pow(1 - alpha)\nln.weight.div_(scales)\nln.bias.div_(scales)\nfc.weight.mul_(scales.reshape(1, -1))"
+      ])
+  ];
+  chapter.mcq = [
+    { id: "exam-od5-m1", source_question_id: "exam-od5-01", topic: "Bitwidth", prompt: "n_bit=3의 unsigned max_int는?", answer_index: 2, explanation: "2^3-1=7입니다.", choices: [{ text: "3", why: "bit 수입니다." }, { text: "6", why: "2×bit가 아닙니다." }, { text: "7", why: "정답입니다." }, { text: "8", why: "표현 개수입니다." }, { text: "15", why: "4-bit max입니다." }] },
+    { id: "exam-od5-m2", source_question_id: "exam-od5-02", topic: "topk", prompt: "torch.topk(...)[1]이 반환하는 것은?", answer_index: 1, explanation: "상위 값의 index입니다.", choices: [{ text: "상위 importance 값", why: "[0]입니다." }, { text: "상위 channel index", why: "정답입니다." }, { text: "scale Tensor", why: "별도 계산합니다." }, { text: "boolean mask", why: "index를 mask처럼 사용합니다." }, { text: "loss", why: "무관합니다." }] },
+    { id: "exam-od5-m3", source_question_id: "exam-od5-03", topic: "Scale 보상", prompt: "SmoothQuant에서 LN을 scale로 나눈 뒤 FC weight에 scale을 곱하는 이유는?", answer_index: 4, explanation: "두 연결 layer 사이의 전체 forward scale을 보존합니다.", choices: [{ text: "parameter 수를 줄임", why: "shape는 같습니다." }, { text: "Teacher를 고정", why: "distillation이 아닙니다." }, { text: "gradient를 제거", why: "no_grad는 별도입니다." }, { text: "softmax를 안정화", why: "직접 목적이 아닙니다." }, { text: "LN–FC 연결의 scale 상쇄", why: "정답입니다." }] }
+  ];
+  chapter.questionCount = 3;
+  chapter.exam_design = { version: 2, style: "LLM group·outlier·SmoothQuant 구현형" };
+})();
+
+queueMicrotask(() => {
+  const course = window.LLM_COURSE;
+  if (!course || course.chapters.some(c => c.id === 'on-device-final-review')) return;
+  const pick = [
+    ['2. Quantization for CNN.ipynb', 'exam-od1-05'],
+    ['1. Pruning for CNN.ipynb', 'exam-od2-01'],
+    ['3. Knowledge Distillation.ipynb', 'exam-od3-02'],
+    ['4. Pruning for LLM.ipynb', 'exam-od4-03'],
+    ['5. Quantization for LLM.ipynb', 'exam-od5-03']
+  ];
+  const subjective = pick.map(([file, id], i) => {
+    const ch = course.chapters.find(c => c.file === file);
+    const s = ch?.subjective?.find(q => q.id === id);
+    if (!s) return null;
+    return {
+      ...s,
+      id: `on-device-review-${i + 1}`,
+      chapterId: 'on-device-final-review',
+      chapterNumber: 'FINAL',
+      chapterTitle: 'On-device AI 종합 구현 모의고사',
+      file: 'ON_DEVICE_FINAL_REVIEW',
+      topic: `${i + 1}. ${s.topic}`,
+      source_type: `${file} 핵심 구현 혼합문제`,
+      accepted_answers: s.accepted_answers ? [...s.accepted_answers] : [s.answer]
+    };
+  }).filter(Boolean);
+
+  const mcq = pick.map(([file, id], i) => {
+    const ch = course.chapters.find(c => c.file === file);
+    const original = ch?.mcq?.find(q => q.source_question_id === id);
+    if (!original) return null;
+    return {
+      ...original,
+      id: `on-device-review-m${i + 1}`,
+      source_question_id: `on-device-review-${i + 1}`
+    };
+  }).filter(Boolean);
+
+  course.chapters.push({
+    id: 'on-device-final-review',
+    number: 'FINAL',
+    title: 'On-device AI 종합 구현 모의고사',
+    file: 'ON_DEVICE_FINAL_REVIEW',
+    subject: 'On-device AI',
+    notebook_goal: '양자화·pruning·distillation 코드에서 Tensor 흐름과 학습 목표를 보고 필요한 구현을 선택한다.',
+    capability: '처음 보는 on-device 코드 문맥에서 scale/mask/Teacher target/activation importance를 구분해 1~5줄 구현을 복원한다.',
+    summary: '다섯 노트북의 핵심을 섞은 누적 실전입니다. 먼저 입력·출력 Tensor와 학습 목적을 읽고 어떤 기술인지 판단한 뒤 답을 작성하세요.',
+    overview: {
+      title: 'On-device AI 5개 핵심 기술 통합 모의고사',
+      subtitle: 'CNN/LLM 양자화, CNN/LLM 가지치기, 지식증류 핵심 구현 총망라',
+      steps: [
+        { label: 'Linear Requant', code: 'output * (s_x * s_w / s_y) + z_y', flow: 'int32 acc → int8 coords' },
+        { label: 'CNN Pruning', code: 'abs(w) → kthvalue → mask', flow: 'weights → sparse weights' },
+        { label: 'Knowledge Distill', code: 'KL(T) * T^2 + CE(hard)', flow: 'Teacher soft + Student hard' },
+        { label: 'Wanda LLM', code: 'abs(W) * input_feat → row kth', flow: 'activation-aware row mask' },
+        { label: 'SmoothQuant', code: 'act^alpha / weight^(1-alpha)', flow: 'LN div_ & FC mul_' }
+      ],
+      rules: [
+        '각 문제의 입력·출력 텐서 형상과 주석 지시문을 통해 어떤 최적화 기법인지 즉시 파악한다.',
+        'Scale 곱셈/나눗셈 비율과 Temperature T^2 스케일링 등 핵심 수식의 인자 위치를 정확히 작성한다.',
+        'RHS 수식뿐만 아니라 변수 대입문 형태 모두 정답으로 유효하게 인정된다.'
+      ]
+    },
+    key_points: [
+      { title: 'Quantization', purpose: '실수↔정수 좌표계와 scale 보상', code: 'round(x/s)+z', flow: 'float→int→float' },
+      { title: 'Pruning', purpose: 'importance ranking과 mask 유지', code: 'abs→kthvalue→mask', flow: 'weights→sparse weights' },
+      { title: 'Distillation', purpose: 'Teacher signal과 label signal 결합', code: 'KD/feature loss + CE', flow: 'inputs→Teacher/Student→Student loss' }
+    ],
+    theory_guide: [],
+    full_code_cells: [],
+    subjective,
+    mcq,
+    questionCount: subjective.length,
+    exam_design: { version: 2, style: '과목 누적·교차 구현 모의고사' }
+  });
+});

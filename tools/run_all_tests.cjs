@@ -13,7 +13,7 @@ const TEST_SCRIPTS = [
   { name: '4. 독립 주관식 엔진(subjective-test-app.js) 유닛테스트', file: 'tools/tests/test_subjective_app.cjs' },
   { name: '5. 모의고사 1~5회 세션·채점 유닛테스트', file: 'tools/tests/test_mock_exam.cjs' },
   { name: '6. 전체 HTML 링크·태그 짝·도메인 정적 검증', file: 'tools/validate_site.cjs' },
-  { name: '7. 모의고사 60문항 Python AST 문법 검증', file: 'tools/verify-mock-exams.cjs' },
+  { name: '7. 모의고사 1~5회(75문항) Python AST 문법 검증', file: 'tools/verify-mock-exams.cjs' },
 ];
 
 console.log('================================================================================');

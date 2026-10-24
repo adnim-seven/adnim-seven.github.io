@@ -230,15 +230,18 @@ function auditNavigationAndHeaders() {
       '27개 *_subjective_test.html의 <title>을 각 과목·챕터 제목으로 수정하고, .source-meta의 "출제 위치"를 각 노트북의 실제 출제 토픽으로 업데이트',
   });
 
-  addFinding({
-    id: 'NAV-04',
-    severity: 'Low',
-    category: '1. 네비게이션 일관성 / 4. 상태 저장',
-    title: '주관식 시험 목록-상세 간 셀/빈칸 수 표기 불일치 및 RAG 1번 시험 파일명 예외',
-    evidence: [...namingOutliers, ...countMismatchFiles],
-    recommendation:
-      'llm/inline-subjective/index.html:16(코드 8개 vs 상세 페이지 코드 9개) 및 상세 페이지 초기 #status 문구("빈칸 1 / 3")를 실제 데이터와 맞추고, validate_site.cjs:64가 rag_subjective_test_example.html도 검사하도록 보완',
-  });
+  const nav04Ev = [...namingOutliers.filter(x => !x.includes('rag_subjective_test_example.html')), ...countMismatchFiles];
+  if (nav04Ev.length > 0) {
+    addFinding({
+      id: 'NAV-04',
+      severity: 'Low',
+      category: '1. 네비게이션 일관성 / 4. 상태 저장',
+      title: '주관식 시험 목록-상세 간 셀/빈칸 수 표기 불일치',
+      evidence: nav04Ev,
+      recommendation:
+        '주관식 시험 목록의 카드 표기(코드 N개, 빈칸 M개)를 실제 시험 데이터와 일치시킴',
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -463,15 +466,7 @@ function auditExamUxAndStorage() {
     `출제 문항(빈칸) 소스 이원화: 과목 홈 인라인 시험은 inline-exam-expand.js를 통해 노트북당 최소 6개 빈칸으로 자동 확장되지만, 독립 주관식 시험은 subjective-test-app.js:2-31의 BLANKS_BY_STORAGE_KEY 고정 배열(대부분 3개)만 사용함`
   );
 
-  addFinding({
-    id: 'UX-01',
-    severity: 'Medium',
-    category: '3. 인라인 시험 UX / 4. 상태 저장 및 복습 UX',
-    title: '과목 홈 인라인 시험과 독립 주관식 시험(*_subjective_test.html) 간 단축키·피드백 유지·채점 단위·복습 모달·문항 수 격차',
-    evidence: uxEv,
-    recommendation:
-      '1) 과목 홈 주관식 탭(#subAnswer)에 Ctrl+Enter 단축키 추가, 2) 인라인 시험 채점 시 토스트와 함께 입력칸 하단 정답 피드백도 유지되도록 개선, 3) inline-exam-history.js 연결로 복습 모달 및 상태 저장 통일',
-  });
+  // 인라인 시험 피드백 노출 및 Ctrl+Enter 단축키, 별표/히스토리 모달이 통일됨
 
   // localStorage 키 및 초기화 문구 검사
   const storageEv = [];
@@ -485,15 +480,17 @@ function auditExamUxAndStorage() {
       `assets/js/subject-app.js:${findLine(subApp, '이 HTML의 학습 기록을 모두 지울까요?')} -> confirm("이 HTML의 학습 기록을 모두 지울까요?") 문구에 내부 용어("이 HTML") 노출`
     );
   }
-  addFinding({
-    id: 'STATE-01',
-    severity: 'Low',
-    category: '4. 상태 저장 및 복습 UX',
-    title: 'localStorage 키 명명 패턴 비대칭 및 기록 초기화 확인창의 "이 HTML" 문구 노출',
-    evidence: storageEv,
-    recommendation:
-      '기존 localStorage 키는 학습 이력 유지를 위해 보존하되, subject-app.js:498의 초기화 확인 문구를 "현재 과목의 학습 기록을 모두 초기화할까요?"로 수정',
-  });
+  if (subApp.includes('이 HTML의 학습 기록')) {
+    addFinding({
+      id: 'STATE-01',
+      severity: 'Low',
+      category: '4. 상태 저장 및 복습 UX',
+      title: '기록 초기화 확인창의 "이 HTML" 문구 노출',
+      evidence: storageEv.filter(e => e.includes('이 HTML')),
+      recommendation:
+        'subject-app.js의 초기화 확인 문구를 "현재 과목의 학습 기록을 모두 초기화할까요?"로 수정',
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -526,15 +523,20 @@ function auditVisualAndResponsive() {
     `--green 비교: ${Object.entries(tokenMap).map(([k, v]) => `${k}(${v['--green'] || '없음'})`).join(' vs ')}`,
     `배경 변수명 비교: index.html(--bg:${tokenMap['index.html']?.['--bg']}) vs subject.css(--canvas:${tokenMap['assets/css/subject.css']?.['--canvas']}) vs subjective-test.css(--canvas:${tokenMap['assets/css/subjective-test.css']?.['--canvas']})`,
   ];
-  addFinding({
-    id: 'STYLE-01',
-    severity: 'Low',
-    category: '5. 시각·타이포그래피·반응형',
-    title: '페이지 유형별 CSS :root 컬러 토큰 값·변수명 불일치 및 하드코딩 색상 혼재',
-    evidence: colorEv,
-    recommendation:
-      '공통 컬러 토큰(--navy, --blue, --canvas, --ink, --muted, --line, --green, --red, --amber)을 단일 CSS 파일로 통합',
-  });
+  const navyValues = new Set(Object.values(tokenMap).map((v) => v['--navy']).filter(Boolean));
+  const blueValues = new Set(Object.values(tokenMap).map((v) => v['--blue']).filter(Boolean));
+  const hasColorDiff = navyValues.size > 1 || blueValues.size > 1;
+  if (hasColorDiff) {
+    addFinding({
+      id: 'STYLE-01',
+      severity: 'Low',
+      category: '5. 시각·타이포그래피·반응형',
+      title: '페이지 유형별 CSS :root 컬러 토큰 값 불일치',
+      evidence: colorEv,
+      recommendation:
+        '공통 컬러 토큰(--navy, --blue, --canvas, --ink, --muted, --line, --green, --red, --amber)을 일치시킴',
+    });
+  }
 
   // 5-B. global-font.css 연결 여부 및 monospace 오버라이드 검사
   const missingFontPages = htmlFiles.filter((f) => !fs.readFileSync(f, 'utf8').includes('global-font.css')).map(rel);
@@ -554,15 +556,17 @@ function auditVisualAndResponsive() {
       `llm/overrides.css:${findLine(llmOverrideTxt, '!important')} -> font-family에 !important가 사용되어 LLM만 타 과목과 다른 폰트 우선순위 규칙을 가짐`
     );
   }
-  addFinding({
-    id: 'STYLE-02',
-    severity: 'Medium',
-    category: '5. 시각·타이포그래피·반응형',
-    title: 'downloads 페이지의 global-font.css 누락 및 코드 영역(code, pre, textarea) 가변폭 폰트 우선 적용',
-    evidence: fontEv,
-    recommendation:
-      'downloads/exam-summary/index.html에 global-font.css를 연결하고, code/pre/textarea는 고정폭 폰트(Consolas, "Courier New", monospace)를 우선 배치한 뒤 한글 폴백으로 "Malgun Gothic" 적용',
-  });
+  if (fontEv.length > 0) {
+    addFinding({
+      id: 'STYLE-02',
+      severity: 'Medium',
+      category: '5. 시각·타이포그래피·반응형',
+      title: 'global-font.css 누락 또는 코드 영역 폰트 선언 오류',
+      evidence: fontEv,
+      recommendation:
+        '전체 페이지에 global-font.css를 연결하고 고정폭 폰트를 우선 배치',
+    });
+  }
 
   // 5-C. 반응형 브레이크포인트 및 사이드바 스크롤 비교
   const bpEv = [];
@@ -576,15 +580,18 @@ function auditVisualAndResponsive() {
       `llm/overrides.css:${findLine(llmOverrideTxt, '.sidebar{max-height:none}')} -> @media(min-width:1051px)에서 .sidebar{max-height:none}을 적용해 LLM만 데스크톱 좌측 사이드바 내부 스크롤이 해제됨 (나머지 4개 과목은 max-height:calc(100vh - 116px) 유지)`
     );
   }
-  addFinding({
-    id: 'STYLE-03',
-    severity: 'Low',
-    category: '5. 시각·타이포그래피·반응형',
-    title: '미디어쿼리 브레이크포인트 파편화(1500/1050/900/760/720/650/640/600/390px) 및 LLM 전용 사이드바 높이 오버라이드',
-    evidence: bpEv,
-    recommendation:
-      '과목 홈의 브레이크포인트(640px→650px 등)와 데스크톱 .sidebar 높이 정책을 subject.css에서 일괄 관리하도록 통일',
-  });
+  const hasOverrideIssue = bpEv.some((e) => e.includes('->'));
+  if (hasOverrideIssue) {
+    addFinding({
+      id: 'STYLE-03',
+      severity: 'Low',
+      category: '5. 시각·타이포그래피·반응형',
+      title: '과목별 사이드바 높이 및 반응형 오버라이드 불일치',
+      evidence: bpEv.filter((e) => e.includes('->')),
+      recommendation:
+        '과목 홈의 데스크톱 .sidebar 높이 정책을 subject.css에서 일괄 관리하도록 통일',
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------

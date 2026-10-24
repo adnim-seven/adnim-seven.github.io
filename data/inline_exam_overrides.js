@@ -31,6 +31,20 @@ window.INLINE_EXAM_OVERRIDES = {
       { id: "data-ngcf-topk", label: "★ 유력 · 추천 Top-K 선택", instruction: "item score에서 상위 k score와 index를 함께 구하세요.", answer: "topk_scores, topk_indices = torch.topk(scores, k=k)" },
       { id: "data-ngcf-ndcg", label: "★ 유력 · NDCG 정규화", instruction: "DCG를 이상적 DCG로 정규화하고 0 분모를 방지하세요.", answer: "ndcg_u = dcg / idcg if idcg > 0 else 0.0" }
     ]
+  },
+  "RecSys_NCF.ipynb": {
+    replacements: [
+      { cell: 11, id: "data-ncf-user-emb", from: "self.user_embedding = nn.Embedding(n_users, 32)" },
+      { cell: 11, id: "data-ncf-movie-emb", from: "self.movie_embedding = nn.Embedding(n_movies, 32)" },
+      { cell: 11, id: "data-ncf-concat-override", from: "input_embedding = torch.cat([user_embedding, movie_embedding], dim = 1)" },
+      { cell: 15, id: "data-ncf-loss-step", from: "loss = loss_func(prediction, ground_truth)" }
+    ],
+    blanks: [
+      { id: "data-ncf-user-emb", label: "★ 유력 · User Embedding 계층", instruction: "사용자 수를 32차원 latent vector로 변환하는 nn.Embedding을 선언하세요.", answer: "self.user_embedding = nn.Embedding(n_users, 32)" },
+      { id: "data-ncf-movie-emb", label: "★ 유력 · Movie Embedding 계층", instruction: "영화 수를 32차원 latent vector로 변환하는 nn.Embedding을 선언하세요.", answer: "self.movie_embedding = nn.Embedding(n_movies, 32)" },
+      { id: "data-ncf-concat-override", label: "★ 유력 · 사용자·영화 임베딩 결합", instruction: "user_embedding과 movie_embedding을 dim=1로 결합하세요.", answer: "input_embedding = torch.cat([user_embedding, movie_embedding], dim = 1)" },
+      { id: "data-ncf-loss-step", label: "★ 유력 · 평점 회귀 MSE Loss", instruction: "예측 평점과 ground_truth 평점으로 loss_func을 호출하세요.", answer: "loss = loss_func(prediction, ground_truth)" }
+    ]
   }
 };
 
@@ -41,11 +55,15 @@ window.INLINE_EXAM_OVERRIDES = {
     "blank-ts-forward": "RNN의 모든 시점 출력 out을 마지막 Linear layer에 넣어 [B,T,1] 예측을 반환하세요.",
     "blank-ngcf-norm": "각 edge의 src·dst degree를 사용해 1/sqrt(deg(src)·deg(dst)) 정규화 계수를 계산하세요.",
     "blank-ngcf-edge-dst": "src user feature와 src·dst interaction을 사용해 dst item이 받을 graph message를 계산하세요.",
-    "blank-ngcf-concat": "초기 embedding과 모든 NGCF layer 출력을 마지막 feature 축으로 연결하세요."
+    "blank-ngcf-concat": "초기 embedding과 모든 NGCF layer 출력을 마지막 feature 축으로 연결하세요.",
+    "blank-ncf-user-embedding": "사용자 수를 32차원 잠재 벡터로 매핑하는 nn.Embedding을 선언하세요.",
+    "blank-ncf-concat": "user_embedding과 movie_embedding을 feature 차원(dim=1)으로 결합하세요.",
+    "blank-ncf-loss": "loss_func를 사용해 prediction과 ground_truth의 회귀 손실을 계산하세요."
   };
   const priority = {
     "ts_practice.ipynb": new Set(["blank-ts-train-pred", "blank-ts-rnn", "blank-ts-forward"]),
-    "RecSys_GCF_practice.ipynb": new Set(["blank-ngcf-norm", "blank-ngcf-edge-dst", "blank-ngcf-concat"])
+    "RecSys_GCF_practice.ipynb": new Set(["blank-ngcf-norm", "blank-ngcf-edge-dst", "blank-ngcf-concat"]),
+    "RecSys_NCF.ipynb": new Set(["blank-ncf-user-embedding", "blank-ncf-concat", "blank-ncf-loss"])
   };
   Object.entries(priority).forEach(([file, ids]) => {
     (window.INLINE_EXAM_MAP?.[file]?.blanks || []).forEach((blank) => {

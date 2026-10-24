@@ -1,7 +1,7 @@
 const path=require('path');process.chdir(path.resolve(__dirname,'..'));
 const fs=require('fs'),vm=require('vm'),cp=require('child_process');
 let count=0;const codeSamples=[];
-for(let round=2;round<=5;round++){
+for(let round=1;round<=5;round++){
  const c={window:{}};vm.createContext(c);vm.runInContext(fs.readFileSync(`mock-exam-${round}/questions.js`,'utf8'),c);
  const totals={};if(c.window.EXAM_NUMBER!==round||c.window.EXAM.length!==15)throw Error('round metadata');
  for(const q of c.window.EXAM){totals[q.subject]=(totals[q.subject]||0)+q.slots.reduce((n,s)=>n+s.points,0);let code=q.code;

@@ -52,7 +52,10 @@ const patches={
     "scope_context": "class GPTDatasetV1(Dataset):\n    def __init__(self, txt, tokenizer, max_length, stride):\n        \"\"\"\n        Args:\n            txt (str): 학습할 전체 텍스트 데이터\n            tokenizer: 텍스트를 토큰 ID로 변환해주는 토크나이저 (예: tiktoken)\n            max_length (int): 모델이 한 번에 볼 수 있는 윈도우 크기 (입력 시퀀스 길이)\n            stride (int): 윈도우를 이동시킬 간격 (데이터 중복 정도를 결정)\n        \"\"\"\n        self.input_ids = []\n        self.target_ids = []\n\n        # 1. 전체 텍스트 토큰화\n        # 텍스트를 정수 리스트(token_ids)로 변환합니다.\n        # <|endoftext|> 같은 특수 토큰도 허용하여 인코딩합니다.\n        token_ids = tokenizer.encode(txt, allowed_special={\"<|endoftext|>\"})\n\n        # 데이터가 너무 짧으면 학습할 수 없으므로 최소 길이를 확인합니다.\n        assert len(token_ids) > max_length, \"토큰화된 입력의 개수는 적어도 max_length+1과 같아야 합니다.\"\n\n        # 2. 슬라이딩 윈도우(Sliding Window)로 데이터 생성\n        # 전체 토큰 리스트를 훑으며 max_length 길이만큼 잘라냅니다.\n        # stride만큼 건너뛰며 반복합니다.\n        for i in range(0, len(token_ids) - max_length, stride):\n            # 입력 청크: 현재 위치(i)부터 max_length만큼 가져옵니다.\n            input_chunk = token_ids[i:i+max_length]\n\n            # 타겟 청크: 입력보다 1칸 뒤의 위치(i+1)부터 가져옵니다.\n            # GPT는 '다음 단어'를 맞추는 모델이므로, 정답은 입력보다 한 칸씩 뒤로 밀려있어야 합니다.\n            target_chunk = token_ids[i + 1 : i + max_length + 1]\n\n            # 추출한 데이터를 텐서(Tensor)로 변환하여 리스트에 저장합니다.\n            self.input_ids.append(torch.tensor(input_chunk))\n            self.target_ids.append(torch.tensor(target_chunk))\n\n    def __len__(self):\n        # 데이터셋의 총 샘플(청크) 개수를 반환합니다.\n        return len(self.input_ids)\n\n    def __getitem__(self, idx):\n        # DataLoader가 데이터를 요청할 때 호출됩니다.\n        # 해당 인덱스(idx)의 입력과 정답 쌍을 반환합니다.\n        return ????",
     "answer": "(self.input_ids[idx], self.target_ids[idx])",
     "accepted_answers": [
-      "(self.input_ids[idx], self.target_ids[idx])"
+      "(self.input_ids[idx], self.target_ids[idx])",
+      "self.input_ids[idx], self.target_ids[idx]",
+      "return self.input_ids[idx], self.target_ids[idx]",
+      "return (self.input_ids[idx], self.target_ids[idx])"
     ],
     "scope_source": "ch2-cell-2",
     "isSourceBlank": false,
@@ -60,14 +63,17 @@ const patches={
     "answer_blocks": [
       "(self.input_ids[idx], self.target_ids[idx])"
     ],
-    "prompt": "같은 idx의 입력과 정답 Tensor를 한 쌍으로 반환하는 완성된 return 문을 작성하세요.\n코드의 `????` 자리에 들어갈 오른쪽 코드 또는 표현식을 위에서 아래 순서대로 작성하세요.",
+    "prompt": "해당 인덱스(idx)의 입력 Tensor와 정답 Tensor를 한 쌍(튜플)으로 반환하는 표현식을 작성하세요.\n코드의 `????` 자리에 들어갈 오른쪽 코드 또는 표현식을 위에서 아래 순서대로 작성하세요.",
     "source_type": "기출 유형 확장 · 전체 구현 복원"
   },
   "exam-llm02-05": {
     "scope_context": "def create_dataloader_v1(txt, batch_size=4, max_length=256,\n                         stride=128, shuffle=True, drop_last=True,\n                         num_workers=0):\n\n    # 토크나이저를 초기화합니다.\n    tokenizer = tiktoken.get_encoding(\"gpt2\")\n\n    # 데이터셋을 만듭니다.\n    dataset = ????\n\n    # 데이터 로더를 만듭니다.\n    dataloader = DataLoader(\n        dataset,\n        batch_size=batch_size,\n        shuffle=shuffle,\n        drop_last=drop_last,\n        num_workers=num_workers\n    )\n\n    return dataloader",
     "answer": "GPTDatasetV1(txt, tokenizer, max_length, stride)",
     "accepted_answers": [
-      "GPTDatasetV1(txt, tokenizer, max_length, stride)"
+      "GPTDatasetV1(txt, tokenizer, max_length, stride)",
+      "GPTDatasetV1(txt=txt, tokenizer=tokenizer, max_length=max_length, stride=stride)",
+      "dataset = GPTDatasetV1(txt, tokenizer, max_length, stride)",
+      "dataset = GPTDatasetV1(txt=txt, tokenizer=tokenizer, max_length=max_length, stride=stride)"
     ],
     "scope_source": "ch2-cell-3",
     "isSourceBlank": false,
@@ -75,7 +81,7 @@ const patches={
     "answer_blocks": [
       "GPTDatasetV1(txt, tokenizer, max_length, stride)"
     ],
-    "prompt": "DataLoader의 첫 번째 빈칸에 들어갈 객체를 작성하세요.\n코드의 `????` 자리에 들어갈 오른쪽 코드 또는 표현식을 위에서 아래 순서대로 작성하세요.",
+    "prompt": "함수 인자들을 받아 GPTDatasetV1 인스턴스를 생성하는 코드를 작성하세요.\n코드의 `????` 자리에 들어갈 오른쪽 코드 또는 표현식을 위에서 아래 순서대로 작성하세요.",
     "source_type": "기출 유형 확장 · 전체 구현 복원"
   },
   "exam-llm02-06": {
@@ -221,7 +227,8 @@ const patches={
     "scope_context": "class MultiHeadAttention(nn.Module):\n    def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):\n        super().__init__()\n        # [검증] 전체 출력 차원(d_out)은 헤드 개수(num_heads)로 나누어 떨어져야 합니다.\n        # 예: d_out=768, num_heads=12 -> 각 헤드는 64차원을 담당\n        assert (d_out % num_heads == 0), \"d_out must be divisible by num_heads\"\n\n        self.d_out = d_out\n        self.num_heads = num_heads\n        self.head_dim = d_out // num_heads  # 각 헤드가 담당할 차원 크기\n\n        # [입력 투영] Q, K, V를 만들기 위한 선형 레이어\n        # 참고: 헤드별로 레이어를 따로 만들지 않고, 한번에 큰 차원(d_out)으로 변환 후 나중에 쪼갭니다 (효율성)\n        self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)\n        self.W_key = nn.Linear(d_in, d_out, bias=qkv_bias)\n        self.W_value = nn.Linear(d_in, d_out, bias=qkv_bias)\n        \n        # [출력 투영] 여러 헤드의 결과를 다시 하나로 섞어주는 레이어\n        self.out_proj = nn.Linear(d_out, d_out) \n        self.dropout = nn.Dropout(dropout)\n        \n        # [마스크 등록] 학습 파라미터가 아니므로 register_buffer 사용\n        # 대각선 위쪽(미래 정보)을 1로 채운 상삼각 행렬 생성\n        self.register_buffer(\n            \"mask\",\n            torch.triu(torch.ones(context_length, context_length), diagonal=1)\n        )\n\n    def forward(self, x):\n        # b: 배치 크기, num_tokens: 문장 길이(T), d_in: 입력 차원\n        b, num_tokens, d_in = x.shape\n\n        # 1. [선형 변환] 입력 x를 Q, K, V로 변환\n        # Shape: (b, num_tokens, d_out)\n        keys = self.W_key(x)\n        queries = self.W_query(x)\n        values = self.W_value(x)\n\n        # 2. [헤드 분할] d_out 차원을 (num_heads, head_dim)으로 쪼갭니다.\n        # Shape 변환: (b, num_tokens, d_out) -> (b, num_tokens, num_heads, head_dim)\n        keys = ????\n        values = ????\n        queries = ????\n\n        # 3. [차원 변경] 병렬 연산을 위해 '헤드' 차원을 '문장 길이' 앞으로 옮깁니다.\n        # 이렇게 하면 (b, num_heads)를 마치 하나의 배치처럼 묶어서 행렬 곱셈을 한 번에 처리할 수 있습니다.\n        #Shape 변환: (b, num_tokens, num_heads, head_dim) -> (b, num_heads, num_tokens, head_dim)\n        keys = keys.transpose(1, 2)\n        queries = queries.transpose(1, 2)\n        values = values.transpose(1, 2)\n\n        # 4. [어텐션 스코어 계산] (Query @ Key_Transposed)\n        # 행렬 곱셈: (b, h, T, head_dim) @ (b, h, head_dim, T) -> (b, h, T, T)\n        # 결과값은 각 토큰끼리의 연관도(유사도)를 나타냅니다.\n        attn_scores = queries @ keys.transpose(2, 3)\n\n        # 5. [마스킹] 미래의 단어를 보지 못하게 가림 (Causal Masking)\n        # 현재 시퀀스 길이에 맞춰 마스크를 자르고, 값이 1인 곳(미래)을 -무한대로 채움\n        mask_bool = self.mask.bool()[:num_tokens, :num_tokens]\n        attn_scores.masked_fill_(mask_bool, -torch.inf)\n\n        # 6. [확률 변환] Softmax로 점수를 확률값(0~1)으로 변환\n        # 스케일링(Scaling): head_dim의 제곱근으로 나누어 기울기 소실 방지\n        attn_weights = torch.softmax(attn_scores / keys.shape[-1]**0.5, dim=-1)\n        attn_weights = self.dropout(attn_weights)\n\n        # 7. [컨텍스트 벡터 계산] (Attention_Weights @ Values)\n        # 가중치가 적용된 정보의 합을 구함\n        # Shape: (b, h, T, T) @ (b, h, T, head_dim) -> (b, h, T, head_dim)\n        context_vec = (attn_weights @ values).transpose(1, 2) \n        \n        # 8. [헤드 결합] 쪼개졌던 헤드들을 다시 하나로 이어 붙임 (Concatenate)\n        # transpose로 인해 메모리가 섞인 것을 contiguous로 정렬 후, view로 합침\n        # Shape 변환: (b, T, h, head_dim) -> (b, T, d_out)\n        context_vec = context_vec.contiguous().view(b, num_tokens, self.d_out)\n        \n        # 9. [최종 출력] 마지막 선형 변환\n        context_vec = self.out_proj(context_vec)\n\n        return context_vec",
     "answer": "keys.view(b, num_tokens, self.num_heads, self.head_dim)\nvalues.view(b, num_tokens, self.num_heads, self.head_dim)\nqueries.view(b, num_tokens, self.num_heads, self.head_dim)",
     "accepted_answers": [
-      "keys.view(b, num_tokens, self.num_heads, self.head_dim)\nvalues.view(b, num_tokens, self.num_heads, self.head_dim)\nqueries.view(b, num_tokens, self.num_heads, self.head_dim)"
+      "keys.view(b, num_tokens, self.num_heads, self.head_dim)\nvalues.view(b, num_tokens, self.num_heads, self.head_dim)\nqueries.view(b, num_tokens, self.num_heads, self.head_dim)",
+      "keys = keys.view(b, num_tokens, self.num_heads, self.head_dim)\nvalues = values.view(b, num_tokens, self.num_heads, self.head_dim)\nqueries = queries.view(b, num_tokens, self.num_heads, self.head_dim)"
     ],
     "scope_source": "ch3-full-mha-138",
     "isSourceBlank": false,
@@ -232,13 +239,15 @@ const patches={
       "queries.view(b, num_tokens, self.num_heads, self.head_dim)"
     ],
     "prompt": "Q/K/V를 [B,T,H,Dh]로 분할하는 세 줄을 작성하세요.\n코드의 `????` 자리에 들어갈 오른쪽 코드 또는 표현식을 위에서 아래 순서대로 작성하세요.",
-    "source_type": "기출 유형 확장 · 전체 구현 복원"
+    "source_type": "기출 유형 확장 · 전체 구현 복원",
+    "explanation": "Q/K/V 투영 결과 [B, T, D]에서 D(=emb_dim) 차원을 view를 통해 (num_heads, head_dim)으로 분할합니다. D = num_heads * head_dim 관계가 성립하므로 전체 원소 수 변화 없이 각 어텐션 헤드가 독립적인 특징 부분공간(subspace)을 담당하게 만듭니다."
   },
   "past-implementation-4": {
     "scope_context": "class MultiHeadAttention(nn.Module):\n    def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):\n        super().__init__()\n        # [검증] 전체 출력 차원(d_out)은 헤드 개수(num_heads)로 나누어 떨어져야 합니다.\n        # 예: d_out=768, num_heads=12 -> 각 헤드는 64차원을 담당\n        assert (d_out % num_heads == 0), \"d_out must be divisible by num_heads\"\n\n        self.d_out = d_out\n        self.num_heads = num_heads\n        self.head_dim = d_out // num_heads  # 각 헤드가 담당할 차원 크기\n\n        # [입력 투영] Q, K, V를 만들기 위한 선형 레이어\n        # 참고: 헤드별로 레이어를 따로 만들지 않고, 한번에 큰 차원(d_out)으로 변환 후 나중에 쪼갭니다 (효율성)\n        self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)\n        self.W_key = nn.Linear(d_in, d_out, bias=qkv_bias)\n        self.W_value = nn.Linear(d_in, d_out, bias=qkv_bias)\n        \n        # [출력 투영] 여러 헤드의 결과를 다시 하나로 섞어주는 레이어\n        self.out_proj = nn.Linear(d_out, d_out) \n        self.dropout = nn.Dropout(dropout)\n        \n        # [마스크 등록] 학습 파라미터가 아니므로 register_buffer 사용\n        # 대각선 위쪽(미래 정보)을 1로 채운 상삼각 행렬 생성\n        self.register_buffer(\n            \"mask\",\n            torch.triu(torch.ones(context_length, context_length), diagonal=1)\n        )\n\n    def forward(self, x):\n        # b: 배치 크기, num_tokens: 문장 길이(T), d_in: 입력 차원\n        b, num_tokens, d_in = x.shape\n\n        # 1. [선형 변환] 입력 x를 Q, K, V로 변환\n        # Shape: (b, num_tokens, d_out)\n        keys = self.W_key(x)\n        queries = self.W_query(x)\n        values = self.W_value(x)\n\n        # 2. [헤드 분할] d_out 차원을 (num_heads, head_dim)으로 쪼갭니다.\n        # Shape 변환: (b, num_tokens, d_out) -> (b, num_tokens, num_heads, head_dim)\n        keys = keys.view(b, num_tokens, self.num_heads, self.head_dim)\n        values = values.view(b, num_tokens, self.num_heads, self.head_dim)\n        queries = queries.view(b, num_tokens, self.num_heads, self.head_dim)\n\n        # 3. [차원 변경] 병렬 연산을 위해 '헤드' 차원을 '문장 길이' 앞으로 옮깁니다.\n        # 이렇게 하면 (b, num_heads)를 마치 하나의 배치처럼 묶어서 행렬 곱셈을 한 번에 처리할 수 있습니다.\n        #Shape 변환: (b, num_tokens, num_heads, head_dim) -> (b, num_heads, num_tokens, head_dim)\n        keys = ????\n        queries = ????\n        values = ????\n\n        # 4. [어텐션 스코어 계산] (Query @ Key_Transposed)\n        # 행렬 곱셈: (b, h, T, head_dim) @ (b, h, head_dim, T) -> (b, h, T, T)\n        # 결과값은 각 토큰끼리의 연관도(유사도)를 나타냅니다.\n        attn_scores = queries @ keys.transpose(2, 3)\n\n        # 5. [마스킹] 미래의 단어를 보지 못하게 가림 (Causal Masking)\n        # 현재 시퀀스 길이에 맞춰 마스크를 자르고, 값이 1인 곳(미래)을 -무한대로 채움\n        mask_bool = self.mask.bool()[:num_tokens, :num_tokens]\n        attn_scores.masked_fill_(mask_bool, -torch.inf)\n\n        # 6. [확률 변환] Softmax로 점수를 확률값(0~1)으로 변환\n        # 스케일링(Scaling): head_dim의 제곱근으로 나누어 기울기 소실 방지\n        attn_weights = torch.softmax(attn_scores / keys.shape[-1]**0.5, dim=-1)\n        attn_weights = self.dropout(attn_weights)\n\n        # 7. [컨텍스트 벡터 계산] (Attention_Weights @ Values)\n        # 가중치가 적용된 정보의 합을 구함\n        # Shape: (b, h, T, T) @ (b, h, T, head_dim) -> (b, h, T, head_dim)\n        context_vec = (attn_weights @ values).transpose(1, 2) \n        \n        # 8. [헤드 결합] 쪼개졌던 헤드들을 다시 하나로 이어 붙임 (Concatenate)\n        # transpose로 인해 메모리가 섞인 것을 contiguous로 정렬 후, view로 합침\n        # Shape 변환: (b, T, h, head_dim) -> (b, T, d_out)\n        context_vec = context_vec.contiguous().view(b, num_tokens, self.d_out)\n        \n        # 9. [최종 출력] 마지막 선형 변환\n        context_vec = self.out_proj(context_vec)\n\n        return context_vec",
     "answer": "keys.transpose(1, 2)\nqueries.transpose(1, 2)\nvalues.transpose(1, 2)",
     "accepted_answers": [
-      "keys.transpose(1, 2)\nqueries.transpose(1, 2)\nvalues.transpose(1, 2)"
+      "keys.transpose(1, 2)\nqueries.transpose(1, 2)\nvalues.transpose(1, 2)",
+      "keys = keys.transpose(1, 2)\nqueries = queries.transpose(1, 2)\nvalues = values.transpose(1, 2)"
     ],
     "scope_source": "ch3-full-mha-138",
     "isSourceBlank": false,
@@ -249,13 +258,17 @@ const patches={
       "values.transpose(1, 2)"
     ],
     "prompt": "head별 병렬 연산을 위해 [B,H,T,Dh]로 축을 이동하세요.\n코드의 `????` 자리에 들어갈 오른쪽 코드 또는 표현식을 위에서 아래 순서대로 작성하세요.",
-    "source_type": "기출 유형 확장 · 전체 구현 복원"
+    "source_type": "기출 유형 확장 · 전체 구현 복원",
+    "explanation": "헤드 분할된 [B, T, num_heads, head_dim]에서 축 1과 2를 transpose하여 [B, num_heads, T, head_dim] 형태로 변환합니다. 이렇게 헤드 축을 문장 길이 앞(batch 축 다음)으로 배치해야 PyTorch의 배치 행렬 곱셈(@)이 여러 헤드에 걸쳐 독립적이고 병렬적으로 한 번에 수행됩니다."
   },
   "past-implementation-5": {
     "scope_context": "class MultiHeadAttention(nn.Module):\n    def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):\n        super().__init__()\n        # [검증] 전체 출력 차원(d_out)은 헤드 개수(num_heads)로 나누어 떨어져야 합니다.\n        # 예: d_out=768, num_heads=12 -> 각 헤드는 64차원을 담당\n        assert (d_out % num_heads == 0), \"d_out must be divisible by num_heads\"\n\n        self.d_out = d_out\n        self.num_heads = num_heads\n        self.head_dim = d_out // num_heads  # 각 헤드가 담당할 차원 크기\n\n        # [입력 투영] Q, K, V를 만들기 위한 선형 레이어\n        # 참고: 헤드별로 레이어를 따로 만들지 않고, 한번에 큰 차원(d_out)으로 변환 후 나중에 쪼갭니다 (효율성)\n        self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)\n        self.W_key = nn.Linear(d_in, d_out, bias=qkv_bias)\n        self.W_value = nn.Linear(d_in, d_out, bias=qkv_bias)\n        \n        # [출력 투영] 여러 헤드의 결과를 다시 하나로 섞어주는 레이어\n        self.out_proj = nn.Linear(d_out, d_out) \n        self.dropout = nn.Dropout(dropout)\n        \n        # [마스크 등록] 학습 파라미터가 아니므로 register_buffer 사용\n        # 대각선 위쪽(미래 정보)을 1로 채운 상삼각 행렬 생성\n        self.register_buffer(\n            \"mask\",\n            torch.triu(torch.ones(context_length, context_length), diagonal=1)\n        )\n\n    def forward(self, x):\n        # b: 배치 크기, num_tokens: 문장 길이(T), d_in: 입력 차원\n        b, num_tokens, d_in = x.shape\n\n        # 1. [선형 변환] 입력 x를 Q, K, V로 변환\n        # Shape: (b, num_tokens, d_out)\n        keys = self.W_key(x)\n        queries = self.W_query(x)\n        values = self.W_value(x)\n\n        # 2. [헤드 분할] d_out 차원을 (num_heads, head_dim)으로 쪼갭니다.\n        # Shape 변환: (b, num_tokens, d_out) -> (b, num_tokens, num_heads, head_dim)\n        keys = keys.view(b, num_tokens, self.num_heads, self.head_dim)\n        values = values.view(b, num_tokens, self.num_heads, self.head_dim)\n        queries = queries.view(b, num_tokens, self.num_heads, self.head_dim)\n\n        # 3. [차원 변경] 병렬 연산을 위해 '헤드' 차원을 '문장 길이' 앞으로 옮깁니다.\n        # 이렇게 하면 (b, num_heads)를 마치 하나의 배치처럼 묶어서 행렬 곱셈을 한 번에 처리할 수 있습니다.\n        #Shape 변환: (b, num_tokens, num_heads, head_dim) -> (b, num_heads, num_tokens, head_dim)\n        keys = keys.transpose(1, 2)\n        queries = queries.transpose(1, 2)\n        values = values.transpose(1, 2)\n\n        # 4. [어텐션 스코어 계산] (Query @ Key_Transposed)\n        # 행렬 곱셈: (b, h, T, head_dim) @ (b, h, head_dim, T) -> (b, h, T, T)\n        # 결과값은 각 토큰끼리의 연관도(유사도)를 나타냅니다.\n        attn_scores = ????\n\n        # 5. [마스킹] 미래의 단어를 보지 못하게 가림 (Causal Masking)\n        # 현재 시퀀스 길이에 맞춰 마스크를 자르고, 값이 1인 곳(미래)을 -무한대로 채움\n        mask_bool = self.mask.bool()[:num_tokens, :num_tokens]\n        attn_scores.masked_fill_(mask_bool, -torch.inf)\n\n        # 6. [확률 변환] Softmax로 점수를 확률값(0~1)으로 변환\n        # 스케일링(Scaling): head_dim의 제곱근으로 나누어 기울기 소실 방지\n        attn_weights = ????\n        attn_weights = self.dropout(attn_weights)\n\n        # 7. [컨텍스트 벡터 계산] (Attention_Weights @ Values)\n        # 가중치가 적용된 정보의 합을 구함\n        # Shape: (b, h, T, T) @ (b, h, T, head_dim) -> (b, h, T, head_dim)\n        context_vec = (attn_weights @ values).transpose(1, 2) \n        \n        # 8. [헤드 결합] 쪼개졌던 헤드들을 다시 하나로 이어 붙임 (Concatenate)\n        # transpose로 인해 메모리가 섞인 것을 contiguous로 정렬 후, view로 합침\n        # Shape 변환: (b, T, h, head_dim) -> (b, T, d_out)\n        context_vec = context_vec.contiguous().view(b, num_tokens, self.d_out)\n        \n        # 9. [최종 출력] 마지막 선형 변환\n        context_vec = self.out_proj(context_vec)\n\n        return context_vec",
     "answer": "queries @ keys.transpose(2, 3)\ntorch.softmax(attn_scores / keys.shape[-1] ** 0.5, dim=-1)",
     "accepted_answers": [
-      "queries @ keys.transpose(2, 3)\ntorch.softmax(attn_scores / keys.shape[-1] ** 0.5, dim=-1)"
+      "queries @ keys.transpose(2, 3)\ntorch.softmax(attn_scores / keys.shape[-1] ** 0.5, dim=-1)",
+      "queries @ keys.transpose(2, 3)\ntorch.softmax(attn_scores / self.head_dim ** 0.5, dim=-1)",
+      "attn_scores = queries @ keys.transpose(2, 3)\nattn_weights = torch.softmax(attn_scores / keys.shape[-1] ** 0.5, dim=-1)",
+      "attn_scores = queries @ keys.transpose(2, 3)\nattn_weights = torch.softmax(attn_scores / self.head_dim ** 0.5, dim=-1)"
     ],
     "scope_source": "ch3-full-mha-138",
     "isSourceBlank": false,
@@ -265,13 +278,15 @@ const patches={
       "torch.softmax(attn_scores / keys.shape[-1] ** 0.5, dim=-1)"
     ],
     "prompt": "head별 Q·K 점수와 sqrt(Dh) 스케일 softmax를 구현하세요.\n코드의 `????` 자리에 들어갈 오른쪽 코드 또는 표현식을 위에서 아래 순서대로 작성하세요.",
-    "source_type": "기출 유형 확장 · 전체 구현 복원"
+    "source_type": "기출 유형 확장 · 전체 구현 복원",
+    "explanation": "Q [B,H,T,Dh]와 Transposed K [B,H,Dh,T]를 행렬곱(@)하여 유사도 점수 행렬 [B,H,T,T]를 구합니다. 이후 역전파 시 기울기 소실(vanishing gradient)을 방지하기 위해 헤드 차원의 제곱근(keys.shape[-1]**0.5 또는 self.head_dim**0.5)으로 스케일링한 후 마지막 차원(dim=-1)에 대해 softmax를 적용해 정규화된 어텐션 확률 분포를 만듭니다."
   },
   "past-implementation-6": {
     "scope_context": "class MultiHeadAttention(nn.Module):\n    def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):\n        super().__init__()\n        # [검증] 전체 출력 차원(d_out)은 헤드 개수(num_heads)로 나누어 떨어져야 합니다.\n        # 예: d_out=768, num_heads=12 -> 각 헤드는 64차원을 담당\n        assert (d_out % num_heads == 0), \"d_out must be divisible by num_heads\"\n\n        self.d_out = d_out\n        self.num_heads = num_heads\n        self.head_dim = d_out // num_heads  # 각 헤드가 담당할 차원 크기\n\n        # [입력 투영] Q, K, V를 만들기 위한 선형 레이어\n        # 참고: 헤드별로 레이어를 따로 만들지 않고, 한번에 큰 차원(d_out)으로 변환 후 나중에 쪼갭니다 (효율성)\n        self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)\n        self.W_key = nn.Linear(d_in, d_out, bias=qkv_bias)\n        self.W_value = nn.Linear(d_in, d_out, bias=qkv_bias)\n        \n        # [출력 투영] 여러 헤드의 결과를 다시 하나로 섞어주는 레이어\n        self.out_proj = nn.Linear(d_out, d_out) \n        self.dropout = nn.Dropout(dropout)\n        \n        # [마스크 등록] 학습 파라미터가 아니므로 register_buffer 사용\n        # 대각선 위쪽(미래 정보)을 1로 채운 상삼각 행렬 생성\n        self.register_buffer(\n            \"mask\",\n            torch.triu(torch.ones(context_length, context_length), diagonal=1)\n        )\n\n    def forward(self, x):\n        # b: 배치 크기, num_tokens: 문장 길이(T), d_in: 입력 차원\n        b, num_tokens, d_in = x.shape\n\n        # 1. [선형 변환] 입력 x를 Q, K, V로 변환\n        # Shape: (b, num_tokens, d_out)\n        keys = self.W_key(x)\n        queries = self.W_query(x)\n        values = self.W_value(x)\n\n        # 2. [헤드 분할] d_out 차원을 (num_heads, head_dim)으로 쪼갭니다.\n        # Shape 변환: (b, num_tokens, d_out) -> (b, num_tokens, num_heads, head_dim)\n        keys = keys.view(b, num_tokens, self.num_heads, self.head_dim)\n        values = values.view(b, num_tokens, self.num_heads, self.head_dim)\n        queries = queries.view(b, num_tokens, self.num_heads, self.head_dim)\n\n        # 3. [차원 변경] 병렬 연산을 위해 '헤드' 차원을 '문장 길이' 앞으로 옮깁니다.\n        # 이렇게 하면 (b, num_heads)를 마치 하나의 배치처럼 묶어서 행렬 곱셈을 한 번에 처리할 수 있습니다.\n        #Shape 변환: (b, num_tokens, num_heads, head_dim) -> (b, num_heads, num_tokens, head_dim)\n        keys = keys.transpose(1, 2)\n        queries = queries.transpose(1, 2)\n        values = values.transpose(1, 2)\n\n        # 4. [어텐션 스코어 계산] (Query @ Key_Transposed)\n        # 행렬 곱셈: (b, h, T, head_dim) @ (b, h, head_dim, T) -> (b, h, T, T)\n        # 결과값은 각 토큰끼리의 연관도(유사도)를 나타냅니다.\n        attn_scores = queries @ keys.transpose(2, 3)\n\n        # 5. [마스킹] 미래의 단어를 보지 못하게 가림 (Causal Masking)\n        # 현재 시퀀스 길이에 맞춰 마스크를 자르고, 값이 1인 곳(미래)을 -무한대로 채움\n        mask_bool = self.mask.bool()[:num_tokens, :num_tokens]\n        attn_scores.masked_fill_(mask_bool, -torch.inf)\n\n        # 6. [확률 변환] Softmax로 점수를 확률값(0~1)으로 변환\n        # 스케일링(Scaling): head_dim의 제곱근으로 나누어 기울기 소실 방지\n        attn_weights = torch.softmax(attn_scores / keys.shape[-1]**0.5, dim=-1)\n        attn_weights = self.dropout(attn_weights)\n\n        # 7. [컨텍스트 벡터 계산] (Attention_Weights @ Values)\n        # 가중치가 적용된 정보의 합을 구함\n        # Shape: (b, h, T, T) @ (b, h, T, head_dim) -> (b, h, T, head_dim)\n        context_vec = ????\n        \n        # 8. [헤드 결합] 쪼개졌던 헤드들을 다시 하나로 이어 붙임 (Concatenate)\n        # transpose로 인해 메모리가 섞인 것을 contiguous로 정렬 후, view로 합침\n        # Shape 변환: (b, T, h, head_dim) -> (b, T, d_out)\n        context_vec = ????\n        \n        # 9. [최종 출력] 마지막 선형 변환\n        context_vec = ????\n\n        return context_vec",
     "answer": "(attn_weights @ values).transpose(1, 2)\ncontext_vec.contiguous().view(b, num_tokens, self.d_out)\nself.out_proj(context_vec)",
     "accepted_answers": [
-      "(attn_weights @ values).transpose(1, 2)\ncontext_vec.contiguous().view(b, num_tokens, self.d_out)\nself.out_proj(context_vec)"
+      "(attn_weights @ values).transpose(1, 2)\ncontext_vec.contiguous().view(b, num_tokens, self.d_out)\nself.out_proj(context_vec)",
+      "context_vec = (attn_weights @ values).transpose(1, 2)\ncontext_vec = context_vec.contiguous().view(b, num_tokens, self.d_out)\ncontext_vec = self.out_proj(context_vec)"
     ],
     "scope_source": "ch3-full-mha-138",
     "isSourceBlank": false,
@@ -282,7 +297,8 @@ const patches={
       "self.out_proj(context_vec)"
     ],
     "prompt": "Value 가중합부터 head 결합·출력 projection까지 구현하세요.\n코드의 `????` 자리에 들어갈 오른쪽 코드 또는 표현식을 위에서 아래 순서대로 작성하세요.",
-    "source_type": "기출 유형 확장 · 전체 구현 복원"
+    "source_type": "기출 유형 확장 · 전체 구현 복원",
+    "explanation": "어텐션 가중치 [B,H,T,T]와 V [B,H,T,Dh]를 행렬곱하여 [B,H,T,Dh]의 문맥 벡터를 얻고, transpose(1,2)로 [B,T,H,Dh]로 되돌립니다. 축 변환으로 연속성이 깨진 텐서를 .contiguous()로 메모리 재정렬한 후 .view(b, num_tokens, self.d_out)로 모든 헤드를 [B,T,D]로 이어 붙이고, 최종 out_proj 선형 레이어를 통과시켜 헤드 간 정보를 혼합합니다."
   },
   "exam-llm04-01": {
     "scope_context": "class LayerNorm(nn.Module):\n    \"\"\"\n    층 정규화 (Layer Normalization): 학습 안정성을 높임\n    \"\"\"\n    def __init__(self, emb_dim):\n        super().__init__()\n        self.eps = 1e-5\n        self.scale = nn.Parameter(torch.ones(emb_dim)) # 학습 가능한 스케일 파라미터 (Gamma)\n        self.shift = nn.Parameter(torch.zeros(emb_dim)) # 학습 가능한 시프트 파라미터 (Beta)\n\n    def forward(self, x):\n        mean = x.mean(dim=-1, keepdim=True)\n        var = x.var(dim=-1, keepdim=True, unbiased=False)\n        norm_x = ????\n        return self.scale * norm_x + self.shift",
@@ -429,7 +445,9 @@ const patches={
     "scope_context": "class TransformerBlock(nn.Module):\n    \"\"\"\n    표준 트랜스포머 블록 (Decoder Block)\n    구조: LayerNorm -> Attention -> Add(Residual) -> LayerNorm -> FeedForward -> Add(Residual)\n    \"\"\"\n    def __init__(self, cfg):\n        super().__init__()\n        self.att = ????\n        self.ff = FeedForward(cfg)\n        self.norm1 = LayerNorm(cfg[\"emb_dim\"])\n        self.norm2 = LayerNorm(cfg[\"emb_dim\"])\n        self.drop_shortcut = nn.Dropout(cfg[\"drop_rate\"])\n\n    def forward(self, x):\n        # 1. 어텐션 블록 (Residual Connection 적용)\n        shortcut = x\n        x = self.norm1(x) # Pre-LayerNorm 방식\n        x = self.att(x)\n        x = self.drop_shortcut(x)\n        x = x + shortcut  # 원본 입력을 더해줌 (기울기 소실 방지)\n\n        # 2. 피드 포워드 블록 (Residual Connection 적용)\n        shortcut = x\n        x = self.norm2(x)\n        x = self.ff(x)\n        x = self.drop_shortcut(x)\n        x = x + shortcut  # 원본 입력 다시 더함\n\n        return x",
     "answer": "MultiHeadAttention(d_in=cfg['emb_dim'], d_out=cfg['emb_dim'], context_length=cfg['context_length'], num_heads=cfg['n_heads'], dropout=cfg['drop_rate'], qkv_bias=cfg['qkv_bias'])",
     "accepted_answers": [
-      "MultiHeadAttention(d_in=cfg['emb_dim'], d_out=cfg['emb_dim'], context_length=cfg['context_length'], num_heads=cfg['n_heads'], dropout=cfg['drop_rate'], qkv_bias=cfg['qkv_bias'])"
+      "MultiHeadAttention(d_in=cfg['emb_dim'], d_out=cfg['emb_dim'], context_length=cfg['context_length'], num_heads=cfg['n_heads'], dropout=cfg['drop_rate'], qkv_bias=cfg['qkv_bias'])",
+      "self.att = MultiHeadAttention(d_in=cfg['emb_dim'], d_out=cfg['emb_dim'], context_length=cfg['context_length'], num_heads=cfg['n_heads'], dropout=cfg['drop_rate'], qkv_bias=cfg['qkv_bias'])",
+      "MultiHeadAttention(cfg['emb_dim'], cfg['emb_dim'], cfg['context_length'], cfg['drop_rate'], cfg['n_heads'], cfg['qkv_bias'])"
     ],
     "scope_source": "ch4-cell-2",
     "isSourceBlank": false,
@@ -438,13 +456,17 @@ const patches={
       "MultiHeadAttention(d_in=cfg['emb_dim'], d_out=cfg['emb_dim'], context_length=cfg['context_length'], num_heads=cfg['n_heads'], dropout=cfg['drop_rate'], qkv_bias=cfg['qkv_bias'])"
     ],
     "prompt": "cfg를 사용해 입력·출력 D를 유지하는 MultiHeadAttention을 생성하세요.\n코드의 `????` 자리에 들어갈 오른쪽 코드 또는 표현식을 위에서 아래 순서대로 작성하세요.",
-    "source_type": "기출 유형 확장 · 전체 구현 복원"
+    "source_type": "기출 유형 확장 · 전체 구현 복원",
+    "explanation": "cfg dictionary의 하이퍼파라미터(emb_dim, context_length, n_heads, drop_rate, qkv_bias)를 MultiHeadAttention 생성자에 전달합니다. d_in과 d_out을 모두 cfg['emb_dim']으로 설정해야 Transformer 블록의 잔차 연결(residual connection) x + att(x)에서 입력과 출력의 차원 D가 일치합니다."
   },
   "past-implementation-2": {
     "scope_context": "class GPTModel(nn.Module):\n    \"\"\"\n    전체 GPT 모델 구조 정의\n    Embedding -> Transformer Blocks -> Final Norm -> Output Head\n    \"\"\"\n    def __init__(self, cfg):\n        super().__init__()\n        # 토큰 임베딩 (단어 -> 벡터)\n        self.tok_emb = ????\n        # 위치 임베딩 (위치 정보 -> 벡터)\n        self.pos_emb = ????\n        self.drop_emb = ????\n\n        # 트랜스포머 블록 쌓기 (n_layers 만큼)\n        self.trf_blocks = nn.Sequential(\n            *[TransformerBlock(cfg) for _ in range(cfg[\"n_layers\"])])\n\n        # 최종 정규화 및 출력 헤드\n        self.final_norm = LayerNorm(cfg[\"emb_dim\"])\n        self.out_head = nn.Linear(cfg[\"emb_dim\"], cfg[\"vocab_size\"], bias=False)\n\n    def forward(self, in_idx):\n        batch_size, seq_len = in_idx.shape\n\n        # 1. 임베딩 생성\n        tok_embeds = self.tok_emb(in_idx)\n        pos_embeds = self.pos_emb(torch.arange(seq_len, device=in_idx.device))\n\n        # 2. 토큰 임베딩과 위치 임베딩 합산\n        x = tok_embeds + pos_embeds\n        x = self.drop_emb(x)\n\n        # 3. 트랜스포머 블록 통과\n        x = self.trf_blocks(x)\n\n        # 4. 최종 출력 계산\n        x = self.final_norm(x)\n        logits = self.out_head(x) # 각 단어에 대한 예측 점수 (Logits)\n\n        return logits",
     "answer": "nn.Embedding(cfg['vocab_size'], cfg['emb_dim'])\nnn.Embedding(cfg['context_length'], cfg['emb_dim'])\nnn.Dropout(cfg['drop_rate'])",
     "accepted_answers": [
-      "nn.Embedding(cfg['vocab_size'], cfg['emb_dim'])\nnn.Embedding(cfg['context_length'], cfg['emb_dim'])\nnn.Dropout(cfg['drop_rate'])"
+      "nn.Embedding(cfg['vocab_size'], cfg['emb_dim'])\nnn.Embedding(cfg['context_length'], cfg['emb_dim'])\nnn.Dropout(cfg['drop_rate'])",
+      "self.tok_emb = nn.Embedding(cfg['vocab_size'], cfg['emb_dim'])\nself.pos_emb = nn.Embedding(cfg['context_length'], cfg['emb_dim'])\nself.drop_emb = nn.Dropout(cfg['drop_rate'])",
+      "torch.nn.Embedding(cfg['vocab_size'], cfg['emb_dim'])\ntorch.nn.Embedding(cfg['context_length'], cfg['emb_dim'])\ntorch.nn.Dropout(cfg['drop_rate'])",
+      "self.tok_emb = torch.nn.Embedding(cfg['vocab_size'], cfg['emb_dim'])\nself.pos_emb = torch.nn.Embedding(cfg['context_length'], cfg['emb_dim'])\nself.drop_emb = torch.nn.Dropout(cfg['drop_rate'])"
     ],
     "scope_source": "ch4-cell-3",
     "isSourceBlank": false,
@@ -455,7 +477,8 @@ const patches={
       "nn.Dropout(cfg['drop_rate'])"
     ],
     "prompt": "token·position embedding과 embedding dropout을 생성하세요.\n코드의 `????` 자리에 들어갈 오른쪽 코드 또는 표현식을 위에서 아래 순서대로 작성하세요.",
-    "source_type": "기출 유형 확장 · 전체 구현 복원"
+    "source_type": "기출 유형 확장 · 전체 구현 복원",
+    "explanation": "토큰 임베딩은 vocab_size개의 단어 ID를 emb_dim 차원으로 사상하고, 포지셔널 임베딩은 최대 문장 길이 context_length 내 위치를 emb_dim으로 사상합니다. 결합된 임베딩 텐서 [B,T,D]에 드롭아웃을 적용해 특정 토큰-위치 조합에 대한 과적합을 방지합니다."
   },
   "exam-llm05-01": {
     "scope_context": "def calc_loss_batch(input_batch, target_batch, model, device):\n    # 1. 장치 이동 (CPU -> GPU)\n    # 데이터를 모델이 있는 장치(device)로 옮깁니다. (예: cuda:0)\n    # 모델과 데이터가 서로 다른 장치에 있으면 에러가 발생합니다.\n    input_batch, target_batch = input_batch.to(device), target_batch.to(device)\n\n    # 2. 모델 예측 (Forward Pass)\n    # 입력을 넣어 예측값(Logits)을 얻습니다.\n    logits = model(input_batch)\n\n    # 3. 손실(Loss) 계산\n    # CrossEntropyLoss는 (N, Class) 형태의 2차원 입력을 기대합니다.\n    # 따라서 (Batch, Sequence, Vocab) 형태인 logits를 -> (Batch*Sequence, Vocab)으로 폅니다.\n    # target_batch도 (Batch, Sequence) -> (Batch*Sequence)로 일렬로 폅니다.\n    loss = ????\n\n    return loss",
@@ -807,7 +830,169 @@ const patches={
     "source_type": "기출 유형 확장 · 전체 구현 복원"
   }
 };
-const extras=[{"subject": "LLM", "chapterId": "llm-04", "chapterNumber": "04", "chapterTitle": "GPT Architecture", "file": "Chapter_4_Excercise_GPT.ipynb", "isSourceBlank": true, "source_type": "원본 노트북 실제 빈칸", "occurrence": 0, "accepted_answers": ["norm_x = (x - mean) / torch.sqrt(var + self.eps)"], "id": "past-implementation-1", "topic": "Attention 생성자 구성", "difficulty": "2 · 계산식", "sourceId": "ch4-cell-2", "prompt": "cfg를 사용해 입력·출력 D를 유지하는 MultiHeadAttention을 생성하세요.", "answer": "self.att = MultiHeadAttention(d_in=cfg['emb_dim'], d_out=cfg['emb_dim'], context_length=cfg['context_length'], num_heads=cfg['n_heads'], dropout=cfg['drop_rate'], qkv_bias=cfg['qkv_bias'])", "problem_context": "mean = x.mean(dim=-1, keepdim=True)\nvar = x.var(dim=-1, keepdim=True, unbiased=False)\n# TODO: LayerNorm 계산식의 통계량 변수를 채우세요.\n# 힌트: 평균(mean)과 분산(var)을 사용해 정규화합니다.\nnorm_x = (x - ????) / torch.sqrt(???? + self.eps)", "explanation": "cfg를 사용해 입력·출력 D를 유지하는 MultiHeadAttention을 생성하세요. 인자와 축은 클래스의 선언 및 앞뒤 Tensor shape에서 확인합니다.", "tensor_flow": "[B,T,D] 형태를 유지하도록 구성합니다.", "code_signal": "전체 클래스의 __init__ 및 다음 연산을 확인하세요.", "retry": "입출력 shape를 적은 뒤 다시 구현하세요.", "isPastExam": true}, {"subject": "LLM", "chapterId": "llm-04", "chapterNumber": "04", "chapterTitle": "GPT Architecture", "file": "Chapter_4_Excercise_GPT.ipynb", "isSourceBlank": true, "source_type": "원본 노트북 실제 빈칸", "occurrence": 0, "accepted_answers": ["norm_x = (x - mean) / torch.sqrt(var + self.eps)"], "id": "past-implementation-2", "topic": "GPT 입력부 생성", "difficulty": "2 · 계산식", "sourceId": "ch4-cell-3", "prompt": "token·position embedding과 embedding dropout을 생성하세요.", "answer": "self.tok_emb = nn.Embedding(cfg['vocab_size'], cfg['emb_dim'])\nself.pos_emb = nn.Embedding(cfg['context_length'], cfg['emb_dim'])\nself.drop_emb = nn.Dropout(cfg['drop_rate'])", "problem_context": "mean = x.mean(dim=-1, keepdim=True)\nvar = x.var(dim=-1, keepdim=True, unbiased=False)\n# TODO: LayerNorm 계산식의 통계량 변수를 채우세요.\n# 힌트: 평균(mean)과 분산(var)을 사용해 정규화합니다.\nnorm_x = (x - ????) / torch.sqrt(???? + self.eps)", "explanation": "token·position embedding과 embedding dropout을 생성하세요. 인자와 축은 클래스의 선언 및 앞뒤 Tensor shape에서 확인합니다.", "tensor_flow": "[B,T,D] 형태를 유지하도록 구성합니다.", "code_signal": "전체 클래스의 __init__ 및 다음 연산을 확인하세요.", "retry": "입출력 shape를 적은 뒤 다시 구현하세요.", "isPastExam": true}, {"subject": "LLM", "chapterId": "llm-03a", "chapterNumber": "03A", "chapterTitle": "Attention", "file": "Chapter_3_Excercise_Attention.ipynb", "isSourceBlank": true, "source_type": "원본 노트북 실제 빈칸", "occurrence": 0, "accepted_answers": ["self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)\nself.W_key   = nn.Linear(d_in, d_out, bias=qkv_bias)\nself.W_value = nn.Linear(d_in, d_out, bias=qkv_bias)"], "id": "past-implementation-3", "topic": "Multi-Head 분할", "difficulty": "3 · 연결 구현", "prompt": "Q/K/V를 [B,T,H,Dh]로 분할하는 세 줄을 작성하세요.", "answer": "keys = keys.view(b, num_tokens, self.num_heads, self.head_dim)\nvalues = values.view(b, num_tokens, self.num_heads, self.head_dim)\nqueries = queries.view(b, num_tokens, self.num_heads, self.head_dim)", "sourceId": "ch3-full-mha-138", "problem_context": "# 1. 쿼리(Query), 키(Key), 밸류(Value)를 만들기 위한 선형 투영 레이어 정의\n# 입력 벡터(d_in)를 각각의 목적에 맞는 벡터(d_out)로 변환합니다.\n# TODO: Q/K/V 투영 레이어 타입과 인자를 채우세요.\n# 힌트: 입력 d_in, 출력 d_out을 사용하는 Linear 레이어를 선언하세요.\nself.W_query = nn.????(????, ????, bias=qkv_bias)\nself.W_key   = nn.????(????, ????, bias=qkv_bias)\nself.W_value = nn.????(????, ????, bias=qkv_bias)", "explanation": "Q/K/V를 [B,T,H,Dh]로 분할하는 세 줄을 작성하세요. 인자와 축은 클래스의 선언 및 앞뒤 Tensor shape에서 확인합니다.", "tensor_flow": "[B,T,D] ↔ [B,H,T,Dh], D = H × Dh", "code_signal": "전체 클래스의 __init__ 및 다음 연산을 확인하세요.", "retry": "입출력 shape를 적은 뒤 다시 구현하세요.", "isPastExam": true}, {"subject": "LLM", "chapterId": "llm-03a", "chapterNumber": "03A", "chapterTitle": "Attention", "file": "Chapter_3_Excercise_Attention.ipynb", "isSourceBlank": true, "source_type": "원본 노트북 실제 빈칸", "occurrence": 0, "accepted_answers": ["self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)\nself.W_key   = nn.Linear(d_in, d_out, bias=qkv_bias)\nself.W_value = nn.Linear(d_in, d_out, bias=qkv_bias)"], "id": "past-implementation-4", "topic": "Multi-Head 축 이동", "difficulty": "3 · 연결 구현", "prompt": "head별 병렬 연산을 위해 [B,H,T,Dh]로 축을 이동하세요.", "answer": "keys = keys.transpose(1, 2)\nqueries = queries.transpose(1, 2)\nvalues = values.transpose(1, 2)", "sourceId": "ch3-full-mha-138", "problem_context": "# 1. 쿼리(Query), 키(Key), 밸류(Value)를 만들기 위한 선형 투영 레이어 정의\n# 입력 벡터(d_in)를 각각의 목적에 맞는 벡터(d_out)로 변환합니다.\n# TODO: Q/K/V 투영 레이어 타입과 인자를 채우세요.\n# 힌트: 입력 d_in, 출력 d_out을 사용하는 Linear 레이어를 선언하세요.\nself.W_query = nn.????(????, ????, bias=qkv_bias)\nself.W_key   = nn.????(????, ????, bias=qkv_bias)\nself.W_value = nn.????(????, ????, bias=qkv_bias)", "explanation": "head별 병렬 연산을 위해 [B,H,T,Dh]로 축을 이동하세요. 인자와 축은 클래스의 선언 및 앞뒤 Tensor shape에서 확인합니다.", "tensor_flow": "[B,T,D] ↔ [B,H,T,Dh], D = H × Dh", "code_signal": "전체 클래스의 __init__ 및 다음 연산을 확인하세요.", "retry": "입출력 shape를 적은 뒤 다시 구현하세요.", "isPastExam": true}, {"subject": "LLM", "chapterId": "llm-03a", "chapterNumber": "03A", "chapterTitle": "Attention", "file": "Chapter_3_Excercise_Attention.ipynb", "isSourceBlank": true, "source_type": "원본 노트북 실제 빈칸", "occurrence": 0, "accepted_answers": ["self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)\nself.W_key   = nn.Linear(d_in, d_out, bias=qkv_bias)\nself.W_value = nn.Linear(d_in, d_out, bias=qkv_bias)"], "id": "past-implementation-5", "topic": "Head별 score와 정규화", "difficulty": "3 · 연결 구현", "prompt": "head별 Q·K 점수와 sqrt(Dh) 스케일 softmax를 구현하세요.", "answer": "attn_scores = queries @ keys.transpose(2, 3)\nattn_weights = torch.softmax(attn_scores / keys.shape[-1] ** 0.5, dim=-1)", "sourceId": "ch3-full-mha-138", "problem_context": "# 1. 쿼리(Query), 키(Key), 밸류(Value)를 만들기 위한 선형 투영 레이어 정의\n# 입력 벡터(d_in)를 각각의 목적에 맞는 벡터(d_out)로 변환합니다.\n# TODO: Q/K/V 투영 레이어 타입과 인자를 채우세요.\n# 힌트: 입력 d_in, 출력 d_out을 사용하는 Linear 레이어를 선언하세요.\nself.W_query = nn.????(????, ????, bias=qkv_bias)\nself.W_key   = nn.????(????, ????, bias=qkv_bias)\nself.W_value = nn.????(????, ????, bias=qkv_bias)", "explanation": "head별 Q·K 점수와 sqrt(Dh) 스케일 softmax를 구현하세요. 인자와 축은 클래스의 선언 및 앞뒤 Tensor shape에서 확인합니다.", "tensor_flow": "[B,T,D] ↔ [B,H,T,Dh], D = H × Dh", "code_signal": "전체 클래스의 __init__ 및 다음 연산을 확인하세요.", "retry": "입출력 shape를 적은 뒤 다시 구현하세요.", "isPastExam": true}, {"subject": "LLM", "chapterId": "llm-03a", "chapterNumber": "03A", "chapterTitle": "Attention", "file": "Chapter_3_Excercise_Attention.ipynb", "isSourceBlank": true, "source_type": "원본 노트북 실제 빈칸", "occurrence": 0, "accepted_answers": ["self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)\nself.W_key   = nn.Linear(d_in, d_out, bias=qkv_bias)\nself.W_value = nn.Linear(d_in, d_out, bias=qkv_bias)"], "id": "past-implementation-6", "topic": "Head 결합과 출력", "difficulty": "3 · 연결 구현", "prompt": "Value 가중합부터 head 결합·출력 projection까지 구현하세요.", "answer": "context_vec = (attn_weights @ values).transpose(1, 2)\ncontext_vec = context_vec.contiguous().view(b, num_tokens, self.d_out)\ncontext_vec = self.out_proj(context_vec)", "sourceId": "ch3-full-mha-138", "problem_context": "# 1. 쿼리(Query), 키(Key), 밸류(Value)를 만들기 위한 선형 투영 레이어 정의\n# 입력 벡터(d_in)를 각각의 목적에 맞는 벡터(d_out)로 변환합니다.\n# TODO: Q/K/V 투영 레이어 타입과 인자를 채우세요.\n# 힌트: 입력 d_in, 출력 d_out을 사용하는 Linear 레이어를 선언하세요.\nself.W_query = nn.????(????, ????, bias=qkv_bias)\nself.W_key   = nn.????(????, ????, bias=qkv_bias)\nself.W_value = nn.????(????, ????, bias=qkv_bias)", "explanation": "Value 가중합부터 head 결합·출력 projection까지 구현하세요. 인자와 축은 클래스의 선언 및 앞뒤 Tensor shape에서 확인합니다.", "tensor_flow": "[B,T,D] ↔ [B,H,T,Dh], D = H × Dh", "code_signal": "전체 클래스의 __init__ 및 다음 연산을 확인하세요.", "retry": "입출력 shape를 적은 뒤 다시 구현하세요.", "isPastExam": true}];
+const extras=[
+  {
+    "subject": "LLM",
+    "chapterId": "llm-04",
+    "chapterNumber": "04",
+    "chapterTitle": "GPT Architecture",
+    "file": "Chapter_4_Excercise_GPT.ipynb",
+    "isSourceBlank": true,
+    "source_type": "원본 노트북 실제 빈칸",
+    "occurrence": 0,
+    "accepted_answers": [
+      "MultiHeadAttention(d_in=cfg['emb_dim'], d_out=cfg['emb_dim'], context_length=cfg['context_length'], num_heads=cfg['n_heads'], dropout=cfg['drop_rate'], qkv_bias=cfg['qkv_bias'])",
+      "self.att = MultiHeadAttention(d_in=cfg['emb_dim'], d_out=cfg['emb_dim'], context_length=cfg['context_length'], num_heads=cfg['n_heads'], dropout=cfg['drop_rate'], qkv_bias=cfg['qkv_bias'])",
+      "MultiHeadAttention(cfg['emb_dim'], cfg['emb_dim'], cfg['context_length'], cfg['drop_rate'], cfg['n_heads'], cfg['qkv_bias'])"
+    ],
+    "id": "past-implementation-1",
+    "topic": "Attention 생성자 구성",
+    "difficulty": "2 · 계산식",
+    "sourceId": "ch4-cell-2",
+    "prompt": "cfg를 사용해 입력·출력 D를 유지하는 MultiHeadAttention을 생성하세요.",
+    "answer": "self.att = MultiHeadAttention(d_in=cfg['emb_dim'], d_out=cfg['emb_dim'], context_length=cfg['context_length'], num_heads=cfg['n_heads'], dropout=cfg['drop_rate'], qkv_bias=cfg['qkv_bias'])",
+    "problem_context": "mean = x.mean(dim=-1, keepdim=True)\nvar = x.var(dim=-1, keepdim=True, unbiased=False)\n# TODO: LayerNorm 계산식의 통계량 변수를 채우세요.\n# 힌트: 평균(mean)과 분산(var)을 사용해 정규화합니다.\nnorm_x = (x - ????) / torch.sqrt(???? + self.eps)",
+    "explanation": "cfg dictionary의 하이퍼파라미터(emb_dim, context_length, n_heads, drop_rate, qkv_bias)를 MultiHeadAttention 생성자에 전달합니다. d_in과 d_out을 모두 cfg['emb_dim']으로 설정해야 Transformer 블록의 잔차 연결(residual connection) x + att(x)에서 입력과 출력의 차원 D가 일치합니다.",
+    "tensor_flow": "[B,T,D] 형태를 유지하도록 구성합니다.",
+    "code_signal": "전체 클래스의 __init__ 및 다음 연산을 확인하세요.",
+    "retry": "입출력 shape를 적은 뒤 다시 구현하세요.",
+    "isPastExam": true
+  },
+  {
+    "subject": "LLM",
+    "chapterId": "llm-04",
+    "chapterNumber": "04",
+    "chapterTitle": "GPT Architecture",
+    "file": "Chapter_4_Excercise_GPT.ipynb",
+    "isSourceBlank": true,
+    "source_type": "원본 노트북 실제 빈칸",
+    "occurrence": 0,
+    "accepted_answers": [
+      "nn.Embedding(cfg['vocab_size'], cfg['emb_dim'])\nnn.Embedding(cfg['context_length'], cfg['emb_dim'])\nnn.Dropout(cfg['drop_rate'])",
+      "self.tok_emb = nn.Embedding(cfg['vocab_size'], cfg['emb_dim'])\nself.pos_emb = nn.Embedding(cfg['context_length'], cfg['emb_dim'])\nself.drop_emb = nn.Dropout(cfg['drop_rate'])",
+      "torch.nn.Embedding(cfg['vocab_size'], cfg['emb_dim'])\ntorch.nn.Embedding(cfg['context_length'], cfg['emb_dim'])\ntorch.nn.Dropout(cfg['drop_rate'])",
+      "self.tok_emb = torch.nn.Embedding(cfg['vocab_size'], cfg['emb_dim'])\nself.pos_emb = torch.nn.Embedding(cfg['context_length'], cfg['emb_dim'])\nself.drop_emb = torch.nn.Dropout(cfg['drop_rate'])"
+    ],
+    "id": "past-implementation-2",
+    "topic": "GPT 입력부 생성",
+    "difficulty": "2 · 계산식",
+    "sourceId": "ch4-cell-3",
+    "prompt": "token·position embedding과 embedding dropout을 생성하세요.",
+    "answer": "self.tok_emb = nn.Embedding(cfg['vocab_size'], cfg['emb_dim'])\nself.pos_emb = nn.Embedding(cfg['context_length'], cfg['emb_dim'])\nself.drop_emb = nn.Dropout(cfg['drop_rate'])",
+    "problem_context": "mean = x.mean(dim=-1, keepdim=True)\nvar = x.var(dim=-1, keepdim=True, unbiased=False)\n# TODO: LayerNorm 계산식의 통계량 변수를 채우세요.\n# 힌트: 평균(mean)과 분산(var)을 사용해 정규화합니다.\nnorm_x = (x - ????) / torch.sqrt(???? + self.eps)",
+    "explanation": "토큰 임베딩은 vocab_size개의 단어 ID를 emb_dim 차원으로 사상하고, 포지셔널 임베딩은 최대 문장 길이 context_length 내 위치를 emb_dim으로 사상합니다. 결합된 임베딩 텐서 [B,T,D]에 드롭아웃을 적용해 특정 토큰-위치 조합에 대한 과적합을 방지합니다.",
+    "tensor_flow": "[B,T,D] 형태를 유지하도록 구성합니다.",
+    "code_signal": "전체 클래스의 __init__ 및 다음 연산을 확인하세요.",
+    "retry": "입출력 shape를 적은 뒤 다시 구현하세요.",
+    "isPastExam": true
+  },
+  {
+    "subject": "LLM",
+    "chapterId": "llm-03a",
+    "chapterNumber": "03A",
+    "chapterTitle": "Attention",
+    "file": "Chapter_3_Excercise_Attention.ipynb",
+    "isSourceBlank": true,
+    "source_type": "원본 노트북 실제 빈칸",
+    "occurrence": 0,
+    "accepted_answers": [
+      "keys.view(b, num_tokens, self.num_heads, self.head_dim)\nvalues.view(b, num_tokens, self.num_heads, self.head_dim)\nqueries.view(b, num_tokens, self.num_heads, self.head_dim)",
+      "keys = keys.view(b, num_tokens, self.num_heads, self.head_dim)\nvalues = values.view(b, num_tokens, self.num_heads, self.head_dim)\nqueries = queries.view(b, num_tokens, self.num_heads, self.head_dim)"
+    ],
+    "id": "past-implementation-3",
+    "topic": "Multi-Head 분할",
+    "difficulty": "3 · 연결 구현",
+    "prompt": "Q/K/V를 [B,T,H,Dh]로 분할하는 세 줄을 작성하세요.",
+    "answer": "keys = keys.view(b, num_tokens, self.num_heads, self.head_dim)\nvalues = values.view(b, num_tokens, self.num_heads, self.head_dim)\nqueries = queries.view(b, num_tokens, self.num_heads, self.head_dim)",
+    "sourceId": "ch3-full-mha-138",
+    "problem_context": "# 1. 쿼리(Query), 키(Key), 밸류(Value)를 만들기 위한 선형 투영 레이어 정의\n# 입력 벡터(d_in)를 각각의 목적에 맞는 벡터(d_out)로 변환합니다.\n# TODO: Q/K/V 투영 레이어 타입과 인자를 채우세요.\n# 힌트: 입력 d_in, 출력 d_out을 사용하는 Linear 레이어를 선언하세요.\nself.W_query = nn.????(????, ????, bias=qkv_bias)\nself.W_key   = nn.????(????, ????, bias=qkv_bias)\nself.W_value = nn.????(????, ????, bias=qkv_bias)",
+    "explanation": "Q/K/V 투영 결과 [B, T, D]에서 D(=emb_dim) 차원을 view를 통해 (num_heads, head_dim)으로 분할합니다. D = num_heads * head_dim 관계가 성립하므로 전체 원소 수 변화 없이 각 어텐션 헤드가 독립적인 특징 부분공간(subspace)을 담당하게 만듭니다.",
+    "tensor_flow": "[B,T,D] ↔ [B,H,T,Dh], D = H × Dh",
+    "code_signal": "전체 클래스의 __init__ 및 다음 연산을 확인하세요.",
+    "retry": "입출력 shape를 적은 뒤 다시 구현하세요.",
+    "isPastExam": true
+  },
+  {
+    "subject": "LLM",
+    "chapterId": "llm-03a",
+    "chapterNumber": "03A",
+    "chapterTitle": "Attention",
+    "file": "Chapter_3_Excercise_Attention.ipynb",
+    "isSourceBlank": true,
+    "source_type": "원본 노트북 실제 빈칸",
+    "occurrence": 0,
+    "accepted_answers": [
+      "keys.transpose(1, 2)\nqueries.transpose(1, 2)\nvalues.transpose(1, 2)",
+      "keys = keys.transpose(1, 2)\nqueries = queries.transpose(1, 2)\nvalues = values.transpose(1, 2)"
+    ],
+    "id": "past-implementation-4",
+    "topic": "Multi-Head 축 이동",
+    "difficulty": "3 · 연결 구현",
+    "prompt": "head별 병렬 연산을 위해 [B,H,T,Dh]로 축을 이동하세요.",
+    "answer": "keys = keys.transpose(1, 2)\nqueries = queries.transpose(1, 2)\nvalues = values.transpose(1, 2)",
+    "sourceId": "ch3-full-mha-138",
+    "problem_context": "# 1. 쿼리(Query), 키(Key), 밸류(Value)를 만들기 위한 선형 투영 레이어 정의\n# 입력 벡터(d_in)를 각각의 목적에 맞는 벡터(d_out)로 변환합니다.\n# TODO: Q/K/V 투영 레이어 타입과 인자를 채우세요.\n# 힌트: 입력 d_in, 출력 d_out을 사용하는 Linear 레이어를 선언하세요.\nself.W_query = nn.????(????, ????, bias=qkv_bias)\nself.W_key   = nn.????(????, ????, bias=qkv_bias)\nself.W_value = nn.????(????, ????, bias=qkv_bias)",
+    "explanation": "헤드 분할된 [B, T, num_heads, head_dim]에서 축 1과 2를 transpose하여 [B, num_heads, T, head_dim] 형태로 변환합니다. 이렇게 헤드 축을 문장 길이 앞(batch 축 다음)으로 배치해야 PyTorch의 배치 행렬 곱셈(@)이 여러 헤드에 걸쳐 독립적이고 병렬적으로 한 번에 수행됩니다.",
+    "tensor_flow": "[B,T,D] ↔ [B,H,T,Dh], D = H × Dh",
+    "code_signal": "전체 클래스의 __init__ 및 다음 연산을 확인하세요.",
+    "retry": "입출력 shape를 적은 뒤 다시 구현하세요.",
+    "isPastExam": true
+  },
+  {
+    "subject": "LLM",
+    "chapterId": "llm-03a",
+    "chapterNumber": "03A",
+    "chapterTitle": "Attention",
+    "file": "Chapter_3_Excercise_Attention.ipynb",
+    "isSourceBlank": true,
+    "source_type": "원본 노트북 실제 빈칸",
+    "occurrence": 0,
+    "accepted_answers": [
+      "queries @ keys.transpose(2, 3)\ntorch.softmax(attn_scores / keys.shape[-1] ** 0.5, dim=-1)",
+      "queries @ keys.transpose(2, 3)\ntorch.softmax(attn_scores / self.head_dim ** 0.5, dim=-1)",
+      "attn_scores = queries @ keys.transpose(2, 3)\nattn_weights = torch.softmax(attn_scores / keys.shape[-1] ** 0.5, dim=-1)",
+      "attn_scores = queries @ keys.transpose(2, 3)\nattn_weights = torch.softmax(attn_scores / self.head_dim ** 0.5, dim=-1)"
+    ],
+    "id": "past-implementation-5",
+    "topic": "Head별 score와 정규화",
+    "difficulty": "3 · 연결 구현",
+    "prompt": "head별 Q·K 점수와 sqrt(Dh) 스케일 softmax를 구현하세요.",
+    "answer": "attn_scores = queries @ keys.transpose(2, 3)\nattn_weights = torch.softmax(attn_scores / keys.shape[-1] ** 0.5, dim=-1)",
+    "sourceId": "ch3-full-mha-138",
+    "problem_context": "# 1. 쿼리(Query), 키(Key), 밸류(Value)를 만들기 위한 선형 투영 레이어 정의\n# 입력 벡터(d_in)를 각각의 목적에 맞는 벡터(d_out)로 변환합니다.\n# TODO: Q/K/V 투영 레이어 타입과 인자를 채우세요.\n# 힌트: 입력 d_in, 출력 d_out을 사용하는 Linear 레이어를 선언하세요.\nself.W_query = nn.????(????, ????, bias=qkv_bias)\nself.W_key   = nn.????(????, ????, bias=qkv_bias)\nself.W_value = nn.????(????, ????, bias=qkv_bias)",
+    "explanation": "Q [B,H,T,Dh]와 Transposed K [B,H,Dh,T]를 행렬곱(@)하여 유사도 점수 행렬 [B,H,T,T]를 구합니다. 이후 역전파 시 기울기 소실(vanishing gradient)을 방지하기 위해 헤드 차원의 제곱근(keys.shape[-1]**0.5 또는 self.head_dim**0.5)으로 스케일링한 후 마지막 차원(dim=-1)에 대해 softmax를 적용해 정규화된 어텐션 확률 분포를 만듭니다.",
+    "tensor_flow": "[B,T,D] ↔ [B,H,T,Dh], D = H × Dh",
+    "code_signal": "전체 클래스의 __init__ 및 다음 연산을 확인하세요.",
+    "retry": "입출력 shape를 적은 뒤 다시 구현하세요.",
+    "isPastExam": true
+  },
+  {
+    "subject": "LLM",
+    "chapterId": "llm-03a",
+    "chapterNumber": "03A",
+    "chapterTitle": "Attention",
+    "file": "Chapter_3_Excercise_Attention.ipynb",
+    "isSourceBlank": true,
+    "source_type": "원본 노트북 실제 빈칸",
+    "occurrence": 0,
+    "accepted_answers": [
+      "(attn_weights @ values).transpose(1, 2)\ncontext_vec.contiguous().view(b, num_tokens, self.d_out)\nself.out_proj(context_vec)",
+      "context_vec = (attn_weights @ values).transpose(1, 2)\ncontext_vec = context_vec.contiguous().view(b, num_tokens, self.d_out)\ncontext_vec = self.out_proj(context_vec)"
+    ],
+    "id": "past-implementation-6",
+    "topic": "Head 결합과 출력",
+    "difficulty": "3 · 연결 구현",
+    "prompt": "Value 가중합부터 head 결합·출력 projection까지 구현하세요.",
+    "answer": "context_vec = (attn_weights @ values).transpose(1, 2)\ncontext_vec = context_vec.contiguous().view(b, num_tokens, self.d_out)\ncontext_vec = self.out_proj(context_vec)",
+    "sourceId": "ch3-full-mha-138",
+    "problem_context": "# 1. 쿼리(Query), 키(Key), 밸류(Value)를 만들기 위한 선형 투영 레이어 정의\n# 입력 벡터(d_in)를 각각의 목적에 맞는 벡터(d_out)로 변환합니다.\n# TODO: Q/K/V 투영 레이어 타입과 인자를 채우세요.\n# 힌트: 입력 d_in, 출력 d_out을 사용하는 Linear 레이어를 선언하세요.\nself.W_query = nn.????(????, ????, bias=qkv_bias)\nself.W_key   = nn.????(????, ????, bias=qkv_bias)\nself.W_value = nn.????(????, ????, bias=qkv_bias)",
+    "explanation": "어텐션 가중치 [B,H,T,T]와 V [B,H,T,Dh]를 행렬곱하여 [B,H,T,Dh]의 문맥 벡터를 얻고, transpose(1,2)로 [B,T,H,Dh]로 되돌립니다. 축 변환으로 연속성이 깨진 텐서를 .contiguous()로 메모리 재정렬한 후 .view(b, num_tokens, self.d_out)로 모든 헤드를 [B,T,D]로 이어 붙이고, 최종 out_proj 선형 레이어를 통과시켜 헤드 간 정보를 혼합합니다.",
+    "tensor_flow": "[B,T,D] ↔ [B,H,T,Dh], D = H × Dh",
+    "code_signal": "전체 클래스의 __init__ 및 다음 연산을 확인하세요.",
+    "retry": "입출력 shape를 적은 뒤 다시 구현하세요.",
+    "isPastExam": true
+  }
+];
 for(const q of extras) window.LLM_COURSE.chapters.find(c=>c.id===q.chapterId).subjective.push(q);
 const pastExamIds=["exam-llm03-02", "exam-llm03-03", "exam-llm03-05", "exam-llm03-06", "exam-llm04-05", "exam-llm04-08", "exam-llm04-09"];
 const course=window.LLM_COURSE;

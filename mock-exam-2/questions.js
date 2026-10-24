@@ -11,22 +11,32 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "input_ids = torch.tensor(token_ids, dtype=torch.long)",
-        "why": "embedding index용 정수 Tensor입니다.",
-        "alternatives": []
+        "why": "파이썬 정수 목록을 임베딩 룩업에 적합한 64비트 정수(long) 텐서 [T]로 변환합니다. 오답 주의: float 타입으로 생성하면 nn.Embedding에서 룩업 인덱스 타입 불일치 에러가 발생합니다.",
+        "alternatives": [
+          "input_ids = torch.tensor(token_ids, dtype=torch.int64)",
+          "input_ids = torch.LongTensor(token_ids)",
+          "input_ids = torch.tensor(token_ids)"
+        ]
       },
       {
         "key": "B",
         "points": 2,
         "answer": "input_ids = input_ids.unsqueeze(0).to(model_device)",
-        "why": "[T]에 batch 축을 추가해 [1,T]로 만들고 model과 device를 맞춥니다.",
-        "alternatives": []
+        "why": "1차원 시퀀스 텐서 [T]의 앞쪽에 배치 차원을 추가하여 [1, T] 형태로 만들고 모델 디바이스로 전송합니다.",
+        "alternatives": [
+          "input_ids = input_ids.unsqueeze(dim=0).to(model_device)",
+          "input_ids = input_ids.to(model_device).unsqueeze(0)",
+          "input_ids = input_ids.unsqueeze(0).to(device=model_device)"
+        ]
       },
       {
         "key": "C",
         "points": 1,
         "answer": "embeddings = embedding_layer(input_ids)",
-        "why": "index가 embedding vector로 바뀝니다.",
-        "alternatives": []
+        "why": "[1, T] 정수 인덱스 텐서를 임베딩 레이어에 전달하여 각 토큰을 D차원 벡터로 변환한 [1, T, D] 임베딩 텐서를 얻습니다.",
+        "alternatives": [
+          "embeddings = embedding_layer.forward(input_ids)"
+        ]
       }
     ],
     "id": "1-1"
@@ -43,8 +53,11 @@ window.EXAM=[
         "key": "A",
         "points": 7,
         "answer": "norm_x = (x - mean) / torch.sqrt(var + self.eps)",
-        "alternatives": [],
-        "why": "입력에서 평균을 빼 중심을 0으로 만들고 표준편차 sqrt(var+eps)로 나눕니다. eps는 분산이 0일 때의 나눗셈 불안정을 막습니다.\n재도전: 평균 제거와 표준편차 나눗셈을 순서대로 적어 다시 작성하세요."
+        "alternatives": [
+          "norm_x = (x - mean) / (var + self.eps).sqrt()",
+          "norm_x = (x - mean) / torch.sqrt(self.eps + var)"
+        ],
+        "why": "입력 x [B, T, D]에서 평균을 빼고 분산에 수치적 안정성을 위한 epsilon(self.eps)을 더한 뒤 제곱근을 나누어 피처 차원을 표준화(평균 0, 분산 1)합니다."
       }
     ]
   },
@@ -54,28 +67,34 @@ window.EXAM=[
     "title": "GPT forward 흐름",
     "source": "Chapter_4_Excercise_GPT.ipynb · 강의 코드 기반 재구성",
     "prompt": "Embedding 결합, Transformer block 통과, logits 계산의 완성된 세 줄을 작성하세요. 각 표시 위치에는 해당 코드 줄 전체를 작성하세요. 여러 줄도 가능합니다. 입출력: [B,T] → [B,T,D] → [B,T,D] → [B,T,V]",
-    "code": "tok_embeds = self.tok_emb(in_idx)\npos_embeds = self.pos_emb(torch.arange(seq_len, device=in_idx.device))\n# TODO: 토큰 의미와 위치 정보 합산\n{{A}}\nx = self.drop_emb(x)\n# TODO: Transformer blocks 통과\n{{B}}\nx = self.final_norm(x)\n# TODO: vocab logits 계산\n{{C}}",
+    "code": "class GPTModel(nn.Module):\n    def __init__(self, cfg):\n        super().__init__()\n        self.tok_emb = nn.Embedding(cfg[\"vocab_size\"], cfg[\"emb_dim\"])\n        self.pos_emb = nn.Embedding(cfg[\"context_length\"], cfg[\"emb_dim\"])\n        self.drop_emb = nn.Dropout(cfg[\"drop_rate\"])\n        self.trf_blocks = nn.Sequential(\n            *[TransformerBlock(cfg) for _ in range(cfg[\"n_layers\"])]\n        )\n        self.final_norm = LayerNorm(cfg[\"emb_dim\"])\n        self.out_head = nn.Linear(cfg[\"emb_dim\"], cfg[\"vocab_size\"], bias=False)\n\n    def forward(self, in_idx):\n        # in_idx: token ID batch [B,T]\n        batch_size, seq_len = in_idx.shape\n\n        # 토큰·위치 임베딩 생성\n        tok_embeds = self.tok_emb(in_idx)\n        pos_embeds = self.pos_emb(torch.arange(seq_len, device=in_idx.device))\n        # TODO: 토큰 의미와 위치 정보 합산\n        {{A}}\n        x = self.drop_emb(x)\n\n        # TODO: Transformer blocks 통과\n        {{B}}\n        x = self.final_norm(x)\n        # TODO: vocab logits 계산\n        {{C}}\n\n        return logits",
     "slots": [
       {
         "key": "A",
         "points": 3,
         "answer": "x = tok_embeds + pos_embeds",
-        "alternatives": [],
-        "why": "토큰과 위치를 더해 [B,T,D]를 만든 뒤 모든 block과 final norm을 거쳐 out_head로 vocab 차원의 logits를 냅니다.\n재도전: 각 줄 뒤 shape D가 언제 V로 바뀌는지 표시하세요."
+        "alternatives": [
+          "x = pos_embeds + tok_embeds"
+        ],
+        "why": "동일한 shape [B, T, D]를 갖는 토큰 임베딩과 위치 임베딩을 원소별 덧셈으로 결합하여 시퀀스 내 위치 정보를 부여합니다."
       },
       {
         "key": "B",
         "points": 3,
         "answer": "x = self.trf_blocks(x)",
-        "alternatives": [],
-        "why": "토큰과 위치를 더해 [B,T,D]를 만든 뒤 모든 block과 final norm을 거쳐 out_head로 vocab 차원의 logits를 냅니다.\n재도전: 각 줄 뒤 shape D가 언제 V로 바뀌는지 표시하세요."
+        "alternatives": [
+          "x = self.trf_blocks.forward(x)"
+        ],
+        "why": "결합된 임베딩을 순차적인 트랜스포머 블록 컨테이너(self.trf_blocks)에 통과시켜 문맥화된 은닉 상태 [B, T, D]를 추출합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "logits = self.out_head(x)",
-        "alternatives": [],
-        "why": "토큰과 위치를 더해 [B,T,D]를 만든 뒤 모든 block과 final norm을 거쳐 out_head로 vocab 차원의 logits를 냅니다.\n재도전: 각 줄 뒤 shape D가 언제 V로 바뀌는지 표시하세요."
+        "alternatives": [
+          "logits = self.out_head.forward(x)"
+        ],
+        "why": "트랜스포머 은닉 표현을 최종 선형 출력 헤드(Linear(D, vocab_size))에 통과시켜 각 토큰 위치의 다음 단어 로짓 [B, T, V]를 산출합니다."
       }
     ]
   },
@@ -91,15 +110,20 @@ window.EXAM=[
         "key": "A",
         "points": 3,
         "answer": "query_engine = index.as_query_engine()",
-        "alternatives": [],
-        "why": "as_query_engine()은 index 검색과 LLM 응답 합성을 묶은 인터페이스를 만들고 query()가 자연어 질문을 실행합니다.\n재도전: 객체 생성 단계와 실제 질의 단계의 메서드를 구분해 다시 쓰세요."
+        "alternatives": [
+          "query_engine = index.as_query_engine(similarity_top_k=2)",
+          "query_engine = index.as_query_engine(similarity_top_k=5)"
+        ],
+        "why": "벡터 인덱스로부터 검색(Retriever)과 응답 합성(ResponseSynthesizer)을 결합한 일체형 쿼리 엔진 객체를 생성합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "response = query_engine.query(question)",
-        "alternatives": [],
-        "why": "as_query_engine()은 index 검색과 LLM 응답 합성을 묶은 인터페이스를 만들고 query()가 자연어 질문을 실행합니다.\n재도전: 객체 생성 단계와 실제 질의 단계의 메서드를 구분해 다시 쓰세요."
+        "alternatives": [
+          "response = query_engine.query(str(question))"
+        ],
+        "why": "질문 문자열을 쿼리 엔진에 전달하여 관련 청크를 자동 검색하고 LLM 증강 답변 객체를 생성합니다."
       }
     ]
   },
@@ -115,15 +139,19 @@ window.EXAM=[
         "key": "A",
         "points": 4,
         "answer": "nodes = self.retriever.retrieve(query_str)",
-        "alternatives": [],
-        "why": "Custom query의 핵심 순서는 retrieve → synthesize입니다. 같은 query_str로 근거를 찾고, 찾은 nodes를 두 번째 인자로 합성기에 전달합니다.\n재도전: 첫 줄의 출력 nodes가 둘째 줄의 어느 위치로 전달되는지 확인하세요."
+        "alternatives": [
+          "nodes = self.retriever.retrieve(str(query_str))"
+        ],
+        "why": "질의 문자열을 전달하여 벡터 인덱스로부터 코사인 유사도가 가장 높은 관련 NodeWithScore 리스트를 검색합니다."
       },
       {
         "key": "B",
         "points": 3,
         "answer": "response_obj = self.response_synthesizer.synthesize(query_str, nodes)",
-        "alternatives": [],
-        "why": "Custom query의 핵심 순서는 retrieve → synthesize입니다. 같은 query_str로 근거를 찾고, 찾은 nodes를 두 번째 인자로 합성기에 전달합니다.\n재도전: 첫 줄의 출력 nodes가 둘째 줄의 어느 위치로 전달되는지 확인하세요."
+        "alternatives": [
+          "response_obj = self.response_synthesizer.synthesize(query=query_str, nodes=nodes)"
+        ],
+        "why": "검색된 노드들과 원본 질의를 response_synthesizer에 전달하여 LLM 기반의 최종 답변 객체를 합성합니다."
       }
     ]
   },
@@ -139,22 +167,31 @@ window.EXAM=[
         "key": "A",
         "points": 3,
         "answer": "nodes = self.retriever.retrieve(query_str)",
-        "alternatives": [],
-        "why": "검색 결과 객체에서 get_content로 본문을 꺼내 하나의 context로 합칩니다. PromptTemplate.format 결과를 llm.complete에 전달합니다.\n재도전: retrieve → get_content → format → complete 네 동사를 순서대로 적으세요."
+        "alternatives": [
+          "nodes = self.retriever.retrieve(str(query_str))"
+        ],
+        "why": "검색기(retriever)를 사용하여 질의와 가장 연관성 높은 텍스트 노드 목록을 검색합니다."
       },
       {
         "key": "B",
         "points": 3,
         "answer": "context_str = \"\\n\\n\".join([n.node.get_content() for n in nodes])",
-        "alternatives": [],
-        "why": "검색 결과 객체에서 get_content로 본문을 꺼내 하나의 context로 합칩니다. PromptTemplate.format 결과를 llm.complete에 전달합니다.\n재도전: retrieve → get_content → format → complete 네 동사를 순서대로 적으세요."
+        "alternatives": [
+          "context_str = \"\\n\\n\".join(n.node.get_content() for n in nodes)",
+          "context_str = \"\\n\".join([n.node.get_content() for n in nodes])",
+          "context_str = \"\\n\".join(n.node.get_content() for n in nodes)",
+          "context_str = \"\\n\\n\".join([n.get_content() for n in nodes])"
+        ],
+        "why": "검색된 각 노드(n.node)에서 본문 문자열을 추출하여 두 줄바꿈(\"\\n\\n\")으로 연결한 컨텍스트 문자열을 구성합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "response = self.llm.complete(\n    self.qa_prompt.format(context_str=context_str, query_str=query_str)\n)",
-        "alternatives": [],
-        "why": "검색 결과 객체에서 get_content로 본문을 꺼내 하나의 context로 합칩니다. PromptTemplate.format 결과를 llm.complete에 전달합니다.\n재도전: retrieve → get_content → format → complete 네 동사를 순서대로 적으세요."
+        "alternatives": [
+          "response = self.llm.complete(self.qa_prompt.format(query_str=query_str, context_str=context_str))"
+        ],
+        "why": "qa_prompt 템플릿의 context_str과 query_str을 바인딩한 후 LLM 완성형 메서드(.complete())를 호출하여 응답을 생성합니다."
       }
     ]
   },
@@ -170,15 +207,20 @@ window.EXAM=[
         "key": "A",
         "points": 3,
         "answer": "rmse = root_mean_squared_error(y_test, test_predictions)",
-        "alternatives": [],
-        "why": "sklearn metric은 y_true를 먼저, y_pred를 두 번째로 받습니다. 두 값 모두 CPU NumPy 배열로 변환돼 있습니다.\n재도전: 정답(true)과 예측(pred)을 먼저 표시한 후 두 함수에 같은 순서로 넣으세요."
+        "alternatives": [
+          "rmse = root_mean_squared_error(y_true=y_test, y_pred=test_predictions)",
+          "rmse = np.sqrt(mean_squared_error(y_test, test_predictions))"
+        ],
+        "why": "실제 타깃 y_test와 모델 예측값 test_predictions 간의 평균 제곱근 오차(RMSE)를 계산합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "mape = mean_absolute_percentage_error(y_test, test_predictions)",
-        "alternatives": [],
-        "why": "sklearn metric은 y_true를 먼저, y_pred를 두 번째로 받습니다. 두 값 모두 CPU NumPy 배열로 변환돼 있습니다.\n재도전: 정답(true)과 예측(pred)을 먼저 표시한 후 두 함수에 같은 순서로 넣으세요."
+        "alternatives": [
+          "mape = mean_absolute_percentage_error(y_true=y_test, y_pred=test_predictions)"
+        ],
+        "why": "실제 값 대비 오차율의 절댓값 평균인 평균 절대 백분율 오차(MAPE)를 계산합니다."
       }
     ]
   },
@@ -194,15 +236,22 @@ window.EXAM=[
         "key": "A",
         "points": 4,
         "answer": "self.conv1d = nn.Conv1d(in_channels=input_size, out_channels=hidden_size, kernel_size=2, stride=1)",
-        "alternatives": [],
-        "why": "transpose 뒤 feature 수가 Conv1d channel이므로 in_channels=input_size입니다. Conv 출력 channel hidden_size가 다시 마지막 축이 된 후 Linear 입력이 됩니다.\n재도전: 각 transpose 뒤 축 순서를 적고 Linear 직전 마지막 축을 확인하세요."
+        "alternatives": [
+          "self.conv1d = nn.Conv1d(input_size, hidden_size, kernel_size=2, stride=1)",
+          "self.conv1d = nn.Conv1d(input_size, hidden_size, 2, stride=1)",
+          "self.conv1d = nn.Conv1d(input_size, hidden_size, 2)"
+        ],
+        "why": "시계열 특징 수를 입력 채널로 취급하여 kernel_size=2인 1차원 합성곱 계층을 구성합니다."
       },
       {
         "key": "B",
         "points": 3,
         "answer": "self.fc = nn.Linear(hidden_size, 1)",
-        "alternatives": [],
-        "why": "transpose 뒤 feature 수가 Conv1d channel이므로 in_channels=input_size입니다. Conv 출력 channel hidden_size가 다시 마지막 축이 된 후 Linear 입력이 됩니다.\n재도전: 각 transpose 뒤 축 순서를 적고 Linear 직전 마지막 축을 확인하세요."
+        "alternatives": [
+          "self.fc = nn.Linear(in_features=hidden_size, out_features=1)",
+          "self.fc = torch.nn.Linear(hidden_size, 1)"
+        ],
+        "why": "합성곱 결과의 hidden_size 차원을 1개의 스칼라 예측값으로 사영하는 완전연결계층을 정의합니다."
       }
     ]
   },
@@ -218,36 +267,43 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "pred = model(batch_x)[:, -1, 0]",
-        "alternatives": [],
-        "why": "[B,T,1]에서 마지막 시점의 scalar [B]를 선택해 target과 MSE를 계산합니다. 이전 gradient를 지운 뒤 backward와 step을 실행합니다.\n재도전: 각 줄 뒤 shape를 쓰고 zero_grad→backward→step 순서를 다시 확인하세요."
+        "alternatives": [
+          "pred = model(batch_x)[:, -1]",
+          "pred = model(batch_x)[:, -1, :].squeeze(-1)"
+        ],
+        "why": "모델 출력 [B, T, 1]에서 시계열의 가장 마지막 시점(-1)과 단일 채널(0)을 슬라이싱하여 배치별 1차원 예측값 [B]를 추출합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "loss = loss_fn(pred, batch_y)",
-        "alternatives": [],
-        "why": "[B,T,1]에서 마지막 시점의 scalar [B]를 선택해 target과 MSE를 계산합니다. 이전 gradient를 지운 뒤 backward와 step을 실행합니다.\n재도전: 각 줄 뒤 shape를 쓰고 zero_grad→backward→step 순서를 다시 확인하세요."
+        "alternatives": [
+          "loss = loss_fn(input=pred, target=batch_y)"
+        ],
+        "why": "예측값 [B]와 정답 타깃 batch_y [B]를 손실 함수에 전달하여 스칼라 손실을 계산합니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "optimizer.zero_grad()",
-        "alternatives": [],
-        "why": "[B,T,1]에서 마지막 시점의 scalar [B]를 선택해 target과 MSE를 계산합니다. 이전 gradient를 지운 뒤 backward와 step을 실행합니다.\n재도전: 각 줄 뒤 shape를 쓰고 zero_grad→backward→step 순서를 다시 확인하세요."
+        "alternatives": [
+          "optimizer.zero_grad(set_to_none=True)"
+        ],
+        "why": "기존에 누적된 가중치 파라미터의 gradient를 0으로 초기화합니다."
       },
       {
         "key": "D",
         "points": 1,
         "answer": "loss.backward()",
         "alternatives": [],
-        "why": "[B,T,1]에서 마지막 시점의 scalar [B]를 선택해 target과 MSE를 계산합니다. 이전 gradient를 지운 뒤 backward와 step을 실행합니다.\n재도전: 각 줄 뒤 shape를 쓰고 zero_grad→backward→step 순서를 다시 확인하세요."
+        "why": "손실 스칼라로부터 역전파를 수행하여 가중치 파라미터의 기울기를 계산합니다."
       },
       {
         "key": "E",
         "points": 1,
         "answer": "optimizer.step()",
         "alternatives": [],
-        "why": "[B,T,1]에서 마지막 시점의 scalar [B]를 선택해 target과 MSE를 계산합니다. 이전 gradient를 지운 뒤 backward와 step을 실행합니다.\n재도전: 각 줄 뒤 shape를 쓰고 zero_grad→backward→step 순서를 다시 확인하세요."
+        "why": "옵티마이저를 통해 계산된 기울기를 바탕으로 모델 파라미터를 갱신합니다."
       }
     ]
   },
@@ -263,22 +319,33 @@ window.EXAM=[
         "key": "A",
         "points": 2,
         "answer": "mean = torch.tensor(CIFAR10_MEAN).view(1,3,1,1)",
-        "alternatives": [],
-        "why": "Normalize의 역연산은 x*std+mean입니다. 채널 통계를 [1,3,1,1]로 만들어 batch와 공간축 전체에 broadcasting합니다.\n재도전: view(3)만 사용할 때와 [1,3,1,1]의 broadcasting 차이를 설명하세요."
+        "alternatives": [
+          "mean = torch.tensor(CIFAR10_MEAN).reshape(1,3,1,1)",
+          "mean = torch.tensor(CIFAR10_MEAN).view(1, 3, 1, 1)",
+          "mean = torch.tensor(CIFAR10_MEAN).reshape(1, 3, 1, 1)"
+        ],
+        "why": "이미지 텐서 [B, 3, H, W]와의 브로드캐스팅 연산을 위해 채널별 평균 튜플을 [1, 3, 1, 1] 텐서로 변환합니다."
       },
       {
         "key": "B",
         "points": 2,
         "answer": "std  = torch.tensor(CIFAR10_STD).view(1,3,1,1)",
-        "alternatives": [],
-        "why": "Normalize의 역연산은 x*std+mean입니다. 채널 통계를 [1,3,1,1]로 만들어 batch와 공간축 전체에 broadcasting합니다.\n재도전: view(3)만 사용할 때와 [1,3,1,1]의 broadcasting 차이를 설명하세요."
+        "alternatives": [
+          "std  = torch.tensor(CIFAR10_STD).reshape(1,3,1,1)",
+          "std = torch.tensor(CIFAR10_STD).view(1,3,1,1)",
+          "std = torch.tensor(CIFAR10_STD).view(1, 3, 1, 1)"
+        ],
+        "why": "채널별 표준편차 튜플을 [1, 3, 1, 1] 텐서로 변환합니다."
       },
       {
         "key": "C",
         "points": 1,
         "answer": "return x * std + mean",
-        "alternatives": [],
-        "why": "Normalize의 역연산은 x*std+mean입니다. 채널 통계를 [1,3,1,1]로 만들어 batch와 공간축 전체에 broadcasting합니다.\n재도전: view(3)만 사용할 때와 [1,3,1,1]의 broadcasting 차이를 설명하세요."
+        "alternatives": [
+          "return (x * std) + mean",
+          "return x*std + mean"
+        ],
+        "why": "정규화 공식의 역변환인 x * std + mean을 계산하여 원래 픽셀 색상 값으로 복원합니다."
       }
     ]
   },
@@ -294,15 +361,22 @@ window.EXAM=[
         "key": "A",
         "points": 4,
         "answer": "qkv = self.to_qkv(x).chunk(3, dim = -1)",
-        "alternatives": [],
-        "why": "Linear 출력의 마지막 축 3·H·d를 세 Tensor로 나눈 뒤 결합된 H·d를 head와 head_dim으로 분리합니다.\n재도전: chunk의 dim을 1로 쓰면 어떤 축이 잘못 나뉘는지 설명하세요."
+        "alternatives": [
+          "qkv = self.to_qkv(x).chunk(3, dim=-1)",
+          "qkv = self.to_qkv(x).chunk(3, -1)",
+          "qkv = self.to_qkv(x).chunk(3, dim=2)"
+        ],
+        "why": "입력 x를 3배 크기로 선형 사영한 뒤 마지막 특징 축(dim=-1)을 따라 Query, Key, Value 3개 텐서로 균등 분할(chunk)합니다."
       },
       {
         "key": "B",
         "points": 3,
         "answer": "q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = h), qkv)",
-        "alternatives": [],
-        "why": "Linear 출력의 마지막 축 3·H·d를 세 Tensor로 나눈 뒤 결합된 H·d를 head와 head_dim으로 분리합니다.\n재도전: chunk의 dim을 1로 쓰면 어떤 축이 잘못 나뉘는지 설명하세요."
+        "alternatives": [
+          "q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h=h), qkv)",
+          "q, k, v = [rearrange(t, 'b n (h d) -> b h n d', h=h) for t in qkv]"
+        ],
+        "why": "rearrange를 사용하여 각 텐서 [B, N, H*D]를 멀티헤드 차원 [B, H, N, D]로 재배열합니다."
       }
     ]
   },
@@ -318,22 +392,28 @@ window.EXAM=[
         "key": "A",
         "points": 3,
         "answer": "dots = einsum('b h i d, b h j d -> b h i j', q, k) * self.scale",
-        "alternatives": [],
-        "why": "Q의 i token과 K의 j token 내적으로 [i,j] score를 만들고 scale 후 softmax합니다. j축 attention으로 V[j]를 합쳐 query i의 새 표현을 얻습니다.\n재도전: 각 einsum에서 합산되어 사라지는 index를 표시하세요."
+        "alternatives": [
+          "dots = (q @ k.transpose(-2, -1)) * self.scale"
+        ],
+        "why": "Query와 Key의 헤드별 내적을 계산하여 어텐션 스코어 [B, H, i, j]를 구하고 1/sqrt(D) 스케일 팩터를 곱합니다."
       },
       {
         "key": "B",
         "points": 3,
         "answer": "attn = self.attend(dots)",
-        "alternatives": [],
-        "why": "Q의 i token과 K의 j token 내적으로 [i,j] score를 만들고 scale 후 softmax합니다. j축 attention으로 V[j]를 합쳐 query i의 새 표현을 얻습니다.\n재도전: 각 einsum에서 합산되어 사라지는 index를 표시하세요."
+        "alternatives": [
+          "attn = torch.softmax(dots, dim=-1)"
+        ],
+        "why": "스케일된 점수에 softmax 및 드롭아웃을 적용하여 정규화된 어텐션 확률 가중치 행렬을 얻습니다."
       },
       {
         "key": "C",
         "points": 2,
         "answer": "out = einsum('b h i j, b h j d -> b h i d', attn, v)",
-        "alternatives": [],
-        "why": "Q의 i token과 K의 j token 내적으로 [i,j] score를 만들고 scale 후 softmax합니다. j축 attention으로 V[j]를 합쳐 query i의 새 표현을 얻습니다.\n재도전: 각 einsum에서 합산되어 사라지는 index를 표시하세요."
+        "alternatives": [
+          "out = attn @ v"
+        ],
+        "why": "어텐션 확률 행렬과 Value 텐서의 행렬곱을 통해 최종 어텐션 가중합 출력 [B, H, i, D]를 산출합니다."
       }
     ]
   },
@@ -348,15 +428,22 @@ window.EXAM=[
         "key": "A",
         "points": 3,
         "answer": "weight_scale = weight_scale.flatten().view(1, -1, 1, 1)",
-        "why": "batch·공간 축은 singleton이고 OC가 두 번째 축입니다.",
-        "alternatives": []
+        "why": "출력 텐서 [B, OC, H, W]와의 브로드캐스팅 연산을 위해 각 출력 채널별 가중치 스케일을 [1, OC, 1, 1] 텐서로 재배열합니다.",
+        "alternatives": [
+          "weight_scale = weight_scale.view(1, -1, 1, 1)",
+          "weight_scale = weight_scale.reshape(1, -1, 1, 1)",
+          "weight_scale = weight_scale.flatten().reshape(1, -1, 1, 1)"
+        ]
       },
       {
         "key": "B",
         "points": 2,
         "answer": "output = output.float()",
-        "why": "실수 scale 연산을 위한 변환입니다.",
-        "alternatives": []
+        "why": "정수 누적기(int32 accumulator) 출력을 부동소수점 실수 스케일 연산을 위해 float32 텐서로 변환합니다.",
+        "alternatives": [
+          "output = output.to(torch.float)",
+          "output = output.type(torch.float)"
+        ]
       }
     ],
     "id": "5-1"
@@ -373,15 +460,20 @@ window.EXAM=[
         "key": "A",
         "points": 4,
         "answer": "bias_scale = input_scale * weight_scale",
-        "alternatives": [],
-        "why": "bias는 input×weight 누산값에 더해지므로 같은 실수 단위 input_scale×weight_scale을 사용하고 overflow 여유가 큰 int32에 저장합니다.\n재도전: bias를 int8로 저장할 때 생길 수 있는 문제를 설명하세요."
+        "alternatives": [
+          "bias_scale = weight_scale * input_scale"
+        ],
+        "why": "bias는 input과 weight의 곱에 더해지므로 바이어스의 양자화 스케일은 반드시 input_scale * weight_scale이어야 합니다."
       },
       {
         "key": "B",
         "points": 3,
         "answer": "quantized_bias = linear_quantize(bias, 32, bias_scale, zero_point=0, dtype=torch.int32)",
-        "alternatives": [],
-        "why": "bias는 input×weight 누산값에 더해지므로 같은 실수 단위 input_scale×weight_scale을 사용하고 overflow 여유가 큰 int32에 저장합니다.\n재도전: bias를 int8로 저장할 때 생길 수 있는 문제를 설명하세요."
+        "alternatives": [
+          "quantized_bias = linear_quantize(bias, 32, bias_scale, 0, torch.int32)",
+          "quantized_bias = linear_quantize(bias, 32, bias_scale, zero_point=0, dtype=torch.int)"
+        ],
+        "why": "32비트 정수(int32) 정밀도로 zero_point=0을 적용하여 bias를 양자화합니다."
       }
     ]
   },
@@ -397,15 +489,20 @@ window.EXAM=[
         "key": "A",
         "points": 4,
         "answer": "output = output*(input_scale * weight_scale / output_scale)",
-        "alternatives": [],
-        "why": "누산 결과의 실제 단위는 input_scale×weight_scale입니다. 이를 output_scale로 나눠 output 정수 한 칸 단위로 환산한 뒤 output_zero_point를 더합니다.\n재도전: Conv2d output [B,OC,H,W]에서는 weight_scale을 어떤 shape로 바꿀지 쓰세요."
+        "alternatives": [
+          "output = output * (input_scale * weight_scale / output_scale)",
+          "output = output * ((input_scale * weight_scale) / output_scale)"
+        ],
+        "why": "누적기 출력에 유효 배율 M = (input_scale * weight_scale) / output_scale을 곱하여 목표 출력 스케일로 재양자화합니다."
       },
       {
         "key": "B",
         "points": 4,
         "answer": "output = output + output_zero_point",
-        "alternatives": [],
-        "why": "누산 결과의 실제 단위는 input_scale×weight_scale입니다. 이를 output_scale로 나눠 output 정수 한 칸 단위로 환산한 뒤 output_zero_point를 더합니다.\n재도전: Conv2d output [B,OC,H,W]에서는 weight_scale을 어떤 shape로 바꿀지 쓰세요."
+        "alternatives": [
+          "output = output_zero_point + output"
+        ],
+        "why": "출력 텐서의 정수 표현 오프셋인 output_zero_point를 더하여 영점을 정렬합니다."
       }
     ]
   }

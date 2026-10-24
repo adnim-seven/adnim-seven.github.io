@@ -72,10 +72,10 @@ response = self.llm.complete(
   const base = {subject:"RAG",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:false,source_type:"원본 YOUR CODE HERE 셀 기반"};
   const make = (data) => ({...base, accepted_answers:[data.answer], ...data});
   chapter.subjective = [
-    make({id:"exam-rag01-01",topic:"문서 로딩과 Index",difficulty:"2 · 핵심 연결",sourceId:"exam-rag1-load-index",prompt:"data 폴더를 Document 목록으로 읽고 VectorStoreIndex를 만드는 완성된 두 줄을 작성하세요.",answer:cells["exam-rag1-load-index"],problem_context:`# TODO: 폴더의 파일을 읽어 documents를 만들고 vector index로 연결하세요.
+    make({id:"exam-rag01-01",topic:"문서 로딩과 Index",difficulty:"2 · 핵심 연결",sourceId:"exam-rag1-load-index",prompt:"data 폴더를 Document 목록으로 읽고 VectorStoreIndex를 만드는 완성된 두 줄을 작성하세요.",answer:cells["exam-rag1-load-index"],accepted_answers:[cells["exam-rag1-load-index"], cells["exam-rag1-load-index"].replace('"data"', 'input_dir="data"'), cells["exam-rag1-load-index"].replace('documents)', 'documents=documents)'), cells["exam-rag1-load-index"].replace('"data"', 'input_dir="data"').replace('documents)', 'documents=documents)')],problem_context:`# TODO: 폴더의 파일을 읽어 documents를 만들고 vector index로 연결하세요.
 documents = ????("data").????()
 index = ????.????(documents)`,explanation:"SimpleDirectoryReader가 파일을 list[Document]로 바꾸고 from_documents가 node 분할·embedding·vector index 구성을 수행합니다.",tensor_flow:"files → list[Document] → nodes/embeddings → VectorStoreIndex",code_signal:"왼쪽 documents와 index, import된 SimpleDirectoryReader와 VectorStoreIndex가 단계별로 대응합니다.",retry:"Reader의 결과가 다음 줄 어느 인자로 들어가는지 화살표로 연결해 다시 쓰세요."}),
-    make({id:"exam-rag01-02",topic:"Chunk Transformation",difficulty:"3 · 인자 구성",sourceId:"exam-rag1-chunk-index",prompt:"200 크기·50 중복의 splitter를 만들고 index 생성 시 적용하는 완성 코드를 작성하세요.",answer:cells["exam-rag1-chunk-index"],problem_context:`# TODO: 검색 단위를 정하고 from_documents에 transformation으로 전달하세요.
+    make({id:"exam-rag01-02",topic:"Chunk Transformation",difficulty:"3 · 인자 구성",sourceId:"exam-rag1-chunk-index",prompt:"200 크기·50 중복의 splitter를 만들고 index 생성 시 적용하는 완성 코드를 작성하세요.",answer:cells["exam-rag1-chunk-index"],accepted_answers:[cells["exam-rag1-chunk-index"], cells["exam-rag1-chunk-index"].replace('documents=documents', 'documents'), cells["exam-rag1-chunk-index"].replace('chunk_size=200, chunk_overlap=50', '200, 50'), cells["exam-rag1-chunk-index"].replace('documents=documents', 'documents').replace('chunk_size=200, chunk_overlap=50', '200, 50')],problem_context:`# TODO: 검색 단위를 정하고 from_documents에 transformation으로 전달하세요.
 text_splitter = SentenceSplitter(chunk_size=????, chunk_overlap=????)
 index = VectorStoreIndex.from_documents(
     documents=documents,
@@ -100,7 +100,7 @@ ret_passages = retriever.????("Who is the author?")`,explanation:"as_retriever()
 docu = Document(text=data_text, ????="new_doc_id")
 index.????(docu)
 new_query_engine = index.????()`,explanation:"Document의 명시적 식별자 인자는 id_이며 insert가 해당 문서를 검색 index에 추가합니다. 이후 index 상태를 사용하는 query engine을 다시 얻습니다.",tensor_flow:"text + id → Document → updated Index → QueryEngine",code_signal:"Document 생성자의 ID 인자는 Python 내장 id와 구분되는 id_이고 CRUD 동사는 insert입니다.",retry:"세 줄의 주체가 Document → index → index 순서인지 확인하세요."}),
-    make({id:"exam-rag01-07",topic:"Document Update·Delete",difficulty:"3 · 상태 갱신",sourceId:"exam-rag1-update-delete",prompt:"문서 내용을 바꾸고 index를 갱신한 뒤 doc_id를 이용해 docstore에서도 삭제하는 전체 코드를 작성하세요.",answer:cells["exam-rag1-update-delete"],problem_context:`# TODO: Document 내용과 Index 상태를 순서대로 변경하세요.
+    make({id:"exam-rag01-07",topic:"Document Update·Delete",difficulty:"3 · 상태 갱신",sourceId:"exam-rag1-update-delete",prompt:"문서 내용을 바꾸고 index를 갱신한 뒤 doc_id를 이용해 docstore에서도 삭제하는 전체 코드를 작성하세요.",answer:cells["exam-rag1-update-delete"],accepted_answers:[cells["exam-rag1-update-delete"], cells["exam-rag1-update-delete"].replace('value=updated_text', 'updated_text'), 'set_content\nupdate_ref_doc\ndoc_id\ndelete_ref_doc'],problem_context:`# TODO: Document 내용과 Index 상태를 순서대로 변경하세요.
 docu.????(value=updated_text)
 output = index.????(
     docu,
@@ -725,14 +725,14 @@ return completion`
   const base = {subject:"RAG",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:false,source_type:"원본 YOUR CODE HERE 셀 기반"};
   const make = (data) => ({...base,accepted_answers:[data.answer],...data});
   chapter.subjective = [
-    make({id:"exam-rag02-01",topic:"WikipediaReader",difficulty:"1 · 객체 연결",sourceId:"exam-rag2-wiki",prompt:"Wikipedia reader를 만들고 city_names의 문서를 자동 제목 보정 없이 읽는 두 줄을 작성하세요.",answer:cells["exam-rag2-wiki"],problem_context:`# TODO: 문서 수집기와 입력 목록을 연결하세요.
+    make({id:"exam-rag02-01",topic:"WikipediaReader",difficulty:"1 · 객체 연결",sourceId:"exam-rag2-wiki",prompt:"Wikipedia reader를 만들고 city_names의 문서를 자동 제목 보정 없이 읽는 두 줄을 작성하세요.",answer:cells["exam-rag2-wiki"],accepted_answers:[cells["exam-rag2-wiki"], cells["exam-rag2-wiki"].replace('city_names', 'pages=city_names')],problem_context:`# TODO: 문서 수집기와 입력 목록을 연결하세요.
 reader = ????()
 documents = reader.????(city_names, auto_suggest=????)`,explanation:"WikipediaReader가 문서 수집 객체이고 load_data가 도시명 목록을 Document 목록으로 바꿉니다. auto_suggest=False는 입력 제목을 임의 교정하지 않습니다.",tensor_flow:"city_names list[str] → documents list[Document]",code_signal:"import된 WikipediaReader, 결과 변수 documents, 제목 보정 옵션 주석을 함께 봅니다.",retry:"클래스 생성과 실제 로드 호출을 두 단계로 나눠 쓰세요."}),
     make({id:"exam-rag02-02",topic:"기본 RAG query",difficulty:"2 · 함수 연결",sourceId:"exam-rag2-basic-flow",prompt:"query 메서드에서 검색 결과를 생성 함수로 전달하고 반환하는 세 줄을 작성하세요.",answer:cells["exam-rag2-basic-flow"],problem_context:`def query(self, query: str) -> str:
     context_str = self.????(query)
     completion = self.????(query, context_str)
     return ????`,explanation:"query는 파이프라인 조정자입니다. retrieve 결과를 context_str에 받고 같은 query와 함께 generate_response로 넘긴 뒤 completion을 반환합니다.",tensor_flow:"query str → retrieved context → generated completion",code_signal:"클래스 안에 이미 정의된 retrieve와 generate_response 메서드, 왼쪽 변수명이 단서입니다.",retry:"앞줄의 출력 변수를 다음 줄 입력으로 그대로 연결해 쓰세요."}),
-    make({id:"exam-rag02-03",topic:"짧은 Chunk Index",difficulty:"3 · 구성 구현",sourceId:"exam-rag2-chunk",prompt:"200/50 splitter를 만들고 documents에 적용해 short index를 구성하는 전체 코드를 작성하세요.",answer:cells["exam-rag2-chunk"],problem_context:`# TODO: 짧은 검색 단위를 index 생성 과정에 적용하세요.
+    make({id:"exam-rag02-03",topic:"짧은 Chunk Index",difficulty:"3 · 구성 구현",sourceId:"exam-rag2-chunk",prompt:"200/50 splitter를 만들고 documents에 적용해 short index를 구성하는 전체 코드를 작성하세요.",answer:cells["exam-rag2-chunk"],accepted_answers:[cells["exam-rag2-chunk"], cells["exam-rag2-chunk"].replace('documents=documents', 'documents')],problem_context:`# TODO: 짧은 검색 단위를 index 생성 과정에 적용하세요.
 text_splitter_short = SentenceSplitter(chunk_size=????, chunk_overlap=????)
 index_short = VectorStoreIndex.from_documents(
     documents=documents,
@@ -753,11 +753,11 @@ ret_passages_short = retriever_short.????(question)`,explanation:"similarity_top
     llm=????,
     qa_prompt=????,
 )`,explanation:"클래스에 선언된 네 field를 같은 역할의 기존 객체에 연결합니다. qa_prompt를 바꾸면 같은 engine 구현으로 답변/요약 동작을 전환할 수 있습니다.",tensor_flow:"Retriever + Synthesizer + LLM + Prompt → CustomQueryEngine",code_signal:"keyword 이름과 바로 위에서 만든 retriever, synthesizer, llm, simple_qa_prompt 변수가 일대일 대응합니다.",retry:"왼쪽 keyword와 같은 역할의 오른쪽 변수명을 선으로 연결하세요."}),
-    make({id:"exam-rag02-07",topic:"Refine 두 단계 검색",difficulty:"3 · Tuple 반환",sourceId:"exam-rag2-refine-retrieve",prompt:"Refine_RAG.retrieve에서 원시 passage와 query engine 결과를 모두 구해 tuple로 반환하는 세 줄을 작성하세요.",answer:cells["exam-rag2-refine-retrieve"],problem_context:`def retrieve(self, query: str) -> list:
+    make({id:"exam-rag02-07",topic:"Refine 두 단계 검색",difficulty:"3 · Tuple 반환",sourceId:"exam-rag2-refine-retrieve",prompt:"Refine_RAG.retrieve에서 원시 passage와 query engine 결과를 모두 구해 tuple로 반환하는 세 줄을 작성하세요.",answer:cells["exam-rag2-refine-retrieve"],accepted_answers:[cells["exam-rag2-refine-retrieve"], cells["exam-rag2-refine-retrieve"].replace('return ret, results', 'return (ret, results)')],problem_context:`def retrieve(self, query: str) -> list:
     ret = retriever.????(query)
     results = query_engine.????(query)
     return ????, ????`,explanation:"retriever.retrieve는 원시 node 목록, query_engine.query는 검색·합성이 반영된 중간 결과입니다. 둘을 함께 반환해 검사와 최종 생성에 활용합니다.",tensor_flow:"query → (raw nodes, intermediate response)",code_signal:"ret/results라는 왼쪽 변수와 바깥 객체 retriever/query_engine의 표준 실행 메서드가 대응합니다.",retry:"각 객체가 검색 전용인지 검색+생성인지 구분해 메서드를 채우세요."}),
-    make({id:"exam-rag02-08",topic:"Refine 최종 연결",difficulty:"2 · Tuple unpack",sourceId:"exam-rag2-refine-flow",prompt:"Refine_RAG.query에서 retrieve의 두 결과를 받고 context를 최종 생성 함수로 넘기는 세 줄을 작성하세요.",answer:cells["exam-rag2-refine-flow"],problem_context:`def query(self, query: str) -> str:
+    make({id:"exam-rag02-08",topic:"Refine 최종 연결",difficulty:"2 · Tuple unpack",sourceId:"exam-rag2-refine-flow",prompt:"Refine_RAG.query에서 retrieve의 두 결과를 받고 context를 최종 생성 함수로 넘기는 세 줄을 작성하세요.",answer:cells["exam-rag2-refine-flow"],accepted_answers:[cells["exam-rag2-refine-flow"], cells["exam-rag2-refine-flow"].replace('return completion', 'return (completion)'), cells["exam-rag2-refine-flow"].replace('ret, context_str', '(ret, context_str)')],problem_context:`def query(self, query: str) -> str:
     ????, ???? = self.retrieve(query)
     completion = self.????(query, context_str)
     return ????`,explanation:"retrieve가 두 값을 반환하므로 ret와 context_str로 unpack합니다. 최종 답에는 context_str을 사용하고 completion을 반환합니다.",tensor_flow:"query → (ret, context_str) → completion",code_signal:"retrieve의 return ret, results와 query 내부 주석의 intermediate summary를 함께 보면 unpack 구조를 알 수 있습니다.",retry:"반환값 두 개와 받는 변수 두 개의 순서를 먼저 맞추세요."})
