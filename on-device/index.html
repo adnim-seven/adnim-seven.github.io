@@ -15,7 +15,7 @@
 <body>
   <header class="topbar">
     <div class="brand"><span class="brand-mark">A</span><span>AI Coding Recall<small>On-device AI 집중 학습</small></span></div>
-    <div class="headline-stats" id="headlineStats"></div>
+    <div class="topbar-right"><div class="headline-stats" id="headlineStats"></div><a class="home-link" href="../">← 전체 홈</a></div>
   </header>
 
   <div class="app-shell">
@@ -46,6 +46,7 @@
       </div>
 
       <section id="studyPanel" class="panel active" aria-labelledby="chapterTitle">
+        <figure id="notebookOverview" class="notebook-overview" aria-label="현재 노트북 핵심 흐름 한 장 요약"></figure>
         <div class="study-intro"><span>학습 목표</span><h2 id="capability"></h2><p id="summary"></p></div>
         <div id="keyPoints" class="key-points"></div>
         <div class="panel-footer"><button class="primary-button next-mode" data-panel="fullCodePanel" type="button">전체 코드 보기</button></div>

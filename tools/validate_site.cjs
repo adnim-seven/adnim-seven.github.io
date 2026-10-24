@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 사이트 전체 정적 검증: 로컬 링크, 태그 짝, JS 문법, 과목 데이터 로드, 과목 폴더 규칙.
+// 사이트 전체 정적 검증: 로컬 링크, 태그 짝, 하드코딩 도메인 여부, JS 문법, 과목 데이터 로드, 페이지 템플릿 규칙.
 // 사용: node tools/validate_site.cjs   (저장소 루트 또는 아무 위치에서 실행 가능)
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
@@ -19,9 +19,12 @@ function walk(dir, out = []) {
 }
 const files = walk(ROOT);
 
-// 1) HTML 로컬 참조 + 태그 짝
+// 1) HTML 로컬 참조 + 태그 짝 + 하드코딩 도메인 검사
 for (const f of files.filter(f => f.endsWith('.html'))) {
   const html = fs.readFileSync(f, 'utf8');
+  if (html.includes('https://adnim-seven.github.io')) {
+    errors.push(`[domain] ${rel(f)}: 하드코딩된 https://adnim-seven.github.io 링크 발견`);
+  }
   for (const m of html.matchAll(/(?:src|href)="([^"]+)"/g)) {
     let link = m[1];
     if (/^(https?:|mailto:|#|javascript:|data:)/.test(link) || link.includes('${')) continue;
@@ -45,11 +48,26 @@ for (const f of files.filter(f => /\.(js|cjs)$/.test(f))) {
   catch (e) { errors.push(`[js] ${rel(f)}: ${e.message}`); }
 }
 
-// 3) 과목 폴더 규칙 + 데이터 로드
+// 3) 과목 폴더 규칙 + 페이지 구조 규칙 + 데이터 로드
 for (const s of SUBJECTS) {
   const dir = path.join(ROOT, s);
   for (const r of REQUIRED) if (!fs.existsSync(path.join(dir, r))) errors.push(`[subject] ${s}/${r} 없음`);
   const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8');
+  if (!html.includes('id="notebookOverview"')) errors.push(`[structure] ${s}/index.html: #notebookOverview 누락`);
+  if (!html.includes('class="home-link"')) errors.push(`[structure] ${s}/index.html: .home-link 누락`);
+  if (!html.includes("inline-subjective/")) errors.push(`[structure] ${s}/index.html: inline-subjective 이동 버튼 누락`);
+
+  const listHtml = fs.readFileSync(path.join(dir, 'inline-subjective/index.html'), 'utf8');
+  if (!listHtml.includes('subjective-list.css')) errors.push(`[structure] ${s}/inline-subjective/index.html: subjective-list.css 미연결`);
+  if (!listHtml.includes('class="list-nav"')) errors.push(`[structure] ${s}/inline-subjective/index.html: .list-nav 누락`);
+
+  for (const tf of fs.readdirSync(path.join(dir, 'inline-subjective')).filter(n => n.endsWith('_subjective_test.html'))) {
+    const th = fs.readFileSync(path.join(dir, 'inline-subjective', tf), 'utf8');
+    if (!th.includes('subjective-test.css') || !th.includes('subjective-test-app.js') || !th.includes('data-storage-key=')) {
+      errors.push(`[structure] ${s}/inline-subjective/${tf}: 공통 템플릿 미적용`);
+    }
+  }
+
   const scripts = [...html.matchAll(/<script src="([^"]+)"/g)].map(m => m[1].split('?')[0]);
   const dataScripts = scripts.filter(x => !x.startsWith('../') && x !== 'app.js' && /data|overrides|scope/.test(x));
   const ctx = { window: {}, document: { addEventListener() {}, querySelector() { return null; } }, queueMicrotask() {}, console };
