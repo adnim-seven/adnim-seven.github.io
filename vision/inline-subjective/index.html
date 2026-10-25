@@ -13,12 +13,12 @@
     <p class="tag">Vision · 실습 코드</p>
     <h1>인라인 주관식 시험</h1>
     <p>실제 노트북 전체 코드 문맥 안에서 구현 위치를 직접 채웁니다. 설명은 ‘풀 노트북 보기’ 탭에서 확인할 수 있습니다.</p>
-    <a class="card" href="vision_resnet18_subjective_test.html"><span class="past-exam-card-badge">🔥 2026-09 기출 1 (train_tfms 4단계) 재구성 · NEW</span><h2>01 · ResNet18 / CIFAR-10 (2026-09 기출 1 반영)</h2><p>기출 1(T.Compose 4단계 train transform) + CIFAR 입력 stem 구성</p><div class="meta">코드 15개 · 빈칸 5개</div></a>
-    <a class="card" href="vision_vit_subjective_test.html"><span class="past-exam-card-badge">🔥 2026-09 기출 2 (Transformer Residual) 재구성 · NEW</span><h2>02 · Vision Transformer (2026-09 기출 2 반영)</h2><p>QKV 투영, multi-head attention, 기출 2(Transformer Residual 연결)</p><div class="meta">코드 16개 · 빈칸 5개</div></a>
-    <a class="card" href="vision_detr_subjective_test.html"><h2>03 · DETR</h2><p>이미지 전처리와 사전학습 DETR inference 연결</p><div class="meta">코드 17개 · 빈칸 3개</div></a>
-    <a class="card" href="vision_unet_subjective_test.html"><h2>04 · U-Net</h2><p>업샘플링·skip connection·segmentation loss</p><div class="meta">코드 7개 · 빈칸 3개</div></a>
-    <a class="card" href="vision_ddpm_subjective_test.html"><h2>05 · DDPM</h2><p>이미지 feature map의 self-attention</p><div class="meta">코드 14개 · 빈칸 3개</div></a>
-    <a class="card" href="vision_stable_diffusion_subjective_test.html"><h2>06 · Stable Diffusion</h2><p>Pipeline 로드와 prompt·seed 기반 이미지 생성</p><div class="meta">코드 14개 · 빈칸 3개</div></a>
+    <a class="card past-exam-card" href="vision_resnet18_subjective_test.html"><span class="past-exam-card-badge">🔥 2026-09 기출 1 (train_tfms 4단계) + ✨ 기출 변형 유력 · NEW</span><h2>01 · ResNet18 / CIFAR-10 (기출 4문항 + 신유형 6문항)</h2><p>기출 1(T.Compose 4단계) + CIFAR Stem/FC 헤드 교체 + Top-1 추론 + Grad-CAM 가중치</p><div class="meta">코드 15개 · 빈칸 11개</div></a>
+    <a class="card past-exam-card" href="vision_vit_subjective_test.html"><span class="past-exam-card-badge">🔥 2026-09 기출 2 (Transformer Residual & pair) + ✨ 기출 변형 유력 · NEW</span><h2>02 · Vision Transformer (기출 3문항 + 신유형 6문항)</h2><p>pair(t) · QKV chunk & einsum · Transformer Residual · Patch/CLS/Pos Embedding · 풀링</p><div class="meta">코드 16개 · 빈칸 12개</div></a>
+    <a class="card variant-exam-card" href="vision_detr_subjective_test.html"><span class="card-variant-badge">✨ 기출 변형 유력 · NEW</span><h2>03 · DETR (cxcywh→xyxy 변환 & Confidence 필터링)</h2><p>Resize/Normalize · torch.hub 로드 · unbind/stack 좌표 변환 · no-object 제외 확률 & keep 마스크</p><div class="meta">코드 17개 · 빈칸 8개</div></a>
+    <a class="card variant-exam-card" href="vision_unet_subjective_test.html"><span class="card-variant-badge">✨ 기출 변형 유력 · NEW</span><h2>04 · U-Net (Down/Up 블록 · Skip Concat · 이진 마스크 추론)</h2><p>채널 차원 확장 · MaxPool2d · ConvTranspose2d · Skip torch.cat(dim=1) · OutConv · Sigmoid 임계값</p><div class="meta">코드 7개 · 빈칸 8개</div></a>
+    <a class="card variant-exam-card" href="vision_ddpm_subjective_test.html"><span class="card-variant-badge">✨ 기출 변형 유력 · NEW</span><h2>05 · DDPM (Time Embedding · Self-Attention · q_sample & p_sample)</h2><p>Sinusoidal sin/cos 결합 · rearrange 브로드캐스팅 · Pixel Attention · Forward/Reverse Diffusion 수식</p><div class="meta">코드 14개 · 빈칸 9개</div></a>
+    <a class="card variant-exam-card" href="vision_stable_diffusion_subjective_test.html"><span class="card-variant-badge">✨ 기출 변형 유력 · NEW</span><h2>06 · Stable Diffusion (FP16 파이프라인 · Negative Prompt · 해상도 제어)</h2><p>from_pretrained(float16) · Generator 시드 고정 · guidance_scale · negative_prompt · width/height</p><div class="meta">코드 14개 · 빈칸 6개</div></a>
   </main>
 </body>
 </html>

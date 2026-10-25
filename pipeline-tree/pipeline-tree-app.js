@@ -100,85 +100,48 @@
       canvas.appendChild(rootDiv);
     }
 
-    // 2. Branches & Nodes
-    (data.branches || []).forEach((branch) => {
-      const branchDetails = document.createElement("details");
-      branchDetails.className = "tree-branch";
-      branchDetails.open = true;
-
-      const branchSummary = document.createElement("summary");
-      branchSummary.className = "tree-branch-summary";
-      branchSummary.innerHTML = `
-        <div class="tree-branch-title">
-          <span class="tree-branch-icon">${branch.icon || "📂"}</span>
-          <span>${esc(branch.title)}</span>
-        </div>
-        <span class="tree-branch-meta">${esc(branch.meta || "")}</span>
-      `;
-      branchDetails.appendChild(branchSummary);
-
-      const childrenContainer = document.createElement("div");
-      childrenContainer.className = "tree-children";
-
-      (branch.nodes || []).forEach((node) => {
-        const funcDetails = document.createElement("details");
-        funcDetails.className = `tree-func-node ${node.isExam ? "exam-highlight" : ""}`;
-        funcDetails.open = true;
-
-        const funcSummary = document.createElement("summary");
-        funcSummary.className = "tree-func-summary";
-        funcSummary.innerHTML = `
-          <div class="tree-func-left">
-            <span class="kind-pill ${node.isExam ? "exam" : ""}">${esc(node.kind)}</span>
-            <span class="func-signature">${esc(node.name)}</span>
+    // 2. Render Top-Down Nested Trees
+    function renderNestedNode(node, level = 0) {
+      const hasChildren = node.children && node.children.length > 0;
+      let childrenHtml = "";
+      if (hasChildren) {
+        childrenHtml = `
+          <div class="tree-children">
+            ${node.children.map(child => renderNestedNode(child, level + 1)).join("")}
           </div>
+        `;
+      }
+
+      let shapesHtml = "";
+      if (node.inShape || node.outShape) {
+        shapesHtml = `
           <div class="shape-tags">
-            <span class="shape-badge in">In: ${esc(node.inShape)}</span>
-            <span class="shape-badge out">Out: ${esc(node.outShape)}</span>
+            ${node.inShape ? `<span class="shape-badge in">In: ${esc(node.inShape)}</span>` : ""}
+            ${node.outShape ? `<span class="shape-badge out">➔ Out: ${esc(node.outShape)}</span>` : ""}
           </div>
         `;
-        funcDetails.appendChild(funcSummary);
+      }
 
-        const detailDiv = document.createElement("div");
-        detailDiv.className = "tree-func-detail";
-
-        let stepsHtml = "";
-        if (node.steps && node.steps.length) {
-          stepsHtml = `
-            <div class="sub-operations">
-              ${node.steps.map((st) => `<div class="sub-step"><span class="sub-step-arrow">├─</span><span>${esc(st)}</span></div>`).join("")}
+      return `
+        <details class="tree-func-node level-${level} ${node.isExam ? "exam-highlight" : ""}" open>
+          <summary class="tree-func-summary">
+            <div class="tree-func-left">
+              ${node.kind ? `<span class="kind-pill ${node.isExam ? "exam" : ""}">${esc(node.kind)}</span>` : ""}
+              <span class="func-signature">${esc(node.name)}</span>
             </div>
-          `;
-        }
+            ${shapesHtml}
+          </summary>
+          ${childrenHtml}
+        </details>
+      `;
+    }
 
-        detailDiv.innerHTML = `
-          <p class="func-desc">${esc(node.desc)}</p>
-          ${stepsHtml}
-          <div class="code-container">
-            <pre class="code-view"><code>${esc(node.code)}</code></pre>
-            <button class="copy-code-btn" type="button" data-code="${esc(node.code)}">복사</button>
-          </div>
-        `;
-
-        funcDetails.appendChild(detailDiv);
-        childrenContainer.appendChild(funcDetails);
-      });
-
-      branchDetails.appendChild(childrenContainer);
-      canvas.appendChild(branchDetails);
-    });
-
-    // Setup Copy Code Buttons
-    canvas.querySelectorAll(".copy-code-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const code = btn.getAttribute("data-code");
-        navigator.clipboard.writeText(code).then(() => {
-          const original = btn.textContent;
-          btn.textContent = "복사 완료!";
-          setTimeout(() => (btn.textContent = original), 1500);
-        });
-      });
-    });
+    if (data.top_down_trees && data.top_down_trees.length) {
+      const treeContainer = document.createElement("div");
+      treeContainer.className = "top-down-interactive-group";
+      treeContainer.innerHTML = data.top_down_trees.map(t => renderNestedNode(t, 0)).join("");
+      canvas.appendChild(treeContainer);
+    }
 
     // Re-apply filters if active
     if (examFilterActive) {

@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AI Specialist · 순수 계층 트리 뷰 (설명 없이 트리만)</title>
-  <meta name="description" content="설명문 없이 순수한 함수 상하 의존성과 텐서 shape, 실행 스텝만 계층적으로 접고 펼쳐보는 클린 트리 뷰">
+  <title>AI Specialist · 순수 계층 트리 뷰 (최상위 함수 탑다운)</title>
+  <meta name="description" content="설명문 없이 최상위 실행 함수부터 하위 호출 함수 및 텐서 변환으로 뻗어나가는 진짜 Top-Down 계층 트리">
   <link rel="stylesheet" href="../assets/css/global-font.css">
   <style>
     :root {
@@ -12,16 +12,13 @@
       --bg-surface: #0f172a;
       --bg-hover: #1e293b;
       --border: #1e293b;
-      --border-focus: #3b82f6;
       --text-main: #f1f5f9;
       --text-muted: #94a3b8;
       --blue: #38bdf8;
       --blue-subtle: rgba(56, 189, 248, 0.12);
       --green: #34d399;
-      --green-subtle: rgba(52, 211, 153, 0.12);
       --red: #f43f5e;
       --red-subtle: rgba(244, 63, 94, 0.15);
-      --purple: #c084fc;
       --yellow: #fbbf24;
       --line: #334155;
     }
@@ -160,25 +157,53 @@
       margin: 0 auto;
     }
 
-    /* Tree Details & Summary */
-    details.pure-tree-root {
+    /* Top Goal Banner */
+    .top-target-card {
       margin-bottom: 20px;
+      padding: 14px 18px;
+      border: 1px solid #1e3a8a;
+      background: linear-gradient(180deg, #0f1f3d 0%, #091326 100%);
+      border-radius: 10px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
     }
-    summary.pure-summary {
+    .top-target-card h3 {
+      margin: 0 0 4px;
+      font-size: 0.95rem;
+      color: #93c5fd;
+    }
+    .top-target-card p {
+      margin: 0;
+      color: #38bdf8;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+
+    /* Nested Details Tree Node */
+    details.tree-node {
+      margin: 4px 0;
+      border-radius: 6px;
+      transition: background 0.12s;
+    }
+    details.tree-node.exam-hit > summary {
+      background: rgba(244, 63, 94, 0.1);
+      border-left: 3px solid var(--red);
+    }
+    summary.tree-summary {
       list-style: none;
       cursor: pointer;
       user-select: none;
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 6px 8px;
+      padding: 6px 10px;
       border-radius: 6px;
       transition: background 0.12s;
+      flex-wrap: wrap;
     }
-    summary.pure-summary::-webkit-details-marker {
+    summary.tree-summary::-webkit-details-marker {
       display: none;
     }
-    summary.pure-summary:hover {
+    summary.tree-summary:hover {
       background: var(--bg-hover);
     }
     .toggle-arrow {
@@ -194,81 +219,39 @@
       color: var(--blue);
     }
 
-    /* Node Styles */
-    .root-tag {
-      background: #1e3a8a;
-      color: #93c5fd;
-      padding: 2px 7px;
-      border-radius: 5px;
-      font-weight: 900;
-      font-size: 0.78rem;
-    }
-    .root-text {
-      color: #e0e7ff;
-      font-weight: 800;
-      font-size: 1rem;
-    }
-
-    /* Tree Branches */
-    .branch-group {
-      margin-left: 20px;
-      padding-left: 14px;
-      border-left: 1px dashed var(--line);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-top: 6px;
-    }
-    .branch-summary {
-      font-size: 0.94rem;
-      font-weight: 800;
-      color: var(--yellow);
-    }
-    .branch-nodes {
-      margin-left: 20px;
-      padding-left: 14px;
-      border-left: 1px dashed var(--line);
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin-top: 4px;
-    }
-
-    /* Function Nodes */
-    details.func-item {
-      border-radius: 6px;
-      transition: background 0.12s;
-    }
-    details.func-item.exam-hit {
-      background: var(--red-subtle);
-      border: 1px solid rgba(244, 63, 94, 0.35);
-    }
-    .func-summary {
-      font-size: 0.88rem;
-      font-weight: 700;
-      color: var(--text-main);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .func-tag {
-      font-size: 0.7rem;
-      padding: 1px 6px;
+    /* Node Tags */
+    .node-tag {
+      font-size: 0.72rem;
+      padding: 2px 6px;
       border-radius: 4px;
-      background: var(--bg-hover);
-      color: var(--text-muted);
+      background: var(--bg-surface);
+      color: #cbd5e1;
+      border: 1px solid var(--border);
     }
-    .func-tag.exam {
+    .node-tag.exam {
       background: var(--red);
       color: #fff;
       font-weight: 900;
+      border-color: var(--red);
+      box-shadow: 0 1px 4px rgba(244, 63, 94, 0.4);
     }
-    .func-name {
+    .node-title {
+      color: var(--text-main);
+      font-weight: 700;
+      font-size: 0.88rem;
+    }
+    details.level-0 > summary > .node-title {
+      font-size: 1rem;
+      font-weight: 900;
+      color: var(--yellow);
+    }
+    details.level-1 > summary > .node-title {
+      font-size: 0.92rem;
       color: var(--blue);
-      font-weight: 800;
     }
-    .func-shapes {
+
+    /* Shapes */
+    .node-shapes {
       font-size: 0.76rem;
       color: var(--text-muted);
       margin-left: auto;
@@ -278,35 +261,16 @@
     .shape-in { color: #94a3b8; }
     .shape-out { color: var(--green); font-weight: 700; }
 
-    /* Steps / Lines inside Function */
-    .func-steps {
-      margin-left: 28px;
-      padding-left: 12px;
+    /* Children Indentation & Lines */
+    .tree-children {
+      margin-left: 20px;
+      padding-left: 14px;
       border-left: 1px dashed var(--line);
       display: flex;
       flex-direction: column;
-      gap: 3px;
-      padding-top: 4px;
-      padding-bottom: 6px;
-      font-size: 0.82rem;
-    }
-    .step-line {
-      display: flex;
-      align-items: flex-start;
-      gap: 6px;
-      color: #cbd5e1;
-    }
-    .step-line.comment {
-      color: #64748b;
-      font-style: italic;
-    }
-    .step-line.code-highlight {
-      color: #38bdf8;
-      font-weight: 700;
-    }
-    .step-bullet {
-      color: var(--text-muted);
-      font-size: 0.75rem;
+      gap: 4px;
+      margin-top: 2px;
+      margin-bottom: 4px;
     }
 
     /* Toast */
@@ -334,7 +298,7 @@
     @media (max-width: 800px) {
       header.pure-topbar { padding: 10px 14px; }
       .search-box { width: 100%; }
-      .func-shapes { margin-left: 0; width: 100%; }
+      .node-shapes { margin-left: 0; width: 100%; }
     }
   </style>
 </head>
@@ -343,8 +307,8 @@
   <header class="pure-topbar">
     <div class="topbar-left">
       <a class="brand-title" href="../">
-        <span>🌳 순수 계층 트리</span>
-        <span class="pure-pill">설명 없이 트리만</span>
+        <span>🌳 최상위 탑다운 트리</span>
+        <span class="pure-pill">호출 계층 구조</span>
       </a>
       <nav class="subj-nav" aria-label="과목 탭">
         <button class="subj-btn active" data-subject="llm" type="button">01 · LLM</button>
@@ -359,7 +323,7 @@
       <input type="text" id="pureSearch" class="search-box" placeholder="🔍 함수 / 텐서 검색..." />
       <button id="btnPureExpand" class="ctrl-btn" type="button">모두 펼치기</button>
       <button id="btnPureCollapse" class="ctrl-btn" type="button">모두 접기</button>
-      <button id="btnPureBranch" class="ctrl-btn" type="button">브랜치만</button>
+      <button id="btnPureLevel1" class="ctrl-btn" type="button">진입점만</button>
       <button id="btnPureExam" class="ctrl-btn" type="button">🔥 기출만</button>
       <button id="btnPureCopy" class="ctrl-btn" type="button">📋 전체 복사</button>
       <a href="index.html" class="ctrl-btn link-btn">📖 설명 포함 뷰로</a>
@@ -394,7 +358,7 @@
 
         $('#btnPureExpand')?.addEventListener('click', () => setAllDetails(true));
         $('#btnPureCollapse')?.addEventListener('click', () => setAllDetails(false));
-        $('#btnPureBranch')?.addEventListener('click', showBranchOnly);
+        $('#btnPureLevel1')?.addEventListener('click', showLevel0Only);
         $('#btnPureExam')?.addEventListener('click', toggleExamFilter);
         $('#btnPureCopy')?.addEventListener('click', copyTree);
         $('#pureSearch')?.addEventListener('input', e => handleSearch(e.target.value));
@@ -412,62 +376,57 @@
         renderTree();
       }
 
+      function renderNode(node, level = 0) {
+        const hasChildren = node.children && node.children.length > 0;
+        let childrenHtml = '';
+        if (hasChildren) {
+          childrenHtml = `
+            <div class="tree-children">
+              ${node.children.map(child => renderNode(child, level + 1)).join('')}
+            </div>
+          `;
+        }
+
+        let shapesHtml = '';
+        if (node.inShape || node.outShape) {
+          shapesHtml = `
+            <div class="node-shapes">
+              ${node.inShape ? `<span class="shape-in">[In: ${esc(node.inShape)}]</span>` : ''}
+              ${node.outShape ? `<span class="shape-out">➔ [Out: ${esc(node.outShape)}]</span>` : ''}
+            </div>
+          `;
+        }
+
+        return `
+          <details class="tree-node level-${level} ${node.isExam ? 'exam-hit' : ''}" open>
+            <summary class="tree-summary">
+              <span class="toggle-arrow">${hasChildren ? '▶' : '•'}</span>
+              ${node.kind ? `<span class="node-tag ${node.isExam ? 'exam' : ''}">${esc(node.kind)}</span>` : ''}
+              <span class="node-title">${esc(node.name)}</span>
+              ${shapesHtml}
+            </summary>
+            ${childrenHtml}
+          </details>
+        `;
+      }
+
       function renderTree() {
         const data = dataset[currentSubj];
         const canvas = $('#pureCanvas');
         if (!data || !canvas) return;
 
-        let branchesHtml = (data.branches || []).map((b, bIdx) => {
-          let nodesHtml = (b.nodes || []).map((n, nIdx) => {
-            let stepsHtml = (n.steps || []).map(st => {
-              const isComment = st.trim().startsWith('#');
-              const isHighlight = st.includes('calc_loss_batch') || st.includes('cross_entropy') || st.includes('keys.view') || st.includes('transpose') || st.includes('argmax') || st.includes('cat');
-              return `<div class="step-line ${isComment ? 'comment' : isHighlight ? 'code-highlight' : ''}">
-                <span class="step-bullet">├─</span>
-                <span>${esc(st)}</span>
-              </div>`;
-            }).join('');
-
-            return `
-              <details class="func-item ${n.isExam ? 'exam-hit' : ''}" open data-node-index="${nIdx}">
-                <summary class="pure-summary func-summary">
-                  <span class="toggle-arrow">▶</span>
-                  <span class="func-tag ${n.isExam ? 'exam' : ''}">${esc(n.kind)}</span>
-                  <span class="func-name">${esc(n.name)}</span>
-                  <div class="func-shapes">
-                    <span class="shape-in">[In: ${esc(n.inShape)}]</span>
-                    <span class="shape-out">➔ [Out: ${esc(n.outShape)}]</span>
-                  </div>
-                </summary>
-                <div class="func-steps">
-                  ${stepsHtml}
-                </div>
-              </details>`;
-          }).join('');
-
-          return `
-            <details class="branch-item" open data-branch-index="${bIdx}">
-              <summary class="pure-summary branch-summary">
-                <span class="toggle-arrow">▶</span>
-                <span>${b.icon || '📂'} ${esc(b.title)}</span>
-              </summary>
-              <div class="branch-nodes">
-                ${nodesHtml}
-              </div>
-            </details>`;
-        }).join('');
+        const trees = data.top_down_trees || [];
+        const treeNodesHtml = trees.map(t => renderNode(t, 0)).join('');
 
         canvas.innerHTML = `
-          <details class="pure-tree-root" open>
-            <summary class="pure-summary">
-              <span class="toggle-arrow">▶</span>
-              <span class="root-tag">ROOT TARGET</span>
-              <span class="root-text">${esc(data.root?.title || data.title)}</span>
-            </summary>
-            <div class="branch-group">
-              ${branchesHtml}
-            </div>
-          </details>`;
+          <div class="top-target-card">
+            <h3>🎯 ${esc(data.root?.title || '최상위 실행 목표')}</h3>
+            <p>${esc(data.root?.methods || '')}</p>
+          </div>
+          <div class="top-down-container">
+            ${treeNodesHtml}
+          </div>
+        `;
 
         if (examOnly) applyExamFilter();
       }
@@ -476,10 +435,9 @@
         $$('#pureCanvas details').forEach(d => d.open = isOpen);
       }
 
-      function showBranchOnly() {
-        $$('#pureCanvas .pure-tree-root').forEach(d => d.open = true);
-        $$('#pureCanvas .branch-item').forEach(d => d.open = true);
-        $$('#pureCanvas .func-item').forEach(d => d.open = false);
+      function showLevel0Only() {
+        $$('#pureCanvas details.level-0').forEach(d => d.open = true);
+        $$('#pureCanvas details.tree-node:not(.level-0)').forEach(d => d.open = false);
       }
 
       function toggleExamFilter() {
@@ -489,7 +447,7 @@
       }
 
       function applyExamFilter() {
-        $$('.func-item').forEach(item => {
+        $$('.tree-node').forEach(item => {
           if (examOnly) {
             item.style.display = item.classList.contains('exam-hit') ? '' : 'none';
           } else {
@@ -500,13 +458,17 @@
 
       function handleSearch(q) {
         const keyword = q.toLowerCase().trim();
-        $$('.func-item').forEach(item => {
+        $$('.tree-node').forEach(item => {
           const text = item.textContent.toLowerCase();
           const match = !keyword || text.includes(keyword);
           item.style.display = match ? '' : 'none';
           if (keyword && match) {
             item.open = true;
-            item.closest('.branch-item')?.setAttribute('open', '');
+            let parent = item.parentElement?.closest('details');
+            while (parent) {
+              parent.open = true;
+              parent = parent.parentElement?.closest('details');
+            }
           }
         });
       }
