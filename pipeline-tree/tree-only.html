@@ -496,6 +496,62 @@
       transform: translateY(0);
     }
 
+    
+    /* Entry Header Line (윗줄 표기) */
+    .entry-header-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+      margin-bottom: 2px;
+      padding: 0 4px;
+      font-size: 0.8rem;
+      color: #8b949e;
+      user-select: none;
+    }
+    .entry-header-line:first-child {
+      margin-top: 4px;
+    }
+    .entry-hash {
+      color: #58a6ff;
+      font-weight: 900;
+      font-size: 0.9rem;
+    }
+    .entry-badge-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: rgba(248, 81, 73, 0.15);
+      border: 1px solid rgba(248, 81, 73, 0.4);
+      color: #ff7b72;
+      font-weight: 800;
+      font-size: 0.74rem;
+    }
+    .entry-kind-title {
+      color: #e6edf3;
+      font-weight: 700;
+      font-size: 0.82rem;
+    }
+    .entry-line-divider {
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(88, 166, 255, 0.3) 0%, rgba(48, 54, 61, 0.6) 60%, transparent 100%);
+      margin-left: 6px;
+    }
+
+    /* Trailing entry pill */
+    .entry-pill {
+      font-size: 0.7rem;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: rgba(88, 166, 255, 0.12);
+      border: 1px solid rgba(88, 166, 255, 0.3);
+      color: #79c0ff;
+      font-weight: 700;
+    }
+
     /* Status Bar (VS Code Bottom Bar) */
     footer.status-bar {
       height: 22px;

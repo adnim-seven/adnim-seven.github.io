@@ -1,6 +1,5 @@
 /**
- * AI Specialist True Top-Down Nested Dependency Tree Data
- * Every caller function branches directly down into its callee sub-functions.
+ * AI Specialist Pipeline Tree Data
  */
 window.PIPELINE_TREE_DATA = {
   "llm": {
@@ -13,7 +12,7 @@ window.PIPELINE_TREE_DATA = {
     },
     "top_down_trees": [
       {
-        "name": "🔥 [진입점 1] train_model_simple(model, train_loader, val_loader, optimizer, device, num_epochs, ...)",
+        "name": "train_model_simple(model, train_loader, val_loader, optimizer, device, num_epochs, ...)",
         "kind": "최상위 학습 루프 (Ch 5)",
         "inShape": "train_loader: [B, T]",
         "outShape": "학습 가중치 갱신",
@@ -34,7 +33,7 @@ window.PIPELINE_TREE_DATA = {
             "isExam": true
           },
           {
-            "name": "🔥 loss = calc_loss_batch(input_batch, target_batch, model, device)",
+            "name": "loss = calc_loss_batch(input_batch, target_batch, model, device)",
             "kind": "배치 손실 계산 (Ch 5)",
             "inShape": "inputs: [B, T], targets: [B, T]",
             "outShape": "scalar Loss",
@@ -48,7 +47,7 @@ window.PIPELINE_TREE_DATA = {
                 "isExam": false
               },
               {
-                "name": "🔥 logits = model(input_batch) ➔ GPTModel.forward(in_idx)",
+                "name": "logits = model(input_batch) ➔ GPTModel.forward(in_idx)",
                 "kind": "백본 신경망 순전파 (Ch 4)",
                 "inShape": "in_idx: [B, T]",
                 "outShape": "logits: [B, T, vocab_size]",
@@ -76,14 +75,14 @@ window.PIPELINE_TREE_DATA = {
                     ]
                   },
                   {
-                    "name": "🔥 x = self.trf_blocks(x) ➔ TransformerBlock.forward(x) (× n_layers)",
+                    "name": "x = self.trf_blocks(x) ➔ TransformerBlock.forward(x) (× n_layers)",
                     "kind": "트랜스포머 블록 누적 (Ch 4)",
                     "inShape": "x: [B, T, D]",
                     "outShape": "x: [B, T, D]",
                     "isExam": true,
                     "children": [
                       {
-                        "name": "🔥 [서브블록 1] x = x + self.drop_shortcut(self.att(self.norm1(x)))",
+                        "name": "x = x + self.drop_shortcut(self.att(self.norm1(x)))",
                         "kind": "어텐션 잔차 연결 (Ch 4)",
                         "inShape": "x: [B, T, D]",
                         "outShape": "x: [B, T, D]",
@@ -96,7 +95,7 @@ window.PIPELINE_TREE_DATA = {
                             "outShape": "[B, T, D]"
                           },
                           {
-                            "name": "🔥 att_out = self.att(norm1_out) ➔ MultiHeadAttention.forward(x)",
+                            "name": "att_out = self.att(norm1_out) ➔ MultiHeadAttention.forward(x)",
                             "kind": "🔥 2026-09 기출 (Ch 3)",
                             "inShape": "x: [B, T, D]",
                             "outShape": "context_vec: [B, T, D]",
@@ -161,7 +160,7 @@ window.PIPELINE_TREE_DATA = {
                         ]
                       },
                       {
-                        "name": "[서브블록 2] x = x + self.drop_shortcut(self.ff(self.norm2(x)))",
+                        "name": "x = x + self.drop_shortcut(self.ff(self.norm2(x)))",
                         "kind": "피드포워드 잔차 연결 (Ch 4)",
                         "inShape": "x: [B, T, D]",
                         "outShape": "x: [B, T, D]",
@@ -221,7 +220,7 @@ window.PIPELINE_TREE_DATA = {
                 ]
               },
               {
-                "name": "🔥 loss = torch.nn.functional.cross_entropy(logits.flatten(0, 1), target_batch.flatten())",
+                "name": "loss = torch.nn.functional.cross_entropy(logits.flatten(0, 1), target_batch.flatten())",
                 "kind": "1차원 손실 계산 (Ch 5)",
                 "inShape": "logits: [B*T, V], targets: [B*T]",
                 "outShape": "scalar Loss",
@@ -270,10 +269,11 @@ window.PIPELINE_TREE_DATA = {
               }
             ]
           }
-        ]
+        ],
+        "entryPoint": "진입점 1"
       },
       {
-        "name": "🔥 [진입점 2] generate_text_simple(model, idx, max_new_tokens, context_size)",
+        "name": "generate_text_simple(model, idx, max_new_tokens, context_size)",
         "kind": "최상위 텍스트 생성 루프 (Ch 4)",
         "inShape": "idx: [B, T]",
         "outShape": "idx: [B, T + max_new_tokens]",
@@ -299,29 +299,30 @@ window.PIPELINE_TREE_DATA = {
                 "outShape": "[B, T_cond, V]"
               },
               {
-                "name": "🔥 logits = logits[:, -1, :]",
+                "name": "logits = logits[:, -1, :]",
                 "kind": "마지막 토큰 로짓 추출",
                 "inShape": "[B, T_cond, V]",
                 "outShape": "[B, V]"
               },
               {
-                "name": "🔥 idx_next = torch.argmax(logits, dim=-1, keepdim=True)",
+                "name": "idx_next = torch.argmax(logits, dim=-1, keepdim=True)",
                 "kind": "그리디 다음 토큰 선택",
                 "inShape": "[B, V]",
                 "outShape": "[B, 1]"
               },
               {
-                "name": "🔥 idx = torch.cat((idx, idx_next), dim=1)",
+                "name": "idx = torch.cat((idx, idx_next), dim=1)",
                 "kind": "토큰 연쇄 병합",
                 "inShape": "[B, T], [B, 1]",
                 "outShape": "[B, T + 1]"
               }
             ]
           }
-        ]
+        ],
+        "entryPoint": "진입점 2"
       },
       {
-        "name": "🔥 [진입점 3] compute_dpo_loss(model_chosen_logprobs, model_rejected_logprobs, ref_chosen_logprobs, ref_rejected_logprobs, beta=0.1)",
+        "name": "compute_dpo_loss(model_chosen_logprobs, model_rejected_logprobs, ref_chosen_logprobs, ref_rejected_logprobs, beta=0.1)",
         "kind": "최상위 DPO 손실 계산 (Ch 7)",
         "inShape": "4개 Logprobs: [B]",
         "outShape": "scalar Loss",
@@ -372,15 +373,16 @@ window.PIPELINE_TREE_DATA = {
             "outShape": "[B]"
           },
           {
-            "name": "🔥 losses = -torch.nn.functional.logsigmoid(beta * logits).mean()",
+            "name": "losses = -torch.nn.functional.logsigmoid(beta * logits).mean()",
             "kind": "★DPO 핵심 손실",
             "inShape": "[B]",
             "outShape": "scalar"
           }
-        ]
+        ],
+        "entryPoint": "진입점 3"
       },
       {
-        "name": "🔥 [진입점 4] LinearWithLoRA.forward(x) ➔ LoRA 파인튜닝 (Ch 6)",
+        "name": "LinearWithLoRA.forward(x) ➔ LoRA 파인튜닝 (Ch 6)",
         "kind": "최상위 LoRA 선형 변환 (Ch 6)",
         "inShape": "x: [B, T, in_dim]",
         "outShape": "[B, T, out_dim]",
@@ -393,7 +395,7 @@ window.PIPELINE_TREE_DATA = {
             "outShape": "[B, T, out_dim]"
           },
           {
-            "name": "🔥 lora_out = self.lora(x) ➔ LoRALayer.forward(x)",
+            "name": "lora_out = self.lora(x) ➔ LoRALayer.forward(x)",
             "kind": "저순위 적응 변환",
             "inShape": "x: [B, T, in_dim]",
             "outShape": "[B, T, out_dim]",
@@ -412,7 +414,7 @@ window.PIPELINE_TREE_DATA = {
                 "outShape": "B"
               },
               {
-                "name": "🔥 return (x @ self.A @ self.B) * (self.alpha / self.rank)",
+                "name": "return (x @ self.A @ self.B) * (self.alpha / self.rank)",
                 "kind": "저순위 곱 & 스케일링",
                 "inShape": "x @ A @ B",
                 "outShape": "[B, T, out_dim]"
@@ -425,7 +427,8 @@ window.PIPELINE_TREE_DATA = {
             "inShape": "base + lora",
             "outShape": "[B, T, out_dim]"
           }
-        ]
+        ],
+        "entryPoint": "진입점 4"
       }
     ]
   },
@@ -439,14 +442,14 @@ window.PIPELINE_TREE_DATA = {
     },
     "top_down_trees": [
       {
-        "name": "🔥 [진입점 1] response = query_engine.query(query_str)",
+        "name": "response = query_engine.query(query_str)",
         "kind": "최상위 RAG 질의 (Task 1 & 2)",
         "inShape": "query_str: str",
         "outShape": "Response (근거 기반 답변)",
         "isExam": true,
         "children": [
           {
-            "name": "🔥 retrieved_nodes = retriever.retrieve(query_bundle)",
+            "name": "retrieved_nodes = retriever.retrieve(query_bundle)",
             "kind": "상위 K개 노드 검색",
             "inShape": "query_bundle",
             "outShape": "list[NodeWithScore]",
@@ -467,7 +470,7 @@ window.PIPELINE_TREE_DATA = {
                     "isExam": true,
                     "children": [
                       {
-                        "name": "🔥 VectorStoreIndex.from_documents(documents)",
+                        "name": "VectorStoreIndex.from_documents(documents)",
                         "kind": "🔥 2026-09 기출",
                         "inShape": "list[Document]",
                         "outShape": "VectorStoreIndex"
@@ -512,7 +515,7 @@ window.PIPELINE_TREE_DATA = {
             ]
           },
           {
-            "name": "🔥 prompt = prompt_generator(query, top_k_chunks)",
+            "name": "prompt = prompt_generator(query, top_k_chunks)",
             "kind": "🔥 2026-09 기출 (Task 1)",
             "inShape": "query, chunks",
             "outShape": "str (Prompt)",
@@ -560,10 +563,11 @@ window.PIPELINE_TREE_DATA = {
               }
             ]
           }
-        ]
+        ],
+        "entryPoint": "진입점 1"
       },
       {
-        "name": "🔥 [진입점 2] await session.call_tool(tool_name, arguments)",
+        "name": "await session.call_tool(tool_name, arguments)",
         "kind": "최상위 MCP 도구 호출",
         "inShape": "tool_name, arguments",
         "outShape": "Tool Execution Result",
@@ -581,7 +585,8 @@ window.PIPELINE_TREE_DATA = {
             "inShape": "stdio streams",
             "outShape": "ClientSession"
           }
-        ]
+        ],
+        "entryPoint": "진입점 2"
       }
     ]
   },
@@ -595,14 +600,14 @@ window.PIPELINE_TREE_DATA = {
     },
     "top_down_trees": [
       {
-        "name": "🔥 [진입점 1] 시계열 지도학습: loss = criterion(model(X), y)",
+        "name": "시계열 지도학습: loss = criterion(model(X), y)",
         "kind": "최상위 시계열 예측 (ts_practice)",
         "inShape": "X: [B, T, F], y: [B, 1]",
         "outShape": "scalar MSE Loss",
         "isExam": true,
         "children": [
           {
-            "name": "🔥 (입력 데이터 생성): create_sequences(data, seq_length)",
+            "name": "(입력 데이터 생성): create_sequences(data, seq_length)",
             "kind": "슬라이딩 윈도우 분할",
             "inShape": "data: [N, F]",
             "outShape": "X: [B, T, F], y: [B, 1]",
@@ -629,7 +634,7 @@ window.PIPELINE_TREE_DATA = {
             ]
           },
           {
-            "name": "🔥 pred = model(X) (LSTM 또는 Conv1D)",
+            "name": "pred = model(X) (LSTM 또는 Conv1D)",
             "kind": "시계열 백본 순전파",
             "inShape": "X: [B, T, F]",
             "outShape": "pred: [B, 1]",
@@ -657,17 +662,18 @@ window.PIPELINE_TREE_DATA = {
             "inShape": "pred, y",
             "outShape": "MSE Loss"
           }
-        ]
+        ],
+        "entryPoint": "진입점 1"
       },
       {
-        "name": "🔥 [진입점 2] outputs = RNNRNN.forward(source, target, teacher_forcing_ratio)",
+        "name": "outputs = RNNRNN.forward(source, target, teacher_forcing_ratio)",
         "kind": "🔥 2026-09 기출 (Seq2Seq)",
         "inShape": "source: [B, T_src, F], target: [B, T_tgt, F]",
         "outShape": "outputs: [B, T_tgt, F]",
         "isExam": true,
         "children": [
           {
-            "name": "🔥 (데이터 생성): create_enc_dec_sequences(data, sequence_length)",
+            "name": "(데이터 생성): create_enc_dec_sequences(data, sequence_length)",
             "kind": "🔥 2026-09 기출",
             "inShape": "data: [N, F]",
             "outShape": "features, labels: [B, T, F]",
@@ -694,37 +700,38 @@ window.PIPELINE_TREE_DATA = {
             ]
           },
           {
-            "name": "🔥 _, h = self.encoder(source) ➔ EncoderRNN.forward",
+            "name": "_, h = self.encoder(source) ➔ EncoderRNN.forward",
             "kind": "인코더 은닉상태 추출",
             "inShape": "source: [B, T_src, F]",
             "outShape": "h: [1, B, hidden_size]",
             "isExam": true
           },
           {
-            "name": "🔥 input = source[:, -1, :].unsqueeze(1) (디코더 초기 입력)",
+            "name": "input = source[:, -1, :].unsqueeze(1) (디코더 초기 입력)",
             "kind": "마지막 시점 주입",
             "inShape": "[B, F]",
             "outShape": "[B, 1, F]",
             "isExam": true
           },
           {
-            "name": "🔥 for t in range(target_len): out, h = self.decoder(input, h); outputs.append(out); input = out",
+            "name": "for t in range(target_len): out, h = self.decoder(input, h); outputs.append(out); input = out",
             "kind": "디코더 자기회귀 순전파",
             "inShape": "input, h",
             "outShape": "out: [B, 1, F], h",
             "isExam": true
           },
           {
-            "name": "🔥 return torch.stack(outputs, dim=1)",
+            "name": "return torch.stack(outputs, dim=1)",
             "kind": "시퀀스 축 스택 결합",
             "inShape": "list of [B, 1, F]",
             "outShape": "[B, T_tgt, F]",
             "isExam": true
           }
-        ]
+        ],
+        "entryPoint": "진입점 2"
       },
       {
-        "name": "🔥 [진입점 3] BPR 추천 랭킹 손실: loss = -logsigmoid(pos_scores - neg_scores).mean()",
+        "name": "BPR 추천 랭킹 손실: loss = -logsigmoid(pos_scores - neg_scores).mean()",
         "kind": "최상위 추천 학습 (RecSys)",
         "inShape": "u, pos_i, neg_j",
         "outShape": "scalar BPR Loss",
@@ -784,7 +791,8 @@ window.PIPELINE_TREE_DATA = {
             "inShape": "diff",
             "outShape": "scalar Loss"
           }
-        ]
+        ],
+        "entryPoint": "진입점 3"
       }
     ]
   },
@@ -798,14 +806,14 @@ window.PIPELINE_TREE_DATA = {
     },
     "top_down_trees": [
       {
-        "name": "🔥 [진입점 1] ResNet18 학습: loss = criterion(model(images), targets)",
+        "name": "ResNet18 학습: loss = criterion(model(images), targets)",
         "kind": "최상위 CNN 분류 (ResNet18)",
         "inShape": "images: [B, 3, 32, 32], targets: [B]",
         "outShape": "scalar Loss",
         "isExam": true,
         "children": [
           {
-            "name": "🔥 (데이터 전처리): transforms.Compose([...])",
+            "name": "(데이터 전처리): transforms.Compose([...])",
             "kind": "🔥 2026-09 기출",
             "inShape": "PIL Image",
             "outShape": "[3, 32, 32] 정규화 텐서",
@@ -851,7 +859,7 @@ window.PIPELINE_TREE_DATA = {
                 "outShape": "[B, 64, 32, 32]"
               },
               {
-                "name": "🔥 layer1~4 ➔ BasicBlock.forward(x) 누적",
+                "name": "layer1~4 ➔ BasicBlock.forward(x) 누적",
                 "kind": "잔차 블록 (Residual Addition)",
                 "inShape": "x: [B, C_in, H, W]",
                 "outShape": "out: [B, C_out, H, W]",
@@ -870,7 +878,7 @@ window.PIPELINE_TREE_DATA = {
                     "outShape": "out"
                   },
                   {
-                    "name": "🔥 out += self.shortcut(x)",
+                    "name": "out += self.shortcut(x)",
                     "kind": "스킵 연결 가산 (Shortcut)",
                     "inShape": "out, x",
                     "outShape": "residual sum"
@@ -903,10 +911,11 @@ window.PIPELINE_TREE_DATA = {
             "inShape": "logits, targets",
             "outShape": "scalar Loss"
           }
-        ]
+        ],
+        "entryPoint": "진입점 1"
       },
       {
-        "name": "🔥 [진입점 2] ViT 학습: loss = criterion(vit_model(images), targets)",
+        "name": "ViT 학습: loss = criterion(vit_model(images), targets)",
         "kind": "최상위 ViT 분류 (Vision Transformer)",
         "inShape": "images: [B, 3, 32, 32], targets: [B]",
         "outShape": "scalar Loss",
@@ -940,7 +949,7 @@ window.PIPELINE_TREE_DATA = {
             ]
           },
           {
-            "name": "🔥 x = Transformer(x) (Pre-Norm Residual Blocks)",
+            "name": "x = Transformer(x) (Pre-Norm Residual Blocks)",
             "kind": "🔥 2026-09 기출",
             "inShape": "[B, N+1, D]",
             "outShape": "[B, N+1, D]",
@@ -953,13 +962,13 @@ window.PIPELINE_TREE_DATA = {
                 "outShape": "(t, t)"
               },
               {
-                "name": "🔥 x = attn(x) + x",
+                "name": "x = attn(x) + x",
                 "kind": "어텐션 잔차 연결",
                 "inShape": "x",
                 "outShape": "attn_out + x"
               },
               {
-                "name": "🔥 x = ff(x) + x",
+                "name": "x = ff(x) + x",
                 "kind": "피드포워드 잔차 연결",
                 "inShape": "x",
                 "outShape": "ff_out + x"
@@ -973,7 +982,8 @@ window.PIPELINE_TREE_DATA = {
             "outShape": "logits: [B, num_classes]",
             "isExam": true
           }
-        ]
+        ],
+        "entryPoint": "진입점 2"
       }
     ]
   },
@@ -987,20 +997,20 @@ window.PIPELINE_TREE_DATA = {
     },
     "top_down_trees": [
       {
-        "name": "🔥 [진입점 1] prune_weight_channel_level(model, layer, sparsity)",
+        "name": "prune_weight_channel_level(model, layer, sparsity)",
         "kind": "🔥 2026-09 기출 (채널 프루닝)",
         "inShape": "Conv2d weight [C_out, C_in, k, k]",
         "outShape": "Pruned Masked Module",
         "isExam": true,
         "children": [
           {
-            "name": "🔥 num_pruned_channels = round(num_channels * sparsity)",
+            "name": "num_pruned_channels = round(num_channels * sparsity)",
             "kind": "제거 채널 수 계산",
             "inShape": "num_channels, sparsity",
             "outShape": "int k"
           },
           {
-            "name": "🔥 importance = weight.abs().sum(dim=(0, 2, 3), keepdim=True)",
+            "name": "importance = weight.abs().sum(dim=(0, 2, 3), keepdim=True)",
             "kind": "채널별 L1-Norm 중요도",
             "inShape": "[C_out, C_in, k, k]",
             "outShape": "[1, C_in, 1, 1]"
@@ -1018,7 +1028,7 @@ window.PIPELINE_TREE_DATA = {
             "outShape": "bool mask [1, C_in, 1, 1]"
           },
           {
-            "name": "🔥 weight.data *= mask.expand_as(weight)",
+            "name": "weight.data *= mask.expand_as(weight)",
             "kind": "가중치 0 마스킹",
             "inShape": "mask, weight",
             "outShape": "masked weight"
@@ -1029,30 +1039,31 @@ window.PIPELINE_TREE_DATA = {
             "inShape": "Pruned Module",
             "outShape": "Clean Model"
           }
-        ]
+        ],
+        "entryPoint": "진입점 1"
       },
       {
-        "name": "🔥 [진입점 2] 양자화 변환: q = quantize(x, scale, zero_point)",
+        "name": "양자화 변환: q = quantize(x, scale, zero_point)",
         "kind": "🔥 2026-09 기출 (INT8 양자화)",
         "inShape": "FP32 x",
         "outShape": "INT8 q",
         "isExam": true,
         "children": [
           {
-            "name": "🔥 (파라미터 산출): scale, zero_point = get_quantization_scale_and_zero_point(fp_min, fp_max, q_min, q_max)",
+            "name": "(파라미터 산출): scale, zero_point = get_quantization_scale_and_zero_point(fp_min, fp_max, q_min, q_max)",
             "kind": "스케일 & 영점 계산",
             "inShape": "FP32/INT8 min/max",
             "outShape": "scale (float), zero_point (int)",
             "isExam": true,
             "children": [
               {
-                "name": "🔥 scale = (fp_max - fp_min) / (quantized_max - quantized_min)",
+                "name": "scale = (fp_max - fp_min) / (quantized_max - quantized_min)",
                 "kind": "스케일 공식 S",
                 "inShape": "min/max",
                 "outShape": "scale (float)"
               },
               {
-                "name": "🔥 zero_point = round(quantized_min - fp_min / scale)",
+                "name": "zero_point = round(quantized_min - fp_min / scale)",
                 "kind": "영점 공식 Z",
                 "inShape": "min, scale",
                 "outShape": "zero_point (int)"
@@ -1083,10 +1094,11 @@ window.PIPELINE_TREE_DATA = {
             "inShape": "FP32 Model",
             "outShape": "Quantized INT8 Model"
           }
-        ]
+        ],
+        "entryPoint": "진입점 2"
       },
       {
-        "name": "🔥 [진입점 3] 지식 증류: loss = alpha * soft_loss + (1 - alpha) * hard_loss",
+        "name": "지식 증류: loss = alpha * soft_loss + (1 - alpha) * hard_loss",
         "kind": "최상위 지식 증류 루프",
         "inShape": "student_logits, teacher_logits, targets",
         "outShape": "scalar Total Loss",
@@ -1105,7 +1117,7 @@ window.PIPELINE_TREE_DATA = {
             "outShape": "student_logits"
           },
           {
-            "name": "🔥 soft_loss = F.kl_div(F.log_softmax(S/T), F.softmax(T/T), reduction='batchmean') * (T * T)",
+            "name": "soft_loss = F.kl_div(F.log_softmax(S/T), F.softmax(T/T), reduction='batchmean') * (T * T)",
             "kind": "온도 T 스케일 KL 손실",
             "inShape": "logits, T",
             "outShape": "soft_loss",
@@ -1123,7 +1135,8 @@ window.PIPELINE_TREE_DATA = {
             "inShape": "soft, hard",
             "outShape": "Total Loss"
           }
-        ]
+        ],
+        "entryPoint": "진입점 3"
       }
     ]
   }

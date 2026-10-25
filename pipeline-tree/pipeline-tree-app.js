@@ -114,6 +114,12 @@
 
       // Metadata placed strictly BEHIND the function name
       const metaParts = [];
+      if (node.entryPoint) {
+        metaParts.push(`<span class="entry-tag">${esc(node.entryPoint)}</span>`);
+      }
+      if (node.isExam) {
+        metaParts.push(`<span class="exam-tag">🔥 기출</span>`);
+      }
       if (node.inShape && node.inShape !== "-") {
         metaParts.push(`<span class="shape-badge in">[In: ${esc(node.inShape)}]</span>`);
       }
@@ -128,17 +134,30 @@
       }
 
       const metaHtml = metaParts.length ? `<div class="node-meta">${metaParts.join("")}</div>` : "";
-      const examBadge = node.isExam ? `<span class="exam-tag">🔥 기출</span>` : "";
+
+      // Section annotation line for Level 0 entry points (윗줄 표기)
+      let topAnnotationHtml = "";
+      if (level === 0) {
+        const entryLabel = node.entryPoint || "진입점";
+        topAnnotationHtml = `
+          <div class="entry-header-line">
+            <span class="entry-hash">#</span>
+            <span class="entry-badge-tag">🔥 [${esc(entryLabel)}]</span>
+            <span class="entry-kind-title">${esc(node.kind || "")}</span>
+            <span class="entry-line-divider"></span>
+          </div>
+        `;
+      }
 
       if (hasChildren) {
         return `
+          ${topAnnotationHtml}
           <details class="tree-item level-${level} ${node.isExam ? "exam-highlight" : ""}" open>
             <summary class="tree-row">
               <span class="twistie">▶</span>
               <span class="folder-icon closed">📁</span>
               <span class="folder-icon open">📂</span>
               <span class="func-signature">${esc(node.name)}</span>
-              ${examBadge}
               ${metaHtml}
             </summary>
             ${childrenHtml}
@@ -146,11 +165,11 @@
         `;
       } else {
         return `
+          ${topAnnotationHtml}
           <div class="tree-row leaf level-${level} ${node.isExam ? "exam-highlight" : ""}">
             <span class="twistie spacer">•</span>
             <span class="leaf-icon">λ</span>
             <span class="func-signature">${esc(node.name)}</span>
-            ${examBadge}
             ${metaHtml}
           </div>
         `;
