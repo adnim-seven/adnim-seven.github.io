@@ -417,7 +417,14 @@
     const blank = exam.blanks.find((item) => item.id === blankId);
     const answer = document.querySelector(`[data-inline-answer="${blankId}"]`)?.value || "";
     if (!answer.trim()) return;
-    const correct = scoreAnswer(answer, [blank.answer]);
+    const altAnswers = [blank.answer];
+    if (!blank.answer.includes("=")) {
+      altAnswers.push(`x = ${blank.answer}`, `logits = ${blank.answer}`, `self.att = ${blank.answer}`, `self.tok_emb = ${blank.answer}`, `self.pos_emb = ${blank.answer}`, `self.trf_blocks = ${blank.answer}`, `self.out_head = ${blank.answer}`);
+    }
+    if (blank.answer.includes("for _ in range")) {
+      altAnswers.push(blank.answer.replace("for _ in range", "for i in range"), `self.trf_blocks = ${blank.answer}`);
+    }
+    const correct = scoreAnswer(answer, altAnswers);
     recordAttempt(inlineKey(blankId), "subjective", correct, "애매", false, correct ? "" : "인라인 구현");
     const input = document.querySelector(`[data-inline-answer="${blankId}"]`);
     input?.classList.toggle("correct", correct);
@@ -432,7 +439,7 @@
     const status = $("#inlineExamStatus");
     if (!exam || !status) return;
     const answered = exam.blanks.filter((blank) => document.querySelector(`[data-inline-answer="${blank.id}"]`)?.value.trim()).length;
-    const correct = exam.blanks.filter((blank) => scoreAnswer(document.querySelector(`[data-inline-answer="${blank.id}"]`)?.value || "", [blank.answer])).length;
+    const correct = exam.blanks.filter((blank) => { const val = document.querySelector(`[data-inline-answer="${blank.id}"]`)?.value || ""; const alts = [blank.answer, `x = ${blank.answer}`, `logits = ${blank.answer}`, `self.att = ${blank.answer}`, `self.tok_emb = ${blank.answer}`, `self.pos_emb = ${blank.answer}`, `self.trf_blocks = ${blank.answer}`, `self.out_head = ${blank.answer}`, blank.answer.replace("for _ in range", "for i in range")]; return scoreAnswer(val, alts); }).length;
     status.textContent = `문제 ${inlineBlankIndex + 1}/${exam.blanks.length} · 작성 ${answered}개 · 현재 정답 ${correct}개`;
   }
 

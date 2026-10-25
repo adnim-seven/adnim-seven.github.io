@@ -194,7 +194,7 @@ importance = weight.abs().sum(dim=(0, 2, 3), keepdim=True)</pre>
     <article id="recall-1" class="recall-section">
       <div class="section-head">
         <h2>LLM</h2>
-        <span class="badge">Chapter_4_Excercise_GPT.ipynb · 6개 구현</span>
+        <span class="badge">Chapter_4_Excercise_GPT.ipynb · MHA + GPTModel 전체 구성 + generate_text (15빈칸)</span>
       </div>
       <pre class="code-block"><code>### LLM###
 # 1. MultiHeadAttention QKV 계산 후, 헤드 나누기
@@ -203,7 +203,7 @@ keys = keys.view(b, num_tokens, self.num_heads, self.head_dim)
 values = values.view(b, num_tokens, self.num_heads, self.head_dim)
 queries = queries.view(b, num_tokens, self.num_heads, self.head_dim)
 
-# 2. self.att, MultiHeadAttention 할당하기
+# 2. TransformerBlock (self.att 할당 및 forward 서브레이어 호출)
 self.att = MultiHeadAttention(
     d_in=cfg["emb_dim"],
     d_out=cfg["emb_dim"],
@@ -211,14 +211,23 @@ self.att = MultiHeadAttention(
     num_heads=cfg["n_heads"],
     dropout=cfg["drop_rate"],
     qkv_bias=cfg["qkv_bias"])
+x = self.att(x)
+x = self.ff(x)
 
-# 3. self.out_head 구현
+# 3. GPTModel 레이어 구성 (__init__: tok_emb, pos_emb, trf_blocks, out_head)
+self.tok_emb = nn.Embedding(cfg["vocab_size"], cfg["emb_dim"])
+self.pos_emb = nn.Embedding(cfg["context_length"], cfg["emb_dim"])
+self.trf_blocks = nn.Sequential(
+    *[TransformerBlock(cfg) for _ in range(cfg["n_layers"])])
 self.out_head = nn.Linear(cfg["emb_dim"], cfg["vocab_size"], bias=False)
 
-# 4. 토큰 임베딩과 위치 임베딩 합산
+# 4. GPTModel 순전파 구성 (forward: 임베딩 합산 -&gt; trf_blocks 통과 -&gt; out_head 출력)
 # region [토큰 임베딩과 위치 임베딩 합산]
-# TODO
 x = tok_embeds + pos_embeds
+x = self.drop_emb(x)
+x = self.trf_blocks(x)
+x = self.final_norm(x)
+logits = self.out_head(x)
 
 # 5. 모델 예측 (기울기 계산 불필요)
 with torch.no_grad():
@@ -234,8 +243,8 @@ idx_next = torch.argmax(logits, dim=-1, keepdim=True)
 idx = torch.cat((idx, idx_next), dim=1)
 return idx</code></pre>
       <div class="action-links">
-        <a href="../llm/">LLM 과목 홈 (실제 기출 모드로 풀기)</a>
-        <a href="../llm/inline-subjective/llm_chapter_4_subjective_test.html">Chapter 4 · GPT 인라인 주관식 시험 (기출 6문항 전체 수록)</a>
+        <a href="../llm/">LLM 과목 홈 (5. 인라인 시험에서 풀기)</a>
+        <a href="../llm/inline-subjective/llm_chapter_4_subjective_test.html">Chapter 4 · GPT 인라인 주관식 시험 (기출 15빈칸 전체 수록)</a>
       </div>
       <a class="back-top" href="#top">[↑ 목차로]</a>
     </article>
