@@ -112,28 +112,49 @@
         `;
       }
 
-      let shapesHtml = "";
-      if (node.inShape || node.outShape) {
-        shapesHtml = `
-          <div class="shape-tags">
-            ${node.inShape ? `<span class="shape-badge in">In: ${esc(node.inShape)}</span>` : ""}
-            ${node.outShape ? `<span class="shape-badge out">➔ Out: ${esc(node.outShape)}</span>` : ""}
+      // Metadata placed strictly BEHIND the function name
+      const metaParts = [];
+      if (node.inShape && node.inShape !== "-") {
+        metaParts.push(`<span class="shape-badge in">[In: ${esc(node.inShape)}]</span>`);
+      }
+      if (node.outShape && node.outShape !== "-") {
+        metaParts.push(`<span class="shape-badge out">➔ [Out: ${esc(node.outShape)}]</span>`);
+      }
+      if (node.kind) {
+        metaParts.push(`<span class="kind-pill ${node.isExam ? "exam" : ""}">${esc(node.kind)}</span>`);
+      }
+      if (node.desc) {
+        metaParts.push(`<span class="comment-desc">// ${esc(node.desc)}</span>`);
+      }
+
+      const metaHtml = metaParts.length ? `<div class="node-meta">${metaParts.join("")}</div>` : "";
+      const examBadge = node.isExam ? `<span class="exam-tag">🔥 기출</span>` : "";
+
+      if (hasChildren) {
+        return `
+          <details class="tree-item level-${level} ${node.isExam ? "exam-highlight" : ""}" open>
+            <summary class="tree-row">
+              <span class="twistie">▶</span>
+              <span class="folder-icon closed">📁</span>
+              <span class="folder-icon open">📂</span>
+              <span class="func-signature">${esc(node.name)}</span>
+              ${examBadge}
+              ${metaHtml}
+            </summary>
+            ${childrenHtml}
+          </details>
+        `;
+      } else {
+        return `
+          <div class="tree-row leaf level-${level} ${node.isExam ? "exam-highlight" : ""}">
+            <span class="twistie spacer">•</span>
+            <span class="leaf-icon">λ</span>
+            <span class="func-signature">${esc(node.name)}</span>
+            ${examBadge}
+            ${metaHtml}
           </div>
         `;
       }
-
-      return `
-        <details class="tree-func-node level-${level} ${node.isExam ? "exam-highlight" : ""}" open>
-          <summary class="tree-func-summary">
-            <div class="tree-func-left">
-              ${node.kind ? `<span class="kind-pill ${node.isExam ? "exam" : ""}">${esc(node.kind)}</span>` : ""}
-              <span class="func-signature">${esc(node.name)}</span>
-            </div>
-            ${shapesHtml}
-          </summary>
-          ${childrenHtml}
-        </details>
-      `;
     }
 
     if (data.top_down_trees && data.top_down_trees.length) {

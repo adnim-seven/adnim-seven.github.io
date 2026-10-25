@@ -3,338 +3,613 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AI Specialist · 순수 계층 트리 뷰 (최상위 함수 탑다운)</title>
-  <meta name="description" content="설명문 없이 최상위 실행 함수부터 하위 호출 함수 및 텐서 변환으로 뻗어나가는 진짜 Top-Down 계층 트리">
+  <title>AI Specialist · 파일 탐색기형 탑다운 트리 (File Explorer Tree)</title>
+  <meta name="description" content="파일 탐색기 스타일의 최상위 함수 탑다운 호출 계층 트리. 함수명이 앞쪽에 오고 텐서 변환과 설명이 뒤쪽에 정렬됩니다.">
   <link rel="stylesheet" href="../assets/css/global-font.css">
   <style>
     :root {
-      --bg: #090d16;
-      --bg-surface: #0f172a;
-      --bg-hover: #1e293b;
-      --border: #1e293b;
-      --text-main: #f1f5f9;
-      --text-muted: #94a3b8;
-      --blue: #38bdf8;
-      --blue-subtle: rgba(56, 189, 248, 0.12);
-      --green: #34d399;
-      --red: #f43f5e;
-      --red-subtle: rgba(244, 63, 94, 0.15);
-      --yellow: #fbbf24;
-      --line: #334155;
+      --bg-editor: #0d1117;
+      --bg-sidebar: #161b22;
+      --bg-hover: rgba(255, 255, 255, 0.06);
+      --bg-active: rgba(56, 189, 248, 0.15);
+      --border-color: #30363d;
+      --tree-line: rgba(240, 246, 252, 0.15);
+      
+      --text-main: #f0f6fc;
+      --text-muted: #8b949e;
+      --text-comment: #7ee787;
+      
+      --blue: #58a6ff;
+      --yellow: #f1e05a;
+      --green: #3fb950;
+      --purple: #bc8cff;
+      --red: #f85149;
+      --orange: #ffab70;
+      
+      --font-mono: Consolas, "Fira Code", "Courier New", monospace;
     }
+
     * { box-sizing: border-box; }
-    body {
+    html, body {
       margin: 0;
-      background: var(--bg);
+      padding: 0;
+      height: 100%;
+      background: var(--bg-editor);
       color: var(--text-main);
-      font-family: Consolas, "Courier New", "Malgun Gothic", monospace;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
       line-height: 1.5;
     }
 
-    /* Top Control Bar */
-    header.pure-topbar {
-      padding: 12px 24px;
-      background: var(--bg-surface);
-      border-bottom: 1px solid var(--border);
+    /* Overall Layout: Top Bar + Explorer Body */
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* 1. Header & Subject Tabs (VS Code Tab Bar Style) */
+    header.explorer-topbar {
+      background: #010409;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      z-index: 50;
+    }
+
+    .window-title-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 12px;
-      position: sticky;
-      top: 0;
-      z-index: 50;
+      padding: 6px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 0.8rem;
+      color: var(--text-muted);
     }
-    .topbar-left {
+    .window-title-left {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 10px;
     }
-    .brand-title {
-      font-size: 1.05rem;
-      font-weight: 900;
-      color: var(--blue);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      text-decoration: none;
-    }
-    .pure-pill {
-      font-size: 0.72rem;
-      padding: 2px 7px;
-      border-radius: 999px;
-      background: var(--blue-subtle);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      color: var(--blue);
-      font-weight: 700;
-    }
-
-    /* Subject Tabs */
-    .subj-nav {
+    .window-dots {
       display: flex;
       gap: 6px;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot.red { background: #ff5f56; }
+    .dot.yellow { background: #ffbd2e; }
+    .dot.green { background: #27c93f; }
+
+    .window-title-text {
+      color: var(--text-main);
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .window-badge {
+      font-size: 0.7rem;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(88, 166, 255, 0.15);
+      border: 1px solid rgba(88, 166, 255, 0.3);
+      color: var(--blue);
+      font-weight: 600;
+    }
+
+    .window-title-links {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .window-title-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.78rem;
+      transition: color 0.12s;
+    }
+    .window-title-links a:hover {
+      color: var(--blue);
+    }
+
+    /* Tab Bar (Editor File Tabs) */
+    .tab-bar-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+      background: #0d1117;
       overflow-x: auto;
     }
-    .subj-btn {
-      padding: 6px 12px;
-      border-radius: 7px;
-      border: 1px solid var(--border);
-      background: transparent;
+    .tab-list {
+      display: flex;
+      align-items: center;
+      gap: 1px;
+    }
+    .tab-btn {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 16px;
+      background: #161b22;
+      border: 0;
+      border-right: 1px solid var(--border-color);
+      border-top: 2px solid transparent;
       color: var(--text-muted);
-      font: inherit;
-      font-size: 0.82rem;
-      font-weight: 700;
+      font-family: inherit;
+      font-size: 0.84rem;
       cursor: pointer;
       white-space: nowrap;
       transition: all 0.15s ease;
     }
-    .subj-btn:hover {
-      background: var(--bg-hover);
+    .tab-btn:hover {
+      background: #1f242c;
       color: var(--text-main);
     }
-    .subj-btn.active {
-      background: var(--blue-subtle);
+    .tab-btn.active {
+      background: var(--bg-editor);
+      border-top-color: var(--blue);
+      color: var(--text-main);
+      font-weight: 700;
+    }
+    .tab-icon {
+      font-size: 0.95rem;
+    }
+
+    /* Toolbar / Controls Row */
+    .toolbar-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 6px 14px;
+      background: var(--bg-sidebar);
+      border-top: 1px solid var(--border-color);
+    }
+    .toolbar-left, .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .search-input {
+      padding: 4px 10px;
+      background: #0d1117;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.8rem;
+      width: 200px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .search-input:focus {
+      border-color: var(--blue);
+    }
+
+    .tool-btn {
+      padding: 4px 10px;
+      background: #21262d;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.78rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.12s ease;
+      user-select: none;
+    }
+    .tool-btn:hover {
+      background: #30363d;
+      border-color: #8b949e;
+    }
+    .tool-btn.active {
+      background: rgba(248, 81, 73, 0.2);
+      border-color: var(--red);
+      color: #ff7b72;
+    }
+    .tool-btn.primary {
+      background: rgba(88, 166, 255, 0.15);
       border-color: var(--blue);
       color: var(--blue);
     }
 
-    /* Controls */
-    .topbar-right {
+    /* Breadcrumbs Bar */
+    .breadcrumb-row {
+      padding: 4px 16px;
+      background: #090d12;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 0.76rem;
+      color: var(--text-muted);
       display: flex;
       align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
+      gap: 6px;
+      overflow-x: auto;
+      white-space: nowrap;
     }
-    .search-box {
-      padding: 6px 10px;
-      border-radius: 7px;
-      border: 1px solid var(--border);
-      background: var(--bg);
-      color: var(--text-main);
-      font: inherit;
+    .breadcrumb-row span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .breadcrumb-sep {
+      color: #484f58;
+    }
+    .breadcrumb-current {
+      color: var(--blue);
+      font-weight: 700;
+    }
+
+    /* 2. Main Explorer Tree Canvas */
+    main.explorer-canvas {
+      flex: 1;
+      overflow: auto; /* Both X and Y scroll smoothly */
+      padding: 12px 18px 60px;
+      background: var(--bg-editor);
+    }
+
+    /* Target Goal Banner (Compact Explorer Root) */
+    .target-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      margin-bottom: 12px;
+      background: rgba(88, 166, 255, 0.08);
+      border: 1px solid rgba(88, 166, 255, 0.25);
+      border-radius: 6px;
       font-size: 0.82rem;
-      outline: none;
-      min-width: 170px;
+      white-space: nowrap;
+      min-width: fit-content;
     }
-    .search-box:focus {
-      border-color: var(--blue);
+    .target-badge {
+      padding: 2px 6px;
+      border-radius: 3px;
+      background: var(--blue);
+      color: #010409;
+      font-weight: 900;
+      font-size: 0.7rem;
     }
-    .ctrl-btn {
-      padding: 6px 11px;
-      border-radius: 7px;
-      border: 1px solid var(--border);
-      background: var(--bg-hover);
-      color: var(--text-main);
-      font: inherit;
-      font-size: 0.8rem;
+    .target-title {
       font-weight: 700;
-      cursor: pointer;
-      transition: all 0.15s;
+      color: #c9d1d9;
     }
-    .ctrl-btn:hover {
-      border-color: var(--text-muted);
-    }
-    .ctrl-btn.active {
-      background: var(--red);
-      border-color: var(--red);
-      color: #fff;
-    }
-    .ctrl-btn.link-btn {
-      background: transparent;
-      border-color: rgba(148, 163, 184, 0.3);
+    .target-methods {
       color: var(--text-muted);
-      text-decoration: none;
-    }
-    .ctrl-btn.link-btn:hover {
-      color: var(--text-main);
-      border-color: var(--text-main);
+      font-size: 0.78rem;
     }
 
-    /* Pure Tree Canvas */
-    main.pure-canvas {
-      padding: 24px;
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-
-    /* Top Goal Banner */
-    .top-target-card {
-      margin-bottom: 20px;
-      padding: 14px 18px;
-      border: 1px solid #1e3a8a;
-      background: linear-gradient(180deg, #0f1f3d 0%, #091326 100%);
-      border-radius: 10px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-    }
-    .top-target-card h3 {
-      margin: 0 0 4px;
-      font-size: 0.95rem;
-      color: #93c5fd;
-    }
-    .top-target-card p {
-      margin: 0;
-      color: #38bdf8;
-      font-size: 0.85rem;
-      font-weight: 700;
-    }
-
-    /* Nested Details Tree Node */
-    details.tree-node {
-      margin: 4px 0;
-      border-radius: 6px;
-      transition: background 0.12s;
-    }
-    details.tree-node.exam-hit > summary {
-      background: rgba(244, 63, 94, 0.1);
-      border-left: 3px solid var(--red);
-    }
-    summary.tree-summary {
-      list-style: none;
-      cursor: pointer;
-      user-select: none;
+    /* Tree View Styling (File Explorer Look) */
+    .tree-root-container {
       display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 10px;
-      border-radius: 6px;
-      transition: background 0.12s;
-      flex-wrap: wrap;
+      flex-direction: column;
+      gap: 1px;
+      min-width: fit-content; /* Guarantees no ugly horizontal wrap */
     }
-    summary.tree-summary::-webkit-details-marker {
-      display: none;
+
+    /* Details container */
+    details.tree-item {
+      margin: 0;
+      padding: 0;
     }
-    summary.tree-summary:hover {
-      background: var(--bg-hover);
-    }
-    .toggle-arrow {
-      color: var(--text-muted);
-      font-size: 0.8rem;
-      display: inline-block;
-      transition: transform 0.15s ease;
-      width: 14px;
-      text-align: center;
-    }
-    details[open] > summary > .toggle-arrow {
+    details.tree-item[open] > summary > .twistie {
       transform: rotate(90deg);
       color: var(--blue);
     }
+    details[open] > summary .folder-closed {
+      display: none;
+    }
+    details[open] > summary .folder-open {
+      display: inline-block;
+    }
+    details:not([open]) > summary .folder-closed {
+      display: inline-block;
+    }
+    details:not([open]) > summary .folder-open {
+      display: none;
+    }
 
-    /* Node Tags */
-    .node-tag {
-      font-size: 0.72rem;
-      padding: 2px 6px;
+    /* Summary & Leaf Row */
+    .tree-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 28px;
+      line-height: 28px;
+      padding: 0 8px;
       border-radius: 4px;
-      background: var(--bg-surface);
-      color: #cbd5e1;
-      border: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      list-style: none;
+      transition: background 0.1s ease;
     }
-    .node-tag.exam {
-      background: var(--red);
-      color: #fff;
-      font-weight: 900;
-      border-color: var(--red);
-      box-shadow: 0 1px 4px rgba(244, 63, 94, 0.4);
+    summary.tree-row::-webkit-details-marker {
+      display: none;
     }
-    .node-title {
-      color: var(--text-main);
-      font-weight: 700;
-      font-size: 0.88rem;
+    .tree-row:hover {
+      background: var(--bg-hover);
     }
-    details.level-0 > summary > .node-title {
-      font-size: 1rem;
-      font-weight: 900;
-      color: var(--yellow);
+    .tree-item.exam-highlight > .tree-row,
+    .tree-row.leaf.exam-highlight {
+      background: rgba(248, 81, 73, 0.08);
+      border-left: 2px solid var(--red);
     }
-    details.level-1 > summary > .node-title {
-      font-size: 0.92rem;
+
+    /* Twistie Arrow */
+    .twistie {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      transition: transform 0.12s ease;
+      flex-shrink: 0;
+    }
+    .twistie.spacer {
+      visibility: hidden;
+    }
+
+    /* Icon (Folder / File / Method) */
+    .node-icon {
+      font-size: 0.95rem;
+      flex-shrink: 0;
+      width: 18px;
+      text-align: center;
+    }
+    .node-icon.leaf-icon {
+      font-size: 0.85rem;
       color: var(--blue);
     }
 
-    /* Shapes */
-    .node-shapes {
-      font-size: 0.76rem;
-      color: var(--text-muted);
-      margin-left: auto;
-      display: flex;
-      gap: 6px;
+    /* Function Name (PROMINENT, ALWAYS ON THE LEFT) */
+    .node-name {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text-main);
+      font-family: var(--font-mono);
+      flex-shrink: 0;
     }
-    .shape-in { color: #94a3b8; }
-    .shape-out { color: var(--green); font-weight: 700; }
+    .level-0 > summary > .node-name {
+      font-size: 0.96rem;
+      font-weight: 800;
+      color: var(--yellow);
+    }
+    .level-1 > summary > .node-name {
+      color: #79c0ff;
+    }
 
-    /* Children Indentation & Lines */
+    /* Exam Badge (Immediate behind name if applicable) */
+    .exam-pill {
+      font-size: 0.68rem;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: var(--red);
+      color: #fff;
+      font-weight: 800;
+      flex-shrink: 0;
+      box-shadow: 0 1px 4px rgba(248, 81, 73, 0.4);
+    }
+
+    /* Explanations & Tensor Shapes (ALWAYS BEHIND / TRAILING) */
+    .node-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-left: 18px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      opacity: 0.85;
+      transition: opacity 0.12s;
+    }
+    .tree-row:hover .node-meta {
+      opacity: 1;
+    }
+
+    /* Tensor Shapes Badge */
+    .shape-container {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.74rem;
+    }
+    .shape-tag {
+      padding: 1px 6px;
+      border-radius: 3px;
+      background: rgba(110, 118, 129, 0.15);
+      border: 1px solid rgba(110, 118, 129, 0.3);
+      color: #8b949e;
+      font-family: var(--font-mono);
+    }
+    .shape-tag.out {
+      background: rgba(63, 185, 80, 0.12);
+      border-color: rgba(63, 185, 80, 0.3);
+      color: #7ee787;
+      font-weight: 700;
+    }
+
+    /* Code Comment / Kind Explanation */
+    .comment-text {
+      color: #8b949e;
+      font-style: italic;
+      font-size: 0.78rem;
+    }
+    .kind-label {
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: #21262d;
+      color: #c9d1d9;
+      font-size: 0.72rem;
+      border: 1px solid var(--border-color);
+    }
+
+    /* Tree Guide Lines for Sub-branches */
     .tree-children {
-      margin-left: 20px;
+      margin-left: 14px;
       padding-left: 14px;
-      border-left: 1px dashed var(--line);
+      border-left: 1px dotted var(--tree-line);
       display: flex;
       flex-direction: column;
-      gap: 4px;
-      margin-top: 2px;
-      margin-bottom: 4px;
+      gap: 1px;
     }
 
-    /* Toast */
-    .pure-toast {
+    /* Hide Explanations Mode (When user wants 100% naked function names) */
+    .hide-explanations .node-meta {
+      display: none !important;
+    }
+
+    /* Toast Notification */
+    .toast-popup {
       position: fixed;
       bottom: 24px;
       right: 24px;
-      padding: 10px 16px;
-      border-radius: 8px;
+      padding: 8px 16px;
+      border-radius: 6px;
       background: var(--green);
-      color: #052e16;
+      color: #010409;
       font-weight: 800;
-      font-size: 0.84rem;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+      font-size: 0.82rem;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.5);
       opacity: 0;
       transform: translateY(10px);
       transition: all 0.2s ease;
       pointer-events: none;
+      z-index: 100;
     }
-    .pure-toast.show {
+    .toast-popup.show {
       opacity: 1;
       transform: translateY(0);
     }
 
-    @media (max-width: 800px) {
-      header.pure-topbar { padding: 10px 14px; }
-      .search-box { width: 100%; }
-      .node-shapes { margin-left: 0; width: 100%; }
+    /* Status Bar (VS Code Bottom Bar) */
+    footer.status-bar {
+      height: 22px;
+      background: #090d12;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .status-left, .status-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
   </style>
 </head>
 <body>
 
-  <header class="pure-topbar">
-    <div class="topbar-left">
-      <a class="brand-title" href="../">
-        <span>🌳 최상위 탑다운 트리</span>
-        <span class="pure-pill">호출 계층 구조</span>
-      </a>
-      <nav class="subj-nav" aria-label="과목 탭">
-        <button class="subj-btn active" data-subject="llm" type="button">01 · LLM</button>
-        <button class="subj-btn" data-subject="rag" type="button">02 · RAG</button>
-        <button class="subj-btn" data-subject="data" type="button">03 · DATA</button>
-        <button class="subj-btn" data-subject="vision" type="button">04 · VISION</button>
-        <button class="subj-btn" data-subject="on-device" type="button">05 · ON-DEVICE</button>
-      </nav>
-    </div>
+  <div class="app-shell">
+    <!-- Topbar: Window Title & Editor Tabs -->
+    <header class="explorer-topbar">
+      <div class="window-title-row">
+        <div class="window-title-left">
+          <div class="window-dots">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green"></span>
+          </div>
+          <span class="window-title-text">
+            <span>📁 AI Specialist Pipeline Explorer</span>
+            <span class="window-badge">Top-Down Call Graph</span>
+          </span>
+        </div>
+        <div class="window-title-links">
+          <a href="../">🏠 시험 홈</a>
+          <a href="index.html">📖 상세 설명 뷰</a>
+        </div>
+      </div>
 
-    <div class="topbar-right">
-      <input type="text" id="pureSearch" class="search-box" placeholder="🔍 함수 / 텐서 검색..." />
-      <button id="btnPureExpand" class="ctrl-btn" type="button">모두 펼치기</button>
-      <button id="btnPureCollapse" class="ctrl-btn" type="button">모두 접기</button>
-      <button id="btnPureLevel1" class="ctrl-btn" type="button">진입점만</button>
-      <button id="btnPureExam" class="ctrl-btn" type="button">🔥 기출만</button>
-      <button id="btnPureCopy" class="ctrl-btn" type="button">📋 전체 복사</button>
-      <a href="index.html" class="ctrl-btn link-btn">📖 설명 포함 뷰로</a>
-    </div>
-  </header>
+      <!-- VS Code File Tabs -->
+      <div class="tab-bar-row">
+        <nav class="tab-list" aria-label="과목 탭">
+          <button class="tab-btn active" data-subject="llm" type="button">
+            <span class="tab-icon">🐍</span> llm_pipeline.py
+          </button>
+          <button class="tab-btn" data-subject="rag" type="button">
+            <span class="tab-icon">🔍</span> rag_pipeline.py
+          </button>
+          <button class="tab-btn" data-subject="data" type="button">
+            <span class="tab-icon">📊</span> data_pipeline.py
+          </button>
+          <button class="tab-btn" data-subject="vision" type="button">
+            <span class="tab-icon">👁️</span> vision_pipeline.py
+          </button>
+          <button class="tab-btn" data-subject="on-device" type="button">
+            <span class="tab-icon">📱</span> ondevice_pipeline.py
+          </button>
+        </nav>
+      </div>
 
-  <main class="pure-canvas" id="pureCanvas">
-    <!-- Generated dynamically -->
-  </main>
+      <!-- Action Toolbar -->
+      <div class="toolbar-row">
+        <div class="toolbar-left">
+          <input type="text" id="treeSearch" class="search-input" placeholder="🔍 함수 / 심볼 검색 (Ctrl+F)..." />
+          <button id="btnExpandAll" class="tool-btn" type="button">모두 펼치기</button>
+          <button id="btnCollapseAll" class="tool-btn" type="button">모두 접기</button>
+          <button id="btnTopLevelOnly" class="tool-btn" type="button">진입점만</button>
+          <button id="btnToggleExam" class="tool-btn" type="button">🔥 기출만</button>
+          <button id="btnToggleMeta" class="tool-btn primary" type="button">💬 설명 보이기/숨기기</button>
+        </div>
+        <div class="toolbar-right">
+          <button id="btnCopyAscii" class="tool-btn" type="button">📋 아스키 트리 복사</button>
+        </div>
+      </div>
 
-  <div id="pureToast" class="pure-toast">전체 트리 텍스트가 복사되었습니다!</div>
+      <!-- Breadcrumbs Bar -->
+      <div class="breadcrumb-row">
+        <span>📁 workspace</span>
+        <span class="breadcrumb-sep">/</span>
+        <span>AI_Specialist</span>
+        <span class="breadcrumb-sep">/</span>
+        <span id="breadcrumbSubject" class="breadcrumb-current">llm_pipeline.py</span>
+      </div>
+    </header>
+
+    <!-- Main Tree Canvas -->
+    <main class="explorer-canvas" id="explorerCanvas">
+      <!-- Injected via JavaScript -->
+    </main>
+
+    <!-- Status Bar -->
+    <footer class="status-bar">
+      <div class="status-left">
+        <span class="status-item">🔀 UTF-8</span>
+        <span class="status-item">Python 3.10</span>
+        <span class="status-item" id="statusNodeCount">Node: 0</span>
+      </div>
+      <div class="status-right">
+        <span class="status-item" id="statusExamCount">🔥 기출: 0</span>
+        <span class="status-item">Top-Down Verified ✓</span>
+      </div>
+    </footer>
+  </div>
+
+  <div id="toastPopup" class="toast-popup">클립보드에 복사되었습니다!</div>
 
   <script src="../assets/js/pipeline-tree-data.js"></script>
   <script>
@@ -344,24 +619,36 @@
 
       let currentSubj = 'llm';
       let examOnly = false;
+      let showMeta = true;
       const dataset = window.PIPELINE_TREE_DATA || {};
+
+      const fileNames = {
+        'llm': 'llm_pipeline.py',
+        'rag': 'rag_pipeline.py',
+        'data': 'data_pipeline.py',
+        'vision': 'vision_pipeline.py',
+        'on-device': 'ondevice_pipeline.py'
+      };
 
       function init() {
         const params = new URLSearchParams(window.location.search);
         const subj = params.get('subject')?.toLowerCase();
         if (subj && dataset[subj]) currentSubj = subj;
 
-        $$('.subj-btn').forEach(btn => {
+        // Tabs
+        $$('.tab-btn').forEach(btn => {
           btn.classList.toggle('active', btn.dataset.subject === currentSubj);
           btn.addEventListener('click', () => switchSubject(btn.dataset.subject));
         });
 
-        $('#btnPureExpand')?.addEventListener('click', () => setAllDetails(true));
-        $('#btnPureCollapse')?.addEventListener('click', () => setAllDetails(false));
-        $('#btnPureLevel1')?.addEventListener('click', showLevel0Only);
-        $('#btnPureExam')?.addEventListener('click', toggleExamFilter);
-        $('#btnPureCopy')?.addEventListener('click', copyTree);
-        $('#pureSearch')?.addEventListener('input', e => handleSearch(e.target.value));
+        // Controls
+        $('#btnExpandAll')?.addEventListener('click', () => setAllDetails(true));
+        $('#btnCollapseAll')?.addEventListener('click', () => setAllDetails(false));
+        $('#btnTopLevelOnly')?.addEventListener('click', showTopLevelOnly);
+        $('#btnToggleExam')?.addEventListener('click', toggleExamFilter);
+        $('#btnToggleMeta')?.addEventListener('click', toggleMeta);
+        $('#btnCopyAscii')?.addEventListener('click', copyAsciiTree);
+        $('#treeSearch')?.addEventListener('input', e => handleSearch(e.target.value));
 
         renderTree();
       }
@@ -369,61 +656,110 @@
       function switchSubject(subj) {
         if (!dataset[subj]) return;
         currentSubj = subj;
-        $$('.subj-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.subject === subj));
+        $$('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.subject === subj));
+        
+        const b = $('#breadcrumbSubject');
+        if (b) b.textContent = fileNames[subj] || `${subj}.py`;
+
         const url = new URL(window.location);
         url.searchParams.set('subject', subj);
         window.history.replaceState({}, '', url);
+
         renderTree();
       }
 
       function renderNode(node, level = 0) {
         const hasChildren = node.children && node.children.length > 0;
-        let childrenHtml = '';
+        
+        // Explanations / Metadata (Placed strictly BEHIND the name)
+        let metaHtml = '';
+        const shapeTags = [];
+        if (node.inShape && node.inShape !== '-') {
+          shapeTags.push(`<span class="shape-tag in">[In: ${esc(node.inShape)}]</span>`);
+        }
+        if (node.outShape && node.outShape !== '-') {
+          shapeTags.push(`<span class="shape-tag out">➔ [Out: ${esc(node.outShape)}]</span>`);
+        }
+
+        const parts = [];
+        if (shapeTags.length) {
+          parts.push(`<div class="shape-container">${shapeTags.join('')}</div>`);
+        }
+        if (node.kind) {
+          parts.push(`<span class="kind-label">${esc(node.kind)}</span>`);
+        }
+        if (node.desc) {
+          parts.push(`<span class="comment-text">// ${esc(node.desc)}</span>`);
+        }
+
+        if (parts.length) {
+          metaHtml = `<div class="node-meta">${parts.join('')}</div>`;
+        }
+
+        const examBadge = node.isExam ? `<span class="exam-pill">🔥 기출</span>` : '';
+
         if (hasChildren) {
-          childrenHtml = `
+          const childrenHtml = `
             <div class="tree-children">
-              ${node.children.map(child => renderNode(child, level + 1)).join('')}
+              ${node.children.map(c => renderNode(c, level + 1)).join('')}
+            </div>
+          `;
+          return `
+            <details class="tree-item level-${level} ${node.isExam ? 'exam-highlight' : ''}" open>
+              <summary class="tree-row">
+                <span class="twistie">▶</span>
+                <span class="node-icon folder folder-closed">📁</span>
+                <span class="node-icon folder folder-open">📂</span>
+                <span class="node-name">${esc(node.name)}</span>
+                ${examBadge}
+                ${metaHtml}
+              </summary>
+              ${childrenHtml}
+            </details>
+          `;
+        } else {
+          return `
+            <div class="tree-row leaf level-${level} ${node.isExam ? 'exam-highlight' : ''}">
+              <span class="twistie spacer">•</span>
+              <span class="node-icon leaf-icon">λ</span>
+              <span class="node-name">${esc(node.name)}</span>
+              ${examBadge}
+              ${metaHtml}
             </div>
           `;
         }
-
-        let shapesHtml = '';
-        if (node.inShape || node.outShape) {
-          shapesHtml = `
-            <div class="node-shapes">
-              ${node.inShape ? `<span class="shape-in">[In: ${esc(node.inShape)}]</span>` : ''}
-              ${node.outShape ? `<span class="shape-out">➔ [Out: ${esc(node.outShape)}]</span>` : ''}
-            </div>
-          `;
-        }
-
-        return `
-          <details class="tree-node level-${level} ${node.isExam ? 'exam-hit' : ''}" open>
-            <summary class="tree-summary">
-              <span class="toggle-arrow">${hasChildren ? '▶' : '•'}</span>
-              ${node.kind ? `<span class="node-tag ${node.isExam ? 'exam' : ''}">${esc(node.kind)}</span>` : ''}
-              <span class="node-title">${esc(node.name)}</span>
-              ${shapesHtml}
-            </summary>
-            ${childrenHtml}
-          </details>
-        `;
       }
 
       function renderTree() {
         const data = dataset[currentSubj];
-        const canvas = $('#pureCanvas');
+        const canvas = $('#explorerCanvas');
         if (!data || !canvas) return;
+
+        let totalNodes = 0;
+        let totalExams = 0;
+        function count(nodes) {
+          for (const n of nodes) {
+            totalNodes++;
+            if (n.isExam) totalExams++;
+            if (n.children) count(n.children);
+          }
+        }
+        if (data.top_down_trees) count(data.top_down_trees);
+
+        $('#statusNodeCount').textContent = `Nodes: ${totalNodes}`;
+        $('#statusExamCount').textContent = `🔥 기출: ${totalExams}`;
 
         const trees = data.top_down_trees || [];
         const treeNodesHtml = trees.map(t => renderNode(t, 0)).join('');
 
+        canvas.className = 'explorer-canvas' + (showMeta ? '' : ' hide-explanations');
         canvas.innerHTML = `
-          <div class="top-target-card">
-            <h3>🎯 ${esc(data.root?.title || '최상위 실행 목표')}</h3>
-            <p>${esc(data.root?.methods || '')}</p>
+          <div class="target-banner">
+            <span class="target-badge">TOP-LEVEL TARGET</span>
+            <span class="target-title">${esc(data.root?.title || '최상위 실행 파이프라인')}</span>
+            <span class="target-methods">${esc(data.root?.methods || '')}</span>
           </div>
-          <div class="top-down-container">
+          <div class="tree-root-container">
             ${treeNodesHtml}
           </div>
         `;
@@ -432,52 +768,58 @@
       }
 
       function setAllDetails(isOpen) {
-        $$('#pureCanvas details').forEach(d => d.open = isOpen);
+        $$('#explorerCanvas details').forEach(d => d.open = isOpen);
       }
 
-      function showLevel0Only() {
-        $$('#pureCanvas details.level-0').forEach(d => d.open = true);
-        $$('#pureCanvas details.tree-node:not(.level-0)').forEach(d => d.open = false);
+      function showTopLevelOnly() {
+        $$('#explorerCanvas details.level-0').forEach(d => d.open = true);
+        $$('#explorerCanvas details.tree-item:not(.level-0)').forEach(d => d.open = false);
       }
 
       function toggleExamFilter() {
         examOnly = !examOnly;
-        $('#btnPureExam')?.classList.toggle('active', examOnly);
+        $('#btnToggleExam')?.classList.toggle('active', examOnly);
         applyExamFilter();
       }
 
       function applyExamFilter() {
-        $$('.tree-node').forEach(item => {
+        $$('.tree-item, .tree-row.leaf').forEach(item => {
           if (examOnly) {
-            item.style.display = item.classList.contains('exam-hit') ? '' : 'none';
+            item.style.display = item.classList.contains('exam-highlight') ? '' : 'none';
           } else {
             item.style.display = '';
           }
         });
       }
 
+      function toggleMeta() {
+        showMeta = !showMeta;
+        $('#explorerCanvas')?.classList.toggle('hide-explanations', !showMeta);
+        $('#btnToggleMeta')?.classList.toggle('primary', showMeta);
+      }
+
       function handleSearch(q) {
         const keyword = q.toLowerCase().trim();
-        $$('.tree-node').forEach(item => {
+        $$('.tree-item, .tree-row.leaf').forEach(item => {
           const text = item.textContent.toLowerCase();
           const match = !keyword || text.includes(keyword);
           item.style.display = match ? '' : 'none';
           if (keyword && match) {
-            item.open = true;
             let parent = item.parentElement?.closest('details');
             while (parent) {
               parent.open = true;
+              parent.style.display = '';
               parent = parent.parentElement?.closest('details');
             }
           }
         });
       }
 
-      function copyTree() {
+      function copyAsciiTree() {
         const data = dataset[currentSubj];
         if (!data?.ascii) return;
         navigator.clipboard.writeText(data.ascii).then(() => {
-          const toast = $('#pureToast');
+          const toast = $('#toastPopup');
           if (toast) {
             toast.classList.add('show');
             setTimeout(() => toast.classList.remove('show'), 2000);

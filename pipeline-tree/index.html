@@ -585,6 +585,166 @@
       .tree-children::before { left: 8px; }
       .tree-func-node::before { left: -12px; width: 12px; }
     }
+  
+    /* ==========================================================================
+       File Explorer Top-Down Tree Layout
+       ========================================================================== */
+    .top-down-interactive-group {
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px 20px;
+      overflow-x: auto;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+      min-width: 100%;
+    }
+    .tree-item {
+      margin: 0;
+      padding: 0;
+    }
+    .tree-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 30px;
+      line-height: 30px;
+      padding: 0 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      list-style: none;
+      transition: background 0.1s ease;
+    }
+    summary.tree-row::-webkit-details-marker {
+      display: none;
+    }
+    .tree-row:hover {
+      background: #f1f5f9;
+    }
+    .tree-item.exam-highlight > .tree-row,
+    .tree-row.leaf.exam-highlight {
+      background: #fff1f2;
+      border-left: 3px solid #e11d48;
+    }
+
+    .twistie {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      font-size: 0.72rem;
+      color: #94a3b8;
+      transition: transform 0.12s ease;
+      flex-shrink: 0;
+    }
+    details[open] > summary > .twistie {
+      transform: rotate(90deg);
+      color: #2563eb;
+    }
+    .twistie.spacer {
+      visibility: hidden;
+    }
+
+    .folder-icon {
+      font-size: 0.95rem;
+      flex-shrink: 0;
+    }
+    details[open] > summary .folder-icon.closed { display: none; }
+    details[open] > summary .folder-icon.open { display: inline-block; }
+    details:not([open]) > summary .folder-icon.closed { display: inline-block; }
+    details:not([open]) > summary .folder-icon.open { display: none; }
+
+    .leaf-icon {
+      font-size: 0.85rem;
+      color: #2563eb;
+      font-weight: 800;
+      flex-shrink: 0;
+      width: 16px;
+      text-align: center;
+    }
+
+    .func-signature {
+      font-family: Consolas, "Courier New", monospace;
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: #0f172a;
+      flex-shrink: 0;
+    }
+    .level-0 > summary > .func-signature {
+      font-size: 0.98rem;
+      font-weight: 900;
+      color: #1e3a8a;
+    }
+    .level-1 > summary > .func-signature {
+      color: #2563eb;
+    }
+
+    .exam-tag {
+      font-size: 0.68rem;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: #e11d48;
+      color: #fff;
+      font-weight: 800;
+      flex-shrink: 0;
+      margin-left: 4px;
+    }
+
+    .node-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: 16px;
+      font-size: 0.78rem;
+      color: #64748b;
+      flex-shrink: 0;
+    }
+    .shape-badge {
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.74rem;
+      font-family: Consolas, monospace;
+      background: #f1f5f9;
+      color: #475569;
+      border: 1px solid #e2e8f0;
+    }
+    .shape-badge.out {
+      background: #ecfdf5;
+      color: #059669;
+      border-color: #a7f3d0;
+      font-weight: 700;
+    }
+    .kind-pill {
+      font-size: 0.72rem;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: #f1f5f9;
+      color: #334155;
+      border: 1px solid #cbd5e1;
+    }
+    .kind-pill.exam {
+      background: #e11d48;
+      color: #fff;
+      border-color: #e11d48;
+    }
+    .comment-desc {
+      color: #64748b;
+      font-style: italic;
+      font-size: 0.78rem;
+    }
+
+    .tree-children {
+      margin-left: 14px;
+      padding-left: 14px;
+      border-left: 1px dotted #cbd5e1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-top: 2px;
+      margin-bottom: 2px;
+    }
+
   </style>
 </head>
 <body>
