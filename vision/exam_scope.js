@@ -10,7 +10,7 @@ window.VISION_EXAM_SCOPE = {
     "01_ResNet18_CIFAR10.ipynb": {
       matched: ["모델의 원리 이해", "데이터 구성 원리", "관련 Library 활용", "평가 Metric 이해"],
       highlights: [
-        ["학습 이미지 변형", "transforms 출제 핵심", "T.RandomCrop(32, padding=4)\nT.RandomHorizontalFlip()\nT.ToTensor()\nT.Normalize(CIFAR10_MEAN, CIFAR10_STD)"],
+        ["🔴 2026-09 기출 1 · 학습 이미지 변형 (train_tfms)", "주석 가이드를 따라 4단계 transforms 순서 복원", "T.RandomCrop(32, padding=4)\nT.RandomHorizontalFlip()\nT.ToTensor()\nT.Normalize(CIFAR10_MEAN, CIFAR10_STD)"],
         ["CIFAR용 ResNet", "32×32 입력·10개 클래스에 맞춘 layer 교체", "model.conv1 = nn.Conv2d(3, 64, 3, 1, 1, bias=False)\nmodel.maxpool = nn.Identity()\nmodel.fc = nn.Linear(model.fc.in_features, num_classes)"],
         ["학습·정확도", "logits와 label을 loss·update·metric으로 연결", "logits = model(images)\nloss = criterion(logits, labels)\nloss.backward(); optimizer.step()\npreds = logits.argmax(dim=1)"],
       ],
@@ -18,6 +18,7 @@ window.VISION_EXAM_SCOPE = {
     "02_ViT_CIFAR10.ipynb": {
       matched: ["모델의 원리 이해", "데이터 구성 원리", "평가 Metric 이해"],
       highlights: [
+        ["🔴 2026-09 기출 2 · Transformer Residual 연결", "Attention·FFN 출력에 입력 x를 더하는 Pre-LN Residual 루프", "for attn, ff in self.layers:\n    x = attn(x) + x\n    x = ff(x) + x"],
         ["Patch Embedding", "이미지 Tensor를 Transformer token으로 변환", "[B,C,H,W] → [B,N,patch_dim] → [B,N,dim]"],
         ["Self-Attention", "Q·K·V layer의 핵심 계산", "dots = q @ k.transpose(-1, -2) * scale\nattn = dots.softmax(dim=-1)\nout = attn @ v"],
         ["분류 Loss", "logits와 label을 학습 신호로 연결", "log_probs = F.log_softmax(logits, dim=1)\nloss = F.nll_loss(log_probs, labels)"],

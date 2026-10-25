@@ -2,8 +2,6 @@
 window.INLINE_EXAM_OVERRIDES = {
   "01_ResNet18_CIFAR10.ipynb": {
     replacements: [
-      {cell: 6, id: "vision-random-flip", from: "T.RandomHorizontalFlip()"},
-      {cell: 6, id: "vision-to-tensor", from: "T.ToTensor()"},
       {cell: 11, id: "vision-accuracy-argmax", from: "preds = logits.argmax(dim=1)"},
       {cell: 11, id: "vision-train-forward", from: "logits = model(images)"},
       {cell: 11, id: "vision-train-loss", from: "loss = criterion(logits, labels)"},
@@ -13,18 +11,6 @@ window.INLINE_EXAM_OVERRIDES = {
       {cell: 15, id: "vision-predict-max", from: "conf, pred = probs.max(dim=1)"},
     ],
     blanks: [
-      {
-        id: "vision-random-flip",
-        label: "학습 이미지 좌우 반전 증강",
-        instruction: "Random Crop 뒤에 학습 이미지의 좌우 반전 증강을 적용하세요.",
-        answer: "T.RandomHorizontalFlip()",
-      },
-      {
-        id: "vision-to-tensor",
-        label: "PIL 이미지를 CHW Tensor로 변환",
-        instruction: "증강된 PIL 이미지를 [C, H, W] 범위 0~1 Tensor로 변환하세요.",
-        answer: "T.ToTensor()",
-      },
       {id: "vision-accuracy-argmax", label: "분류 logits에서 예측 클래스 선택", instruction: "[B, C] logits의 클래스 축에서 가장 큰 index를 선택하세요.", answer: "preds = logits.argmax(dim=1)"},
       {id: "vision-train-forward", label: "학습 forward", instruction: "학습 이미지 batch를 모델에 넣어 logits를 만드세요.", answer: "logits = model(images)"},
       {id: "vision-train-loss", label: "분류 loss", instruction: "모델 logits와 정답 label로 criterion loss를 계산하세요.", answer: "loss = criterion(logits, labels)"},
@@ -36,8 +22,6 @@ window.INLINE_EXAM_OVERRIDES = {
   },
   "02_ViT_CIFAR10.ipynb": {
     replacements: [
-      {cell: 9, id: "vision-vit-residual-attn", from: "x = attn(x) + x"},
-      {cell: 9, id: "vision-vit-residual-ff", from: "x = ff(x) + x"},
       {cell: 11, id: "vision-vit-patch-embed", from: "x = self.to_patch_embedding(img)"},
       {cell: 11, id: "vision-vit-cls-repeat", from: "cls_tokens = repeat(self.cls_token, \"1 1 d -> b 1 d\", b=b)"},
       {cell: 11, id: "vision-vit-cls-concat", from: "x = torch.cat((cls_tokens, x), dim=1)"},
@@ -48,8 +32,6 @@ window.INLINE_EXAM_OVERRIDES = {
       {cell: 20, id: "vision-vit-eval-pred", from: "_, pred = torch.max(output, dim=1)"},
     ],
     blanks: [
-      {id: "vision-vit-residual-attn", label: "Attention residual 연결", instruction: "Attention 출력과 기존 token 표현을 더해 residual 연결을 만드세요.", answer: "x = attn(x) + x"},
-      {id: "vision-vit-residual-ff", label: "FeedForward residual 연결", instruction: "FFN 출력과 기존 token 표현을 더해 residual 연결을 만드세요.", answer: "x = ff(x) + x"},
       {id: "vision-vit-patch-embed", label: "★ 유력 · Patch embedding 생성", instruction: "[B,C,H,W] 이미지를 patch token [B,N,dim]으로 변환하세요.", answer: "x = self.to_patch_embedding(img)"},
       {id: "vision-vit-cls-repeat", label: "★ 유력 · 배치별 CLS token 복제", instruction: "학습 가능한 CLS token을 현재 batch 크기만큼 반복하세요.", answer: "cls_tokens = repeat(self.cls_token, \"1 1 d -> b 1 d\", b=b)"},
       {id: "vision-vit-cls-concat", label: "★ 유력 · CLS token을 시퀀스 앞에 결합", instruction: "CLS token과 patch token을 token 축(dim=1)에서 결합하세요.", answer: "x = torch.cat((cls_tokens, x), dim=1)"},
@@ -123,12 +105,16 @@ window.INLINE_EXAM_OVERRIDES = {
 /* 공식 출제범위의 직접 타깃: ResNet·ViT·U-Net 구조, transform, 학습 연결 */
 (() => {
   const guides = {
-    "blank-random-crop": "학습용 32×32 CIFAR 이미지를 padding=4 후 random crop하도록 transform을 작성하세요.",
-    "blank-normalize": "앞에서 정의한 CIFAR10_MEAN, CIFAR10_STD를 사용해 채널별 정규화를 적용하세요.",
+    "blank-random-crop": "[2026-09 기출 1-1] 학습용 32×32 CIFAR 이미지를 padding=4 후 random crop하도록 T.RandomCrop(32, padding=4)를 작성하세요.",
+    "blank-random-flip": "[2026-09 기출 1-2] Random Crop 뒤에 좌우 반전 증강 T.RandomHorizontalFlip()을 적용하세요.",
+    "blank-to-tensor": "[2026-09 기출 1-3] 증강된 PIL 이미지를 (C,H,W) 범위 0~1 Tensor로 바꾸는 T.ToTensor()를 작성하세요.",
+    "blank-normalize": "[2026-09 기출 1-4] 앞에서 정의한 CIFAR10_MEAN, CIFAR10_STD를 사용해 T.Normalize(CIFAR10_MEAN, CIFAR10_STD) 정규화를 적용하세요.",
     "blank-cifar-stem": "CIFAR-10의 32×32 입력에 맞는 3→64, kernel=3, stride=1, padding=1 Conv2d stem을 선언하세요.",
     "blank-vit-qkv": "토큰 dim을 Q·K·V 세 덩어리로 동시에 투영하도록 inner_dim*3 출력 Linear layer를 만드세요.",
     "blank-vit-scores": "분리된 Q와 K의 head별 내적을 계산하고 self.scale을 곱해 attention score [B,H,N,N]를 만드세요.",
     "blank-vit-weighted-sum": "attention weight [B,H,N,N]로 V [B,H,N,D]를 가중합해 token representation을 만드세요.",
+    "blank-vit-residual-attn": "[2026-09 기출 2-1] Attention 결과를 입력 x에 더하는 Residual 연결(x = attn(x) + x)을 작성하세요.",
+    "blank-vit-residual-ff": "[2026-09 기출 2-2] FFN 결과를 입력 x에 더하는 Residual 연결(x = ff(x) + x)을 작성하세요.",
     "blank-detr-resize": "DETR 입력 transform에서 이미지의 짧은 변 기준 크기를 800으로 맞추세요.",
     "blank-detr-normalize": "사전학습 DETR이 기대하는 ImageNet RGB mean/std 정규화를 적용하세요.",
     "blank-detr-model": "facebookresearch/detr hub의 detr_resnet50 사전학습 모델을 불러오세요.",
@@ -163,10 +149,10 @@ window.INLINE_EXAM_OVERRIDES = {
   });
   Object.entries(priority).forEach(([file, ids]) => {
     (window.INLINE_EXAM_MAP?.[file]?.blanks || []).forEach((blank) => {
-      if (ids.has(blank.id) && !blank.label.startsWith("★")) blank.label = `★ 유력 · ${blank.label}`;
+      if (ids.has(blank.id) && !blank.label.startsWith("★") && !blank.label.startsWith("🔴")) blank.label = `★ 유력 · ${blank.label}`;
     });
     (window.INLINE_EXAM_OVERRIDES?.[file]?.blanks || []).forEach((blank) => {
-      if (ids.has(blank.id) && !blank.label.startsWith("★")) blank.label = `★ 유력 · ${blank.label}`;
+      if (ids.has(blank.id) && !blank.label.startsWith("★") && !blank.label.startsWith("🔴")) blank.label = `★ 유력 · ${blank.label}`;
     });
   });
 })();

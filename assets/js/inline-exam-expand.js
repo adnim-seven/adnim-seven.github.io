@@ -20,7 +20,7 @@
   const ruleSets = {
     // LLM: 구조ㆍ학습ㆍ데이터 구성 흐름
     "Chapter_3_Excercise_Attention.ipynb": ["self.head_dim =", "keys = keys.view", "context_vec = context_vec.contiguous"],
-    "Chapter_4_Excercise_GPT.ipynb": ["self.tok_emb =", "self.pos_emb =", "self.out_head ="],
+    "Chapter_4_Excercise_GPT.ipynb": [],
     "Chapter_5_Excercise_Pretraining.ipynb": ["optimizer.zero_grad", "loss.backward", "optimizer.step"],
     "Chapter_6_Excercise_Finetuning_Classification.ipynb": ["self.encoded_texts =", "label =", "return torch.tensor"],
     "Chapter_6_Excercise_Finetuning_Classification_LoRA.ipynb": ["self.B =", "return self.alpha", "model ="],
@@ -121,7 +121,7 @@
   for (const [file, exam] of Object.entries(set)) {
     window.INLINE_EXAM_ORIGINAL_IDS[file] = exam.blanks.map((blank) => blank.id);
     exam.blanks.forEach((blank) => {
-      if (!blank.label.startsWith("🔵")) blank.label = `🔵 원본 · ${blank.label}`;
+      if (!blank.label.startsWith("🔵") && !blank.label.startsWith("🔴")) blank.label = `🔵 원본 · ${blank.label}`;
     });
     const wanted = ruleSets[file] || [];
     wanted.forEach((needle, index) => toBlank(exam, needle, index + 1));

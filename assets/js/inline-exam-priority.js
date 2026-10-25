@@ -2,7 +2,7 @@
   const decorate = () => {
     document.querySelectorAll(".inline-code-cell").forEach((cell) => {
       const important = [...cell.querySelectorAll(".inline-check-row strong")]
-        .some((label) => label.textContent.trim().startsWith("★"));
+        .some((label) => label.textContent.trim().startsWith("★") || label.textContent.trim().startsWith("🔴"));
       if (!important || cell.classList.contains("has-priority-question")) return;
       cell.classList.add("has-priority-question");
       const title = cell.querySelector(".cell-title");

@@ -4,6 +4,13 @@
   if (!course || !exams) return;
   const $ = (s) => document.querySelector(s), esc = (v) => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const canonical = (v) => String(v || "").trim().replace(/\s+/g, "").replace(/'/g, '"');
+  const isCorrectInline = (val, ans) => {
+    const u = canonical(val).replace(/,+$/, ""), a = canonical(ans).replace(/,+$/, "");
+    if (u === a) return true;
+    if (a === "x=attn(x)+x" && (u === "x=x+attn(x)" || u === "attn(x)+x" || u === "x+attn(x)")) return true;
+    if (a === "x=ff(x)+x" && (u === "x=x+ff(x)" || u === "ff(x)+x" || u === "x+ff(x)")) return true;
+    return false;
+  };
   let view = "exam", blankIndex = 0, renderTimer = null;
   const pathFile = () => ($("#chapterPath")?.textContent || "").split("›").pop().trim();
   const current = () => {
@@ -114,7 +121,7 @@
   const check = (id) => {
     const exam = current(), blank = exam?.blanks.find(x => x.id === id), input = document.querySelector(`[data-inline-answer="${id}"]`);
     if (!blank || !input?.value.trim()) return;
-    const correct = canonical(input.value) === canonical(blank.answer);
+    const correct = isCorrectInline(input.value, blank.answer);
     const feedback = $("#inline-feedback-" + id);
     input.classList.toggle("correct", correct);
     input.classList.toggle("wrong", !correct);
@@ -130,7 +137,7 @@
     if (!exam || !target) return;
     const answers = exam.blanks.map(b => document.querySelector(`[data-inline-answer="${b.id}"]`)?.value || "");
     const filled = answers.filter(x => x.trim()).length;
-    const right = answers.filter((a, i) => canonical(a) === canonical(exam.blanks[i].answer)).length;
+    const right = answers.filter((a, i) => isCorrectInline(a, exam.blanks[i].answer)).length;
     target.textContent = `문제 ${blankIndex + 1}/${exam.blanks.length} · 작성 ${filled}개 · 현재 정답 ${right}개`;
   };
 

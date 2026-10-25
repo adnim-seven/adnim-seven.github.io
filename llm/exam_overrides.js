@@ -893,71 +893,65 @@ x = self.????(x)
 x = self.drop_shortcut(x)
 x = x + shortcut`,
       explanation:"첫 residual 가지는 토큰 간 정보를 모으는 self.att, 두 번째는 토큰별 표현을 변환하는 self.ff입니다.",tensor_flow:"두 가지 모두 [B,T,D] → [B,T,D], 따라서 shortcut과 덧셈 가능",code_signal:"norm1은 att 앞, norm2는 ff 앞이라는 __init__ 구성과 주석이 대응됩니다.",retry:"두 residual 가지의 역할을 '관계 수집/개별 변환'으로 구분하세요."}),
-    make({id:"exam-llm04-05",topic:"GPT 입출력 레이어",difficulty:"3 · 모델 구성",sourceId:"exam-ch4-model-layers",
-      prompt:"token·position Embedding과 vocab logits 출력 head의 완성된 세 줄을 작성하세요.",answer:cells["exam-ch4-model-layers"],
-      accepted_answers:[cells["exam-ch4-model-layers"], cells["exam-ch4-model-layers"].replace(/nn\./g, 'torch.nn.')],
-      problem_context:`# 토큰 임베딩: token ID → D
-self.tok_emb = nn.Embedding(cfg["????"], cfg["emb_dim"])
-# 위치 임베딩: position ID → D
-self.pos_emb = nn.Embedding(cfg["????"], cfg["emb_dim"])
-# 출력 헤드: D → token 후보 점수
-self.out_head = nn.Linear(cfg["emb_dim"], cfg["????"], bias=False)`,
-      explanation:"토큰 lookup 행 수와 출력 후보 수는 vocab_size이고, 위치 lookup 행 수는 최대 context_length입니다.",tensor_flow:"token [B,T]→[B,T,D], position [T]→[T,D], head [B,T,D]→[B,T,V]",code_signal:"단어 ID/단어 후보는 vocab_size, 허용 위치 수는 context_length입니다.",retry:"각 레이어의 행 개수가 무엇을 세는지 적고 다시 작성하세요."}),
-    make({id:"exam-llm04-06",topic:"GPT forward 흐름",difficulty:"3 · 연결 구현",sourceId:"exam-ch4-forward",
-      prompt:"Embedding 결합, Transformer block 통과, logits 계산의 완성된 세 줄을 작성하세요.",answer:cells["exam-ch4-forward"],
-      problem_context:`class GPTModel(nn.Module):
-    def __init__(self, cfg):
-        super().__init__()
-        self.tok_emb = nn.Embedding(cfg["vocab_size"], cfg["emb_dim"])
-        self.pos_emb = nn.Embedding(cfg["context_length"], cfg["emb_dim"])
-        self.drop_emb = nn.Dropout(cfg["drop_rate"])
-        self.trf_blocks = nn.Sequential(
-            *[TransformerBlock(cfg) for _ in range(cfg["n_layers"])]
-        )
-        self.final_norm = LayerNorm(cfg["emb_dim"])
-        self.out_head = nn.Linear(cfg["emb_dim"], cfg["vocab_size"], bias=False)
+    make({id:"exam-llm04-05",topic:"2026-09 기출 3 · GPT out_head 구현",difficulty:"2 · 모델 구성",sourceId:"exam-ch4-model-layers",
+      prompt:"[2026-09 기출 3번] 최종 정규화 출력 [B,T,emb_dim]을 어휘 사전 크기 [B,T,vocab_size] 로짓으로 변환하는 self.out_head 레이어(bias=False)를 구현하세요.",answer:"nn.Linear(cfg[\"emb_dim\"], cfg[\"vocab_size\"], bias=False)",
+      accepted_answers:["nn.Linear(cfg[\"emb_dim\"], cfg[\"vocab_size\"], bias=False)", "self.out_head = nn.Linear(cfg[\"emb_dim\"], cfg[\"vocab_size\"], bias=False)", "torch.nn.Linear(cfg[\"emb_dim\"], cfg[\"vocab_size\"], bias=False)", "self.out_head = torch.nn.Linear(cfg[\"emb_dim\"], cfg[\"vocab_size\"], bias=False)", cells["exam-ch4-model-layers"], cells["exam-ch4-model-layers"].replace(/nn\./g, 'torch.nn.')],
+      problem_context:`# 토큰 임베딩 (단어 -> 벡터)
+self.tok_emb = nn.Embedding(cfg["vocab_size"], cfg["emb_dim"])
+# 위치 임베딩 (위치 정보 -> 벡터)
+self.pos_emb = nn.Embedding(cfg["context_length"], cfg["emb_dim"])
+self.drop_emb = nn.Dropout(cfg["drop_rate"])
 
+# 최종 정규화 및 출력 헤드
+self.final_norm = LayerNorm(cfg["emb_dim"])
+# TODO
+self.out_head = ????`,
+      explanation:"최종 은닉 표현의 차원 cfg['emb_dim']을 입력받아 전체 단어 집합 크기 cfg['vocab_size']개의 로짓 점수로 선형 투영합니다. GPT-2 구조에서는 출력 헤드에 편향(bias=False)을 사용하지 않습니다.",tensor_flow:"final_norm 출력 [B,T,D] → self.out_head → logits [B,T,V]",code_signal:"바로 위 self.final_norm = LayerNorm(cfg['emb_dim'])이 입력 차원을, 다음 토큰 후보 수가 출력 차원 cfg['vocab_size']를 알려줍니다.",retry:"nn.Linear(입력 차원, 출력 차원, bias=False) 순서로 다시 작성하세요."}),
+    make({id:"exam-llm04-06",topic:"2026-09 기출 4 · 토큰·위치 임베딩 합산",difficulty:"1 · Tensor 연산",sourceId:"exam-ch4-forward",
+      prompt:"[2026-09 기출 4번] # region [토큰 임베딩과 위치 임베딩 합산] 구간에서 토큰 임베딩(tok_embeds)과 위치 임베딩(pos_embeds)을 합산하는 코드를 작성하세요.",answer:"tok_embeds + pos_embeds",
+      accepted_answers:["tok_embeds + pos_embeds", "x = tok_embeds + pos_embeds", cells["exam-ch4-forward"]],
+      problem_context:`class GPTModel(nn.Module):
     def forward(self, in_idx):
-        # in_idx: token ID batch [B,T]
         batch_size, seq_len = in_idx.shape
 
-        # 토큰·위치 임베딩 생성
+        # region [임베딩 생성]
         tok_embeds = self.tok_emb(in_idx)
         pos_embeds = self.pos_emb(torch.arange(seq_len, device=in_idx.device))
-        # TODO: 토큰 의미와 위치 정보 합산
-        x = tok_embeds + ????
+        # endregion
+
+        # region [토큰 임베딩과 위치 임베딩 합산]
+        # TODO
+        x = ????
+        # endregion
+
         x = self.drop_emb(x)
-
-        # TODO: Transformer blocks 통과
-        x = self.????(x)
+        x = self.trf_blocks(x)
         x = self.final_norm(x)
-        # TODO: vocab logits 계산
-        logits = self.????(x)
-
+        logits = self.out_head(x)
         return logits`,
-      explanation:"토큰과 위치를 더해 [B,T,D]를 만든 뒤 모든 block과 final norm을 거쳐 out_head로 vocab 차원의 logits를 냅니다.",tensor_flow:"[B,T] → [B,T,D] → [B,T,D] → [B,T,V]",code_signal:"오른쪽에 이미 정의된 pos_embeds, trf_blocks, out_head를 forward 순서대로 연결합니다.",retry:"각 줄 뒤 shape D가 언제 V로 바뀌는지 표시하세요."}),
-    make({id:"exam-llm04-07",topic:"추론 모드",difficulty:"1 · 컨텍스트",sourceId:"exam-ch4-nograd",
-      prompt:"텍스트 생성 중 gradient 기록 없이 모델을 실행하는 두 줄을 작성하세요.",answer:cells["exam-ch4-nograd"],
+      explanation:"tok_embeds [B,T,D]와 pos_embeds [T,D]를 더하면 PyTorch 브로드캐스팅을 통해 배치 내 모든 문장의 각 토큰에 위치 정보가 합산된 [B,T,D] 텐서가 만들어집니다.",tensor_flow:"tok_embeds [B,T,D] + pos_embeds [T,D] → x [B,T,D]",code_signal:"# region [토큰 임베딩과 위치 임베딩 합산] 주석과 바로 위에서 정의된 tok_embeds, pos_embeds 변수명이 답을 직접 가리킵니다.",retry:"두 임베딩 변수명을 + 연산자로 연결하세요."}),
+    make({id:"exam-llm04-07",topic:"2026-09 기출 5 · 모델 예측 (torch.no_grad)",difficulty:"1 · 컨텍스트",sourceId:"exam-ch4-nograd",
+      prompt:"[2026-09 기출 5번] 텍스트 생성 중 기울기 계산 없이(torch.no_grad) 모델에 idx_cond를 넣어 logits를 예측하는 두 줄을 작성하세요.",answer:cells["exam-ch4-nograd"],
       problem_context:`idx_cond = idx[:, -context_size:]
 # 모델 예측 (기울기 계산 불필요)
 # TODO
 with torch.????():
     logits = model(idx_cond)`,
       explanation:"생성은 파라미터를 업데이트하지 않으므로 torch.no_grad()로 autograd 기록을 끄면 메모리와 연산을 줄일 수 있습니다.",tensor_flow:"idx_cond [B,T] → model → logits [B,T,V]",code_signal:"with torch.????(): 문법과 '기울기 계산 불필요' 주석이 no_grad를 지시합니다.",retry:"학습이 아닌 추론에서 끄는 PyTorch 기능명을 떠올리세요."}),
-    make({id:"exam-llm04-08",topic:"마지막 시점 logits",difficulty:"2 · Tensor 인덱싱",sourceId:"exam-ch4-last",
-      prompt:"모든 위치의 logits에서 마지막 토큰 위치만 선택하는 완성된 줄을 작성하세요.",answer:cells["exam-ch4-last"],
-      problem_context:`# logits: [batch, n_token, vocab_size]
-# 다음 단어 예측에는 마지막 time step만 사용합니다.
+    make({id:"exam-llm04-08",topic:"2026-09 기출 6-1 · 마지막 타임스텝 logits",difficulty:"2 · Tensor 인덱싱",sourceId:"exam-ch4-last",
+      prompt:"[2026-09 기출 6-1번] (batch, n_token, vocab_size) 형태의 logits에서 마지막 타임스텝의 예측값 (batch, vocab_size)만 가져오는 코드를 작성하세요.",answer:cells["exam-ch4-last"],
+      problem_context:`# 마지막 타임스텝의 예측값만 가져옴 (다음 단어 예측이므로)
+# (batch, n_token, vocab_size) -> (batch, vocab_size)
 # TODO
 logits = logits[:, ????, :]`,
       explanation:"첫 축 batch와 마지막 축 vocab은 모두 유지하고, 시간축에서 -1을 선택합니다.",tensor_flow:"[B,T,V] → [B,V]",code_signal:"가운데 축이 n_token이며 '마지막' 인덱스는 -1입니다.",retry:"세 축 B,T,V 중 줄여야 할 축 하나를 고르세요."}),
-    make({id:"exam-llm04-09",topic:"Greedy 생성과 연결",difficulty:"3 · 생성 루프",sourceId:"exam-ch4-generate",
-      prompt:"가장 큰 logits의 token ID를 [B,1]로 선택하고 기존 idx 뒤에 붙이는 두 줄을 작성하세요.",answer:cells["exam-ch4-generate"],
-      accepted_answers:[cells["exam-ch4-generate"],"idx_next = torch.argmax(probas, dim=-1, keepdim=True)\nidx = torch.cat((idx, idx_next), dim=1)"],
-      problem_context:`# 가장 로짓값이 높은 토큰 선택
+    make({id:"exam-llm04-09",topic:"2026-09 기출 6-2 · Greedy argmax & torch.cat",difficulty:"3 · 생성 루프",sourceId:"exam-ch4-generate",
+      prompt:"[2026-09 기출 6-2번] 가장 확률(로짓값)이 높은 토큰을 선택(argmax, keepdim=True)하고 현재 시퀀스 idx 뒤에 이어 붙이는(cat, dim=1) 두 줄을 작성하세요.",answer:cells["exam-ch4-generate"],
+      accepted_answers:[cells["exam-ch4-generate"],"idx_next = torch.argmax(probas, dim=-1, keepdim=True)\nidx = torch.cat((idx, idx_next), dim=1)","logits = logits[:, -1, :]\nidx_next = torch.argmax(logits, dim=-1, keepdim=True)\nidx = torch.cat((idx, idx_next), dim=1)"],
+      problem_context:`# 가장 확률(로짓값)이 높은 토큰 선택 (Greedy Decoding)
 # TODO
 idx_next = torch.????(logits, dim=-1, keepdim=True)
-# 예측 토큰을 기존 시퀀스 뒤에 연결
+# 예측된 토큰을 현재 시퀀스 뒤에 이어 붙임
 # TODO
 idx = torch.????((idx, idx_next), dim=1)`,
       explanation:"argmax는 vocab 축의 최고 점수 ID를 고르고 keepdim=True로 [B,1]을 유지합니다. cat은 token 시간축 dim=1에 이어 붙입니다.",tensor_flow:"logits [B,V] → idx_next [B,1]; idx [B,T] → [B,T+1]",code_signal:"'가장 높은'은 argmax, '이어 붙임'은 cat이며 두 Tensor의 증가 축은 시간축입니다.",retry:"각 함수의 출력 shape을 먼저 적고 두 줄을 다시 작성하세요."})

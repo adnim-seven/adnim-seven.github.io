@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Coding Recall · 2026-09 시험 복기</title>
+  <meta name="description" content="2026-09 AI Specialist 시험 복기 원문 보관 및 출제 관점 비교·재구성">
+  <style>
+    :root{--navy:#102849;--blue:#2563eb;--ink:#17243a;--muted:#647187;--line:#dae2ee;--bg:#f3f6fb;--green:#147b4d;--red:#bd3948;--amber:#b45309}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:"Malgun Gothic","Segoe UI",sans-serif;line-height:1.65}
+    header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px max(24px,calc((100% - 1040px)/2));background:var(--navy);color:#fff}
+    .brand{color:#fff;text-decoration:none;font-weight:900;font-size:1.1rem}
+    .brand small{display:block;font-weight:600;font-size:.78rem;color:#bfdbfe}
+    .page-links{display:flex;gap:10px}
+    .home-link{padding:8px 13px;border-radius:8px;background:rgba(255,255,255,.14);color:#fff;font-weight:700;font-size:.86rem;text-decoration:none}
+    .home-link:hover{background:rgba(255,255,255,.24)}
+    main{max-width:1040px;margin:0 auto;padding:32px 20px 72px}
+    .hero-card{padding:26px;border:1px solid var(--line);border-radius:16px;background:#fff;box-shadow:0 8px 22px rgba(16,41,91,.06);margin-bottom:20px}
+    .eyebrow{display:inline-block;padding:4px 10px;border-radius:999px;background:#dbeafe;color:#1e40af;font-weight:800;font-size:.76rem;letter-spacing:.04em}
+    h1{margin:10px 0 8px;font-size:clamp(1.6rem,3.5vw,2.2rem)}
+    .notice-box{margin-top:14px;padding:14px 16px;border-left:4px solid var(--blue);border-radius:0 10px 10px 0;background:#f8fbff;font-size:.9rem;color:#334155}
+    .toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin:18px 0}
+    .toc-nav{display:flex;flex-wrap:wrap;gap:8px}
+    .toc-nav a{padding:8px 14px;border:1px solid #cbd5e1;border-radius:999px;background:#fff;color:var(--ink);font-weight:800;font-size:.86rem;text-decoration:none}
+    .toc-nav a:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
+    .view-toggle{padding:8px 14px;border:1px solid var(--blue);border-radius:9px;background:#fff;color:var(--blue);font-weight:800;font-size:.86rem;cursor:pointer}
+    .view-toggle.active{background:var(--blue);color:#fff}
+    .raw-panel{display:none;padding:22px;border:1px solid #cbd5e1;border-radius:14px;background:#0f172a;color:#e2e8f0;margin-bottom:22px}
+    .raw-panel.open{display:block}
+    .raw-panel h2{margin:0 0 10px;font-size:1.05rem;color:#93c5fd}
+    .raw-panel pre{margin:0;white-space:pre-wrap;word-break:break-word;font-size:.86rem;line-height:1.6}
+    .recall-section{padding:24px;border:1px solid var(--line);border-radius:16px;background:#fff;box-shadow:0 6px 18px rgba(16,41,91,.05);margin-bottom:18px}
+    .section-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:14px}
+    .section-head h2{margin:0;font-size:1.3rem}
+    .badge{display:inline-block;padding:4px 10px;border-radius:999px;background:#fee2e2;color:#991b1b;font-weight:800;font-size:.76rem}
+    pre.code-block{margin:10px 0 14px;padding:16px;border-radius:12px;background:#0f172a;color:#f8fafc;overflow-x:auto;font-size:.86rem;line-height:1.6}
+    .action-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+    .action-links a{padding:8px 12px;border-radius:8px;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-weight:700;font-size:.84rem;text-decoration:none}
+    .action-links a:hover{background:#2563eb;color:#fff;border-color:#2563eb}
+    .back-top{display:inline-block;margin-top:10px;color:var(--muted);font-size:.82rem;font-weight:700;text-decoration:none}
+    .foot-note{text-align:center;color:var(--muted);font-size:.85rem;margin-top:24px}
+  </style>
+  <link rel="stylesheet" href="../assets/css/global-font.css">
+</head>
+<body id="top">
+  <header>
+    <a class="brand" href="../" aria-label="AI Coding Recall 전체 홈">AI Coding Recall<small>2026-09 시험 복기 · 기출 원문 보관</small></a>
+    <nav class="page-links" aria-label="상위 이동">
+      <a class="home-link" href="../">← 전체 홈</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero-card" aria-labelledby="pageTitle">
+      <span class="eyebrow">2026-09 EXAM RECALL ARCHIVE</span>
+      <h1 id="pageTitle">2026-09 시험 복기</h1>
+      <p>직접 적어주신 복기를 별도로 보관한 탭입니다. 공식 시험지·공식 정답이 아닌 사용자 기억 기반 기록입니다.</p>
+      <div class="notice-box">
+        <strong>원문과 해설 구분</strong> · 내용·불확실한 표현·코드 표기를 임의로 고치지 않았습니다. 기본 보기는 밑줄 등의 Markdown 이스케이프만 풀어 읽기 쉽게 표시하며, 원문 보기에서는 전달된 표기를 확인할 수 있습니다. 문법과 들여쓰기가 불완전한 부분도 있어 그대로 실행할 수 있는 코드라는 뜻은 아닙니다.
+      </div>
+
+      <div class="toolbar">
+        <nav class="toc-nav" aria-label="복기 과목 바로가기">
+          <a href="#recall-0">총평</a>
+          <a href="#recall-1">LLM</a>
+          <a href="#recall-2">RAG</a>
+          <a href="#recall-3">Time / Data</a>
+          <a href="#recall-4">Vision</a>
+          <a href="#recall-5">On-device</a>
+        </nav>
+        <button id="toggleRawBtn" class="view-toggle" type="button" aria-expanded="false">원문 전체 보기</button>
+      </div>
+    </section>
+
+    <section id="rawPanel" class="raw-panel" aria-label="전달된 복기 원문 전체">
+      <h2>전달된 복기 원문 표기 그대로</h2>
+      <pre>총평: 생각보다 구체적으로 가이드가 나와, 수식 외울 필요는 없어보이고, tensor를 잘 써야할 것으로 보임.
+
+### LLM###
+1. MultiHeadAttention QKV 계산 후, 헤드 나누기
+# (b, num_tokens, d_out) -&gt; (b, num_tokens, num_heads, head_dim)
+keys = keys.view(b, num_tokens, self.num_heads, self.head_dim)
+values = values.view(b, num_tokens, self.num_heads, self.head_dim)
+queries = queries.view(b, num_tokens, self.num_heads, self.head_dim)
+
+2. self.att, MultiHeadAttention 할당하기
+self.att = MultiHeadAttention(
+    d_in=cfg["emb_dim"],
+    d_out=cfg["emb_dim"],
+    context_length=cfg["context_length"],
+    num_heads=cfg["n_heads"],
+    dropout=cfg["drop_rate"],
+    qkv_bias=cfg["qkv_bias"])
+
+3. self.out_head 구현
+self.out_head = nn.Linear(cfg["emb_dim"], cfg["vocab_size"], bias=False)
+
+4. 토큰 임베딩과 위치 임베딩 합산
+# region [토큰 임베딩과 위치 임베딩 합산]
+# TODO
+x = tok_embeds + pos_embeds
+
+5. 모델 예측 (기울기 계산 불필요)
+with torch.no_grad():
+    logits = model(idx_cond)
+
+6. generate_text
+# 마지막 타임스텝의 예측값만 가져옴 (다음 단어 예측이므로)
+# (batch, n_token, vocab_size) -&gt; (batch, vocab_size)
+logits = logits[:, -1, :]
+# 가장 확률(로짓값)이 높은 토큰 선택 (Greedy Decoding)
+idx_next = torch.argmax(logits, dim=-1, keepdim=True)
+# 예측된 토큰을 현재 시퀀스 뒤에 이어 붙임
+idx = torch.cat((idx, idx_next), dim=1)
+return idx
+
+### RAG
+비교적 간단한게 많이 나옴.
+index = VectorStoreIndex.from_documents(documents)
+query_engine = index.as_query_engine()
+messages 형식 {"role":"user", "content":"~~~~"}
+
+### Time - Data (RNNCNN)
+1. enc_dec sequence 구성
+- features.append(data[i:i + sequence_length])
+labels.append(data[i + sequence_length : \
+    i + sequence_length + target_len])
+
+2. forward 구현
+def create_enc_dec_sequences(data):
+    features, labels = [], []
+    for i in range(len(data) - sequence_length - target_len):
+        features.append(data[i:i + sequence_length])
+        labels.append(data[i + sequence_length : \
+            i + sequence_length + target_len])
+    features = np.array(features, dtype=np.float32)
+    labels = np.array(labels, dtype=np.float32)
+
+class RNNRNN(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers):
+        super(RNNRNN, self).__init__()
+        self.encoder = EncoderRNN(input_size, hidden_size, num_layers)
+        self.decoder = DecoderRNN(input_size, hidden_size, num_layers)
+    def forward(self, source, target_len):
+        h = self.encoder(source)
+        predictions = []
+        input = source[:, -1, :].unsqueeze(1)
+        for t in range(target_len):
+            out, h = self.decoder(input, h)
+            predictions.append(out.squeeze(1))
+            input = out
+        outputs = torch.stack(predictions, dim=1)
+        return outputs
+model_ = RNNRNN(input_size, hidden_size, num_layers).to(device)
+print(model_)
+
+VISION - CIFAR10
+1. train transform 구현 (Dataset)
+train_tfms = T.Compose([  # train transform(augmentation 포함)
+    T.RandomCrop(32, padding=4),  # 32x32를 padding 후 random crop
+    T.RandomHorizontalFlip(),  # 좌우 반전
+    T.ToTensor(),  # PIL -&gt; torch tensor (C,H,W), 0~1
+    T.Normalize(CIFAR10_MEAN, CIFAR10_STD),  # 정규화, -2.5~2.5
+])
+2. Transformer residual 연결
+def forward(self, x):
+    for attn, ff in self.layers:
+        x = attn(x) + x  # Residual 연결: Attention 결과를 입력에 더해 정보 보존
+        x = ff(x) + x  # Residual 연결: FFN 결과를 입력에 더해 정보 보존
+    return x
+
+### On-Device###
+1. Channel-level pruning? 무튼
+num_pruned_channel (round 쓰는거)
+importance (torch의 abs, sum 쓰라고 했음)
+# 프루닝할 채널 수 계산
+num_channels = weight.shape[1]
+num_pruned_channels = round(num_channels * sparsity)
+# 각 채널의 중요도를 절댓값 합으로 계산
+# (출력 채널, 커널 높이, 커널 너비에 대해 합산)
+importance = weight.abs().sum(dim=(0, 2, 3), keepdim=True)</pre>
+    </section>
+
+    <article id="recall-0" class="recall-section">
+      <div class="section-head">
+        <h2>총평</h2>
+        <span class="badge">2026-09 시험 총평</span>
+      </div>
+      <p><strong>총평:</strong> 생각보다 구체적으로 가이드가 나와, 수식 외울 필요는 없어보이고, tensor를 잘 써야할 것으로 보임.</p>
+      <a class="back-top" href="#top">[↑ 목차로]</a>
+    </article>
+
+    <article id="recall-1" class="recall-section">
+      <div class="section-head">
+        <h2>LLM</h2>
+        <span class="badge">Chapter_4_Excercise_GPT.ipynb · 6개 구현</span>
+      </div>
+      <pre class="code-block"><code>### LLM###
+# 1. MultiHeadAttention QKV 계산 후, 헤드 나누기
+# (b, num_tokens, d_out) -&gt; (b, num_tokens, num_heads, head_dim)
+keys = keys.view(b, num_tokens, self.num_heads, self.head_dim)
+values = values.view(b, num_tokens, self.num_heads, self.head_dim)
+queries = queries.view(b, num_tokens, self.num_heads, self.head_dim)
+
+# 2. self.att, MultiHeadAttention 할당하기
+self.att = MultiHeadAttention(
+    d_in=cfg["emb_dim"],
+    d_out=cfg["emb_dim"],
+    context_length=cfg["context_length"],
+    num_heads=cfg["n_heads"],
+    dropout=cfg["drop_rate"],
+    qkv_bias=cfg["qkv_bias"])
+
+# 3. self.out_head 구현
+self.out_head = nn.Linear(cfg["emb_dim"], cfg["vocab_size"], bias=False)
+
+# 4. 토큰 임베딩과 위치 임베딩 합산
+# region [토큰 임베딩과 위치 임베딩 합산]
+# TODO
+x = tok_embeds + pos_embeds
+
+# 5. 모델 예측 (기울기 계산 불필요)
+with torch.no_grad():
+    logits = model(idx_cond)
+
+# 6. generate_text
+# 마지막 타임스텝의 예측값만 가져옴 (다음 단어 예측이므로)
+# (batch, n_token, vocab_size) -&gt; (batch, vocab_size)
+logits = logits[:, -1, :]
+# 가장 확률(로짓값)이 높은 토큰 선택 (Greedy Decoding)
+idx_next = torch.argmax(logits, dim=-1, keepdim=True)
+# 예측된 토큰을 현재 시퀀스 뒤에 이어 붙임
+idx = torch.cat((idx, idx_next), dim=1)
+return idx</code></pre>
+      <div class="action-links">
+        <a href="../llm/">LLM 과목 홈 (실제 기출 모드로 풀기)</a>
+        <a href="../llm/inline-subjective/llm_chapter_4_subjective_test.html">Chapter 4 · GPT 인라인 주관식 시험 (기출 6문항 전체 수록)</a>
+      </div>
+      <a class="back-top" href="#top">[↑ 목차로]</a>
+    </article>
+
+    <article id="recall-2" class="recall-section">
+      <div class="section-head">
+        <h2>RAG</h2>
+        <span class="badge">2. RAG.ipynb · 3. Task_2.ipynb</span>
+      </div>
+      <pre class="code-block"><code>### RAG 비교적 간단한게 많이 나옴.
+index = VectorStoreIndex.from_documents(documents)
+query_engine = index.as_query_engine()
+# messages 형식 {"role":"user", "content":"~~~~"}</code></pre>
+      <div class="action-links">
+        <a href="../rag/">RAG 과목 홈으로 이동</a>
+        <a href="../rag/inline-subjective/rag_2_subjective_test.html">RAG 기본 파이프라인 인라인 주관식 시험</a>
+      </div>
+      <a class="back-top" href="#top">[↑ 목차로]</a>
+    </article>
+
+    <article id="recall-3" class="recall-section">
+      <div class="section-head">
+        <h2>Time / Data</h2>
+        <span class="badge">ts_practice.ipynb · Encoder-Decoder RNN</span>
+      </div>
+      <pre class="code-block"><code>### Time - Data (RNNCNN)
+# 1. enc_dec sequence 구성
+features.append(data[i:i + sequence_length])
+labels.append(data[i + sequence_length : \
+    i + sequence_length + target_len])
+
+# 2. forward 구현
+def create_enc_dec_sequences(data):
+    features, labels = [], []
+    for i in range(len(data) - sequence_length - target_len):
+        features.append(data[i:i + sequence_length])
+        labels.append(data[i + sequence_length : \
+            i + sequence_length + target_len])
+    features = np.array(features, dtype=np.float32)
+    labels = np.array(labels, dtype=np.float32)
+
+class RNNRNN(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers):
+        super(RNNRNN, self).__init__()
+        self.encoder = EncoderRNN(input_size, hidden_size, num_layers)
+        self.decoder = DecoderRNN(input_size, hidden_size, num_layers)
+
+    def forward(self, source, target_len):
+        h = self.encoder(source)
+        predictions = []
+        input = source[:, -1, :].unsqueeze(1)
+        for t in range(target_len):
+            out, h = self.decoder(input, h)
+            predictions.append(out.squeeze(1))
+            input = out
+        outputs = torch.stack(predictions, dim=1)
+        return outputs
+
+model_ = RNNRNN(input_size, hidden_size, num_layers).to(device)
+print(model_)</code></pre>
+      <div class="action-links">
+        <a href="../data/">Data 과목 홈으로 이동</a>
+        <a href="../data/inline-subjective/data_timeseries_subjective_test.html">Time Series 인라인 주관식 시험</a>
+      </div>
+      <a class="back-top" href="#top">[↑ 목차로]</a>
+    </article>
+
+    <article id="recall-4" class="recall-section">
+      <div class="section-head">
+        <h2>Vision</h2>
+        <span class="badge">01_ResNet18_CIFAR10.ipynb · 02_ViT_CIFAR10.ipynb</span>
+      </div>
+      <pre class="code-block"><code># VISION - CIFAR10
+# 1. train transform 구현 (Dataset)
+train_tfms = T.Compose([  # train transform(augmentation 포함)
+    T.RandomCrop(32, padding=4),  # 32x32를 padding 후 random crop
+    T.RandomHorizontalFlip(),  # 좌우 반전
+    T.ToTensor(),  # PIL -&gt; torch tensor (C,H,W), 0~1
+    T.Normalize(CIFAR10_MEAN, CIFAR10_STD),  # 정규화, -2.5~2.5
+])
+
+# 2. Transformer residual 연결
+def forward(self, x):
+    for attn, ff in self.layers:
+        x = attn(x) + x  # Residual 연결: Attention 결과를 입력에 더해 정보 보존
+        x = ff(x) + x    # Residual 연결: FFN 결과를 입력에 더해 정보 보존
+    return x</code></pre>
+      <div class="action-links">
+        <a href="../vision/">Vision 과목 홈으로 이동</a>
+        <a href="../vision/inline-subjective/vision_resnet18_subjective_test.html">ResNet18 CIFAR10 인라인 주관식 시험</a>
+        <a href="../vision/inline-subjective/vision_vit_subjective_test.html">ViT CIFAR10 인라인 주관식 시험</a>
+      </div>
+      <a class="back-top" href="#top">[↑ 목차로]</a>
+    </article>
+
+    <article id="recall-5" class="recall-section">
+      <div class="section-head">
+        <h2>On-device</h2>
+        <span class="badge">1. Pruning for CNN.ipynb · Channel Pruning</span>
+      </div>
+      <pre class="code-block"><code>### On-Device###
+# 1. Channel-level pruning? 무튼
+# num_pruned_channel (round 쓰는거)
+# importance (torch의 abs, sum 쓰라고 했음)
+# 프루닝할 채널 수 계산
+num_channels = weight.shape[1]
+num_pruned_channels = round(num_channels * sparsity)
+# 각 채널의 중요도를 절댓값 합으로 계산
+# (출력 채널, 커널 높이, 커널 너비에 대해 합산)
+importance = weight.abs().sum(dim=(0, 2, 3), keepdim=True)</code></pre>
+      <div class="action-links">
+        <a href="../on-device/">On-device AI 과목 홈으로 이동</a>
+        <a href="../on-device/inline-subjective/ondevice_pruning_cnn_subjective_test.html">CNN Pruning 인라인 주관식 시험</a>
+      </div>
+      <a class="back-top" href="#top">[↑ 목차로]</a>
+    </article>
+
+    <p class="foot-note">사용자 제공 복기 원문 보관 · 문제은행 보강과 암기 해설은 각 과목 페이지에 반영됨</p>
+  </main>
+
+  <script>
+    const btn = document.getElementById('toggleRawBtn');
+    const panel = document.getElementById('rawPanel');
+    btn.addEventListener('click', () => {
+      const open = panel.classList.toggle('open');
+      btn.classList.toggle('active', open);
+      btn.setAttribute('aria-expanded', String(open));
+      btn.textContent = open ? '원문 전체 닫기' : '원문 전체 보기';
+    });
+  </script>
+</body>
+</html>
