@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Specialist · 종합 통합 파이프라인 트리 (Collapse / Expand)</title>
+  <meta name="description" content="AI Specialist 코드 구현 시험 대비 5개 전 과목 종합 통합 파이프라인 트리. 함수와 클래스의 상하 의존성, 텐서 shape, 핵심 코드를 접고 펼치며 학습합니다.">
+  <link rel="stylesheet" href="../assets/css/global-font.css">
+  <style>
+    :root {
+      --navy: #0f2444;
+      --navy-dark: #09172e;
+      --blue: #2563eb;
+      --blue-hover: #1d4ed8;
+      --blue-soft: #eff6ff;
+      --ink: #0f172a;
+      --text-muted: #64748b;
+      --line: #cbd5e1;
+      --line-subtle: #e2e8f0;
+      --canvas: #f8fafc;
+      --white: #ffffff;
+      --red: #e11d48;
+      --red-soft: #fff1f2;
+      --green: #10b981;
+      --green-soft: #ecfdf5;
+      --amber: #f59e0b;
+      --amber-soft: #fffbeb;
+      --purple: #8b5cf6;
+      --purple-soft: #f5f3ff;
+      --code-bg: #0f172a;
+      --code-color: #38bdf8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: "Malgun Gothic", "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+
+    /* Topbar */
+    header.topbar {
+      height: 68px;
+      padding: 0 max(20px, calc((100vw - 1400px) / 2));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--navy);
+      color: var(--white);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: 0 4px 16px rgba(7, 26, 52, 0.25);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--white);
+      text-decoration: none;
+      font-weight: 900;
+      font-size: 1.08rem;
+    }
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: #3b82f6;
+      color: #fff;
+      font-weight: 900;
+      font-size: 1rem;
+    }
+    .brand small {
+      display: block;
+      color: #93c5fd;
+      font-size: 0.74rem;
+      font-weight: 600;
+    }
+    .topbar-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+    }
+    .topbar-nav a {
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--white);
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+    }
+    .topbar-nav a:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.4);
+    }
+
+    /* Main Container */
+    main.tree-workspace {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px 20px 80px;
+    }
+
+    /* Hero Banner */
+    .hero-card {
+      padding: 26px 30px;
+      background: linear-gradient(135deg, #0d2342 0%, #1e3a66 60%, #1d4ed8 100%);
+      color: var(--white);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(13, 35, 66, 0.15);
+      margin-bottom: 22px;
+    }
+    .hero-eyebrow {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.18);
+      color: #bfdbfe;
+      font-size: 0.74rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+    .hero-card h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.5rem, 3.2vw, 2.1rem);
+      font-weight: 900;
+      letter-spacing: -0.03em;
+    }
+    .hero-card p {
+      margin: 0;
+      color: #dbeafe;
+      font-size: 0.94rem;
+      max-width: 900px;
+      line-height: 1.6;
+    }
+
+    /* Subject Switcher */
+    .subject-tabs {
+      display: flex;
+      gap: 8px;
+      padding: 6px;
+      background: #e2e8f0;
+      border-radius: 12px;
+      margin-bottom: 18px;
+      overflow-x: auto;
+    }
+    .subj-tab {
+      flex: 1;
+      min-width: 160px;
+      padding: 11px 16px;
+      border: 0;
+      border-radius: 9px;
+      background: transparent;
+      color: #475569;
+      font: inherit;
+      font-weight: 800;
+      font-size: 0.9rem;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .subj-tab:hover {
+      background: rgba(255, 255, 255, 0.6);
+      color: #0f172a;
+    }
+    .subj-tab.active {
+      background: var(--white);
+      color: var(--blue-hover);
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+    }
+    .tab-badge {
+      font-size: 0.72rem;
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: #e0e7ff;
+      color: #3730a3;
+    }
+
+    /* Toolbar Controls */
+    .tree-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 14px 18px;
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
+    }
+    .toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .tree-search-input {
+      padding: 8px 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 0.86rem;
+      min-width: 220px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .tree-search-input:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+    .action-btn {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--white);
+      color: #334155;
+      font-size: 0.84rem;
+      font-weight: 800;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+    .action-btn:hover {
+      background: #f1f5f9;
+      border-color: #94a3b8;
+    }
+    .action-btn.primary {
+      background: var(--blue);
+      color: #fff;
+      border-color: var(--blue);
+    }
+    .action-btn.primary:hover {
+      background: var(--blue-hover);
+    }
+    .action-btn.danger {
+      background: var(--red-soft);
+      color: var(--red);
+      border-color: #fecdd3;
+    }
+    .action-btn.danger.active {
+      background: var(--red);
+      color: #fff;
+      border-color: var(--red);
+      box-shadow: 0 2px 8px rgba(225, 29, 72, 0.3);
+    }
+
+    /* Views: Interactive vs Raw ASCII */
+    .view-mode-toggle {
+      display: flex;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .view-mode-btn {
+      padding: 7px 12px;
+      border: 0;
+      background: var(--white);
+      color: #475569;
+      font-size: 0.82rem;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .view-mode-btn.active {
+      background: var(--navy);
+      color: #fff;
+    }
+
+    /* ==========================================================================
+       Interactive Tree Node Styling
+       ========================================================================== */
+    .tree-canvas {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Root Goal Node */
+    .root-goal-node {
+      padding: 16px 20px;
+      border: 2px solid #2563eb;
+      background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%);
+      border-radius: 12px;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.08);
+      position: relative;
+    }
+    .root-goal-badge {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 6px;
+      background: #2563eb;
+      color: #fff;
+      font-weight: 900;
+      font-size: 0.74rem;
+      margin-bottom: 6px;
+    }
+    .root-goal-node h3 {
+      margin: 0 0 4px;
+      font-size: 1.15rem;
+      color: #1e3a8a;
+    }
+    .root-goal-node p {
+      margin: 0;
+      color: #475569;
+      font-size: 0.88rem;
+      font-family: Consolas, "Courier New", monospace;
+    }
+
+    /* Tree Branch (Level 1) */
+    .tree-branch {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--white);
+      overflow: hidden;
+      box-shadow: 0 3px 10px rgba(15, 23, 42, 0.03);
+      transition: all 0.15s ease;
+    }
+    .tree-branch[open] {
+      border-color: #94a3b8;
+    }
+    .tree-branch-summary {
+      padding: 14px 18px;
+      background: #f8fafc;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 800;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+      border-bottom: 1px solid transparent;
+    }
+    .tree-branch[open] > .tree-branch-summary {
+      border-bottom-color: var(--line-subtle);
+      background: #f1f5f9;
+    }
+    .tree-branch-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .tree-branch-icon {
+      font-size: 1.2rem;
+    }
+    .tree-branch-meta {
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: #64748b;
+      background: #e2e8f0;
+      padding: 3px 9px;
+      border-radius: 999px;
+    }
+
+    /* Branch Inner Children */
+    .tree-children {
+      padding: 14px 16px 16px 36px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .tree-children::before {
+      content: "";
+      position: absolute;
+      top: 14px;
+      bottom: 20px;
+      left: 20px;
+      width: 2px;
+      border-left: 2px dashed #cbd5e1;
+    }
+
+    /* Function Node (Level 2) */
+    .tree-func-node {
+      border: 1px solid var(--line-subtle);
+      border-radius: 10px;
+      background: #ffffff;
+      position: relative;
+      transition: all 0.15s ease;
+    }
+    .tree-func-node::before {
+      content: "";
+      position: absolute;
+      top: 18px;
+      left: -16px;
+      width: 16px;
+      height: 2px;
+      border-top: 2px dashed #cbd5e1;
+    }
+    .tree-func-node:hover {
+      border-color: #3b82f6;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
+    }
+    .tree-func-node.exam-highlight {
+      border: 2px solid #e11d48 !important;
+      background: #fffdfd;
+      box-shadow: 0 4px 14px rgba(225, 29, 72, 0.08);
+    }
+
+    .tree-func-summary {
+      padding: 12px 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      user-select: none;
+    }
+    .tree-func-summary:hover {
+      background: #f8fafc;
+    }
+    .tree-func-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .kind-pill {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 900;
+      background: #e2e8f0;
+      color: #334155;
+    }
+    .kind-pill.exam {
+      background: linear-gradient(90deg, #d92d20, #e11d48);
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(217, 45, 32, 0.25);
+    }
+    .func-signature {
+      font-family: Consolas, "Courier New", monospace;
+      font-weight: 800;
+      font-size: 0.92rem;
+      color: #0f172a;
+    }
+    .shape-tags {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.76rem;
+    }
+    .shape-badge {
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: #f1f5f9;
+      color: #475569;
+      border: 1px solid #e2e8f0;
+    }
+    .shape-badge.out {
+      background: #eff6ff;
+      color: #1e40af;
+      border-color: #bfdbfe;
+      font-weight: 800;
+    }
+
+    /* Func Node Detail / Body */
+    .tree-func-detail {
+      padding: 14px 18px 18px;
+      border-top: 1px solid #f1f5f9;
+      background: #fafbfc;
+      font-size: 0.88rem;
+    }
+    .func-desc {
+      margin: 0 0 10px;
+      color: #334155;
+      line-height: 1.6;
+    }
+
+    /* Sub-operations / Steps */
+    .sub-operations {
+      margin: 10px 0 12px 18px;
+      padding-left: 14px;
+      border-left: 2px dashed #cbd5e1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .sub-step {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.82rem;
+      color: #1e293b;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .sub-step-arrow {
+      color: #3b82f6;
+      font-weight: 900;
+    }
+
+    /* Code Box with Copy */
+    .code-container {
+      position: relative;
+      margin-top: 8px;
+    }
+    pre.code-view {
+      margin: 0;
+      padding: 12px 16px;
+      background: var(--code-bg);
+      color: var(--code-color);
+      border-radius: 8px;
+      font: 0.84rem/1.55 Consolas, "Courier New", monospace;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .copy-code-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #ffffff;
+      font-size: 0.72rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .copy-code-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    /* Raw ASCII View */
+    .raw-ascii-panel {
+      display: none;
+      padding: 20px;
+      background: #091322;
+      border: 1px solid #1e3a5f;
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(9, 19, 34, 0.2);
+    }
+    .raw-ascii-panel.active {
+      display: block;
+    }
+    pre.raw-ascii-code {
+      margin: 0;
+      padding: 16px;
+      color: #e2e8f0;
+      font: 13.5px/1.6 Consolas, "Courier New", monospace;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    /* Footer */
+    footer.page-foot {
+      margin-top: 40px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.84rem;
+    }
+
+    @media (max-width: 768px) {
+      .topbar-nav { display: none; }
+      .tree-toolbar { flex-direction: column; align-items: stretch; }
+      .toolbar-left, .toolbar-right { width: 100%; justify-content: space-between; }
+      .tree-search-input { width: 100%; }
+      .tree-children { padding-left: 20px; }
+      .tree-children::before { left: 8px; }
+      .tree-func-node::before { left: -12px; width: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <a class="brand" href="../">
+      <span class="brand-mark">🌳</span>
+      <div>
+        <span>AI Specialist Pipeline Tree</span>
+        <small>전 과목 종합 파이프라인 트리 · Collapse / Expand</small>
+      </div>
+    </a>
+    <nav class="topbar-nav">
+      <a href="../">← 전체 홈</a>
+      <a href="../llm/">01 · LLM</a>
+      <a href="../rag/">02 · RAG</a>
+      <a href="../data/">03 · Data</a>
+      <a href="../vision/">04 · Vision</a>
+      <a href="../on-device/">05 · On-device</a>
+    </nav>
+  </header>
+
+  <!-- Workspace -->
+  <main class="tree-workspace">
+
+    <!-- Hero Card -->
+    <section class="hero-card">
+      <span class="hero-eyebrow">STANDALONE PIPELINE TREE VIEWER</span>
+      <h1 id="heroTitle">🌳 전 과목 종합 파이프라인 트리</h1>
+      <p id="heroDesc">최상위 학습 루프 및 텍스트 생성 지점부터 최하위 텐서 변환까지, 과목별 모든 함수와 모듈의 상하 의존성을 계층형 트리로 접고 펼치며 확인하세요.</p>
+    </section>
+
+    <!-- Subject Switcher -->
+    <nav class="subject-tabs" aria-label="과목 선택">
+      <button class="subj-tab active" data-subject="llm" type="button">
+        <span>01 · LLM</span>
+        <span class="tab-badge">Ch 1~7 완전판</span>
+      </button>
+      <button class="subj-tab" data-subject="rag" type="button">
+        <span>02 · RAG</span>
+        <span class="tab-badge">Day 1~4</span>
+      </button>
+      <button class="subj-tab" data-subject="data" type="button">
+        <span>03 · DATA</span>
+        <span class="tab-badge">TS & RecSys</span>
+      </button>
+      <button class="subj-tab" data-subject="vision" type="button">
+        <span>04 · VISION</span>
+        <span class="tab-badge">CNN & ViT</span>
+      </button>
+      <button class="subj-tab" data-subject="on-device" type="button">
+        <span>05 · ON-DEVICE</span>
+        <span class="tab-badge">3대 경량화</span>
+      </button>
+    </nav>
+
+    <!-- Toolbar -->
+    <section class="tree-toolbar">
+      <div class="toolbar-left">
+        <input type="text" id="treeSearch" class="tree-search-input" placeholder="🔍 함수 / 모듈 / 텐서 검색..." />
+        <button id="btnExpandAll" class="action-btn" type="button">모두 펼치기</button>
+        <button id="btnCollapseAll" class="action-btn" type="button">모두 접기</button>
+        <button id="btnBranchOnly" class="action-btn" type="button">브랜치만 보기</button>
+        <button id="btnExamFilter" class="action-btn danger" type="button">🔥 기출 노드만</button>
+      </div>
+      <div class="toolbar-right">
+        <button id="btnCopyAscii" class="action-btn" type="button">📋 텍스트 트리 복사</button>
+        <div class="view-mode-toggle">
+          <button class="view-mode-btn active" data-view="interactive" type="button">인터랙티브</button>
+          <button class="view-mode-btn" data-view="ascii" type="button">텍스트 (ASCII)</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Interactive Canvas -->
+    <div id="interactiveCanvas" class="tree-canvas">
+      <!-- Generated Dynamically -->
+    </div>
+
+    <!-- Raw ASCII View -->
+    <div id="asciiCanvas" class="raw-ascii-panel">
+      <pre id="rawAsciiContent" class="raw-ascii-code"></pre>
+    </div>
+
+    <footer class="page-foot">
+      <p>AI Specialist 실습 코드 시험 대비 · 원본 실습 노트북 기준 정밀 트리 매핑</p>
+    </footer>
+
+  </main>
+
+  <script src="../assets/js/pipeline-tree-data.js"></script>
+  <script src="pipeline-tree-app.js"></script>
+</body>
+</html>
