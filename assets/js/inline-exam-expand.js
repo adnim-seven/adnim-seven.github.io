@@ -13,7 +13,7 @@
   const isReserved = (line) => reservedLines.some((source) => line.includes(source));
   Object.values(window.INLINE_EXAM_OVERRIDES || {}).forEach((patch) => {
     (patch.blanks || []).forEach((blank) => {
-      if (!blank.label.startsWith("🟠")) blank.label = `🟠 보강 · ${blank.label}`;
+      if (!blank.label.startsWith("🟠") && !blank.label.startsWith("🔴") && !blank.label.startsWith("🟣")) blank.label = `🟠 보강 · ${blank.label}`;
     });
   });
 
@@ -121,7 +121,7 @@
   for (const [file, exam] of Object.entries(set)) {
     window.INLINE_EXAM_ORIGINAL_IDS[file] = exam.blanks.map((blank) => blank.id);
     exam.blanks.forEach((blank) => {
-      if (!blank.label.startsWith("🔵") && !blank.label.startsWith("🔴")) blank.label = `🔵 원본 · ${blank.label}`;
+      if (!blank.label.startsWith("🔵") && !blank.label.startsWith("🔴") && !blank.label.startsWith("🟣")) blank.label = `🔵 원본 · ${blank.label}`;
     });
     const wanted = ruleSets[file] || [];
     wanted.forEach((needle, index) => toBlank(exam, needle, index + 1));

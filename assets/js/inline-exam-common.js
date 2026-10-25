@@ -13,7 +13,14 @@
     if (a === "x=attn(x)+x" && (u === "x=x+attn(x)" || u === "attn(x)+x" || u === "x+attn(x)")) return true;
     if (a === "x=ff(x)+x" && (u === "x=x+ff(x)" || u === "ff(x)+x" || u === "x+ff(x)")) return true;
     if (a === "round(num_channels*sparsity)" && (u === "num_pruned_channels=round(num_channels*sparsity)" || u === "int(round(num_channels*sparsity))" || u === "round(weight.shape[1]*sparsity)")) return true;
+    if (a === "round(num_kernels*sparsity)" && (u === "num_pruned_kernels=round(num_kernels*sparsity)" || u === "int(round(num_kernels*sparsity))")) return true;
     if (a === "weight.abs().sum(dim=(0,2,3),keepdim=True)" && (u === "importance=weight.abs().sum(dim=(0,2,3),keepdim=True)" || u === "torch.abs(weight).sum(dim=(0,2,3),keepdim=True)" || u === "importance=torch.abs(weight).sum(dim=(0,2,3),keepdim=True)" || u === "torch.sum(torch.abs(weight),dim=(0,2,3),keepdim=True)" || u === "torch.sum(weight.abs(),dim=(0,2,3),keepdim=True)" || u === "weight.abs().sum(dim=[0,2,3],keepdim=True)")) return true;
+    if (a === "weight.abs().sum(dim=(2,3),keepdim=True)" && (u === "importance=weight.abs().sum(dim=(2,3),keepdim=True)" || u === "torch.abs(weight).sum(dim=(2,3),keepdim=True)" || u === "torch.sum(torch.abs(weight),dim=(2,3),keepdim=True)" || u === "weight.abs().sum(dim=[2,3],keepdim=True)")) return true;
+    if (a === "torch.topk(importance,int(len(importance)*0.01))[1]" && (u === "torch.topk(importance,num_samples)[1]" || u === "importance.topk(num_samples)[1]")) return true;
+    if (a === "(fp_max-fp_min)/(quantized_max-quantized_min)" && (u === "(fp_max-fp_min)/(2**bitwidth-1)" || u === "(fp_max-fp_min)/((1<<bitwidth)-1)")) return true;
+    if (a === "s_x**ratio" && (u === "torch.pow(s_x,ratio)" || u === "s_x.pow(ratio)")) return true;
+    if (a === "torch.abs(W)*input_feat[n]" && (u === "W.abs()*input_feat[n]" || u === "input_feat[n]*torch.abs(W)" || u === "input_feat[n]*W.abs()")) return true;
+    if (a === "importance>threshold.reshape(row,1)" && (u === "importance>threshold.view(row,1)" || u === "importance>threshold.unsqueeze(1)" || u === "importance>threshold.view(-1,1)")) return true;
     return false;
   };
   let view = "exam", blankIndex = 0, renderTimer = null;
