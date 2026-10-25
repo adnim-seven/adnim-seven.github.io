@@ -9,6 +9,8 @@
     if (u === a) return true;
     if (a === "x=attn(x)+x" && (u === "x=x+attn(x)" || u === "attn(x)+x" || u === "x+attn(x)")) return true;
     if (a === "x=ff(x)+x" && (u === "x=x+ff(x)" || u === "ff(x)+x" || u === "x+ff(x)")) return true;
+    if (a === "round(num_channels*sparsity)" && (u === "num_pruned_channels=round(num_channels*sparsity)" || u === "int(round(num_channels*sparsity))" || u === "round(weight.shape[1]*sparsity)")) return true;
+    if (a === "weight.abs().sum(dim=(0,2,3),keepdim=True)" && (u === "importance=weight.abs().sum(dim=(0,2,3),keepdim=True)" || u === "torch.abs(weight).sum(dim=(0,2,3),keepdim=True)" || u === "importance=torch.abs(weight).sum(dim=(0,2,3),keepdim=True)" || u === "torch.sum(torch.abs(weight),dim=(0,2,3),keepdim=True)" || u === "torch.sum(weight.abs(),dim=(0,2,3),keepdim=True)" || u === "weight.abs().sum(dim=[0,2,3],keepdim=True)")) return true;
     return false;
   };
   let view = "exam", blankIndex = 0, renderTimer = null;

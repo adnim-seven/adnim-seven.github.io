@@ -215,7 +215,7 @@
     "exam-od2-fine": "num_pruned_elements = round(weight.numel() * sparsity)\nimportance = torch.abs(weight)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_elements)[0]\nmask = importance > threshold",
     "exam-od2-vector": "importance = weight.abs().sum(dim=(3,), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_vectors)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
     "exam-od2-kernel": "importance = weight.abs().sum(dim=(2, 3), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_kernels)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
-    "exam-od2-channel": "importance = weight.abs().sum(dim=(0, 2, 3), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_channels)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
+    "exam-od2-channel": "num_pruned_channels = round(num_channels * sparsity)\nimportance = weight.abs().sum(dim=(0, 2, 3), keepdim=True)",
     "exam-od2-apply": "for name, param in model.named_parameters():\n    if name in self.masks:\n        param *= self.masks[name]",
     "exam-od2-global": "all_weights = torch.cat(parameters_to_prune)\nnum_elements = all_weights.numel()\nnum_zeros = round(num_elements * sparsity)\nimportance = torch.abs(all_weights)\nthreshold = torch.kthvalue(importance, num_zeros)[0]",
     "exam-od2-schedule": "sparsity = sparsity_end + (sparsity_start - sparsity_end) * (1 - (epoch - epoch_start) / (epoch_end - epoch_start)) ** exponent"
@@ -228,6 +228,36 @@
     problem_context, explanation, tensor_flow, code_signal, retry
   });
   chapter.subjective = [
+    {
+      ...base,
+      id: "exam-od2-07",
+      topic: "2026-09 기출 · Channel-level Pruning (num_pruned_channels & importance)",
+      difficulty: "1 · 2026-09 기출",
+      sourceId: "exam-od2-channel",
+      isPastExam: true,
+      source_type: "2026-09 실제 기출 복기",
+      prompt: "[2026-09 기출] 주석과 힌트(round, torch의 abs·sum)를 따라 Conv2d 가중치(out_channels, in_channels, kernel_h, kernel_w)에서 프루닝할 입력 채널 수(num_pruned_channels)와 각 입력 채널의 중요도(importance)를 계산하는 두 줄을 작성하세요.",
+      answer: cells["exam-od2-channel"],
+      problem_context: "# 프루닝할 채널 수 계산 (hint: round() 함수를 사용하세요.)\nnum_channels = weight.shape[1]\nnum_pruned_channels = ????\n\n# 각 채널의 중요도를 절댓값 합으로 계산 (hint: torch의 abs, sum을 사용하세요.)\n# (출력 채널, 커널 높이, 커널 너비에 대해 합산)\nimportance = ????\n\n# 이후 threshold 및 마스크 확장\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_channels)[0]\nmask = (importance > threshold).expand_as(weight)",
+      explanation: "실제 2026-09 기출문제입니다. 입력 채널 수 num_channels = weight.shape[1]에 sparsity를 곱해 round()로 제거할 채널 수를 구하고, 입력 채널(dim=1)만 남기도록 출력 채널과 공간 축 dim=(0, 2, 3)에 대해 절댓값 합(weight.abs().sum(dim=(0, 2, 3), keepdim=True))을 계산합니다.",
+      tensor_flow: "weight [OC, IC, KH, KW] → num_pruned_channels (int) & importance [1, IC, 1, 1]",
+      code_signal: "주석 '# 프루닝할 채널 수 계산 (round)'와 '# (출력 채널, 커널 높이, 커널 너비에 대해 합산) (abs, sum)'이 두 줄의 수식과 합산 축 dim=(0, 2, 3), keepdim=True를 직접 알려줍니다.",
+      retry: "출력 채널(out_channels) 단위로 프루닝한다면 num_channels와 sum의 dim을 어떻게 바꿔야 할지 작성해 보세요.",
+      accepted_answers: [
+        "num_pruned_channels = round(num_channels * sparsity)\nimportance = weight.abs().sum(dim=(0, 2, 3), keepdim=True)",
+        "round(num_channels * sparsity)\nweight.abs().sum(dim=(0, 2, 3), keepdim=True)",
+        "num_pruned_channels = round(num_channels * sparsity)\nimportance = torch.abs(weight).sum(dim=(0, 2, 3), keepdim=True)",
+        "round(num_channels * sparsity)\ntorch.abs(weight).sum(dim=(0, 2, 3), keepdim=True)",
+        "num_pruned_channels = round(num_channels * sparsity)\nimportance = torch.sum(torch.abs(weight), dim=(0, 2, 3), keepdim=True)",
+        "round(num_channels * sparsity)\ntorch.sum(torch.abs(weight), dim=(0, 2, 3), keepdim=True)",
+        "num_pruned_channels = round(num_channels * sparsity)\nimportance = torch.sum(weight.abs(), dim=(0, 2, 3), keepdim=True)",
+        "round(num_channels * sparsity)\ntorch.sum(weight.abs(), dim=(0, 2, 3), keepdim=True)",
+        "num_pruned_channels = round(num_channels * sparsity)\nimportance = weight.abs().sum(dim=[0, 2, 3], keepdim=True)",
+        "round(num_channels * sparsity)\nweight.abs().sum(dim=[0, 2, 3], keepdim=True)",
+        "num_channels = weight.shape[1]\nnum_pruned_channels = round(num_channels * sparsity)\nimportance = weight.abs().sum(dim=(0, 2, 3), keepdim=True)",
+        "importance = weight.abs().sum(dim=(0, 2, 3), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_channels)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)"
+      ]
+    },
     Q("exam-od2-01", "Fine-grained Magnitude", "3 · Independent", "exam-od2-fine", "목표 sparsity만큼 가장 작은 원소를 제거하도록 제거 개수, 절댓값 importance, kth threshold, boolean mask 네 줄을 작성하세요.",
       "# weight: any shape, sparsity: 0~1\n############### YOUR CODE STARTS HERE ###############\nnum_pruned_elements = ????\nimportance = ????\nthreshold = ????\nmask = ????\n############### YOUR CODE ENDS HERE #################\nweight.mul_(mask)",
       "전체 원소 수의 sparsity 비율만큼 제거 개수를 정하고 절댓값을 작은 순으로 정렬했을 때 kth 값을 경계로 사용합니다. mask를 곱하면 제거 위치가 0이 됩니다.",
@@ -301,21 +331,10 @@
         "sparsity_end + (sparsity_start - sparsity_end) * (1 - (epoch - epoch_start) / (epoch_end - epoch_start)) ** exponent",
         "sparsity = sparsity_end + (sparsity_start - sparsity_end) * ((1 - (epoch - epoch_start) / (epoch_end - epoch_start)) ** exponent)",
         "sparsity_end + (sparsity_start - sparsity_end) * ((1 - (epoch - epoch_start) / (epoch_end - epoch_start)) ** exponent)"
-      ]),
-    Q("exam-od2-07", "Channel-level Pruning", "3 · Shape", "exam-od2-channel", "입력 channel 하나 전체를 제거하도록 output channel·spatial 축을 합산한 importance부터 expanded mask까지 네 줄을 작성하세요.",
-      "# retain only input-channel axis in group importance\nimportance = ????\nthreshold = ????\nmask = ????\nmask = ????",
-      "input channel pruning은 [1,IC,1,1] score를 만들어 모든 output filter와 spatial 위치에서 같은 input channel을 함께 제거합니다.",
-      "[OC,IC,KH,KW] → [1,IC,1,1] → expanded weight",
-      "num_channels=weight.shape[1]과 output·spatial에 대한 주석이 dim=(0,2,3)을 가리킵니다.",
-      "output channel pruning이라면 retain/sum 축을 어떻게 바꿀지 쓰세요.",
-      [
-        "importance = weight.abs().sum(dim=(0, 2, 3), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_channels)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
-        "importance = torch.abs(weight).sum(dim=(0, 2, 3), keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_channels)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
-        "importance = weight.abs().sum(dim=[0, 2, 3], keepdim=True)\nthreshold = torch.kthvalue(importance.flatten(), num_pruned_channels)[0]\nmask = importance > threshold\nmask = mask.expand_as(weight)",
-        "weight.abs().sum(dim=(0, 2, 3), keepdim=True)\ntorch.kthvalue(importance.flatten(), num_pruned_channels)[0]\nimportance > threshold\nmask.expand_as(weight)"
       ])
   ];
   chapter.mcq = [
+    { id: "exam-od2-m0", source_question_id: "exam-od2-07", topic: "2026-09 기출 · Channel-level Pruning", prompt: "Conv2d 가중치 [OC, IC, KH, KW]에서 입력 채널(IC) 단위 프루닝을 위해 제거할 채널 수와 채널별 중요도[1, IC, 1, 1]를 구하는 올바른 코드는?", answer_index: 0, explanation: "num_channels = weight.shape[1]에 sparsity를 곱해 반올림(round)하고, 출력 채널(0)과 커널 공간 축(2, 3)을 합산해 입력 채널 축(1)만 남깁니다.", choices: [{ text: "round(num_channels * sparsity) / weight.abs().sum(dim=(0, 2, 3), keepdim=True)", why: "2026-09 기출 정답입니다." }, { text: "round(weight.numel() * sparsity) / weight.abs().sum(dim=(2, 3), keepdim=True)", why: "원소 전체 개수와 커널 단위(dim=(2,3)) 합산입니다." }, { text: "int(num_channels / sparsity) / weight.abs().mean(dim=1, keepdim=True)", why: "sparsity 나눗셈과 합산 축(dim=1 제거)이 모두 틀렸습니다." }, { text: "round(num_channels * sparsity) / weight.abs().sum(dim=(3,), keepdim=True)", why: "dim=(3,)은 Vector-level pruning 중요도입니다." }, { text: "round(num_channels + sparsity) / weight.sum(dim=(0, 2, 3), keepdim=False)", why: "절댓값(abs)과 keepdim=True가 누락되어 부호 상쇄 및 브로드캐스팅 오류가 발생합니다." }] },
     { id: "exam-od2-m1", source_question_id: "exam-od2-01", topic: "Threshold", prompt: "importance.flatten()에 kthvalue를 적용하는 목적은?", answer_index: 3, explanation: "모든 원소를 하나의 ranking으로 보고 목표 제거 개수의 경계값을 얻습니다.", choices: [{ text: "weight shape를 복원", why: "복원은 view/expand가 담당합니다." }, { text: "gradient를 계산", why: "no_grad pruning입니다." }, { text: "최댓값만 선택", why: "k번째 작은 값입니다." }, { text: "목표 sparsity의 magnitude 경계값 선택", why: "정답입니다." }, { text: "0이 아닌 원소 수 계산", why: "count_nonzero와 다릅니다." }] },
     { id: "exam-od2-m2", source_question_id: "exam-od2-02", topic: "Vector 축", prompt: "vector-level pruning에서 weight.abs().sum(dim=(3,), keepdim=True)가 의미하는 것은?", answer_index: 1, explanation: "마지막 spatial 축의 원소를 한 vector group으로 묶습니다.", choices: [{ text: "output channel 전체를 하나로 합침", why: "OC 축 0은 남습니다." }, { text: "마지막 축 vector의 절댓값 합", why: "정답입니다." }, { text: "모든 weight를 scalar로 합침", why: "다른 축이 남습니다." }, { text: "batch 차원을 제거", why: "weight에는 batch가 없습니다." }, { text: "threshold를 직접 계산", why: "importance 계산 단계입니다." }] },
     { id: "exam-od2-m3", source_question_id: "exam-od2-04", topic: "Sparse Fine-tuning", prompt: "학습 중 mask를 매번 다시 적용하는 이유는?", answer_index: 4, explanation: "optimizer update 뒤 0이었던 weight가 다시 0이 아닐 수 있습니다.", choices: [{ text: "dropout을 켜기 위해", why: "dropout과 별개입니다." }, { text: "새 mask를 무작위 생성", why: "기존 mask를 유지합니다." }, { text: "learning rate를 변경", why: "scheduler 역할입니다." }, { text: "weight shape를 변경", why: "값만 0으로 만듭니다." }, { text: "pruned weight의 재성장을 막기 위해", why: "정답입니다." }] },
@@ -652,6 +671,7 @@ queueMicrotask(() => {
   if (!course || course.chapters.some(c => c.id === 'on-device-final-review')) return;
   const pick = [
     ['2. Quantization for CNN.ipynb', 'exam-od1-05'],
+    ['1. Pruning for CNN.ipynb', 'exam-od2-07'],
     ['1. Pruning for CNN.ipynb', 'exam-od2-01'],
     ['3. Knowledge Distillation.ipynb', 'exam-od3-02'],
     ['4. Pruning for LLM.ipynb', 'exam-od4-03'],
