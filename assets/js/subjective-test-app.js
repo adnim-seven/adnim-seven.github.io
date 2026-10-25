@@ -48,16 +48,25 @@ const $ = s => document.querySelector(s);
 const save = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
 const escapeHtml = value => String(value).replace(/[&<>"']/g, char => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"}[char]));
 
+const isPastExamItem = item => /2026-09|기출|^🔴/.test(item?.label || '');
+
 function renderCodeCells() {
-  const blankMarkup = item => `<textarea id="${item.id}" class="inline-code-input" aria-label="${item.label}" rows="1" placeholder="### 공개 제한 ###" spellcheck="false">${escapeHtml(drafts[item.id] || '')}</textarea><button id="mark-${item.id}" class="review-mark" type="button" title="나중에 복습할 문제로 표시">☆ 복습 표시</button><div id="feedback-${item.id}" class="inline-feedback" aria-live="polite"></div>`;
+  const blankMarkup = item => {
+    const isPast = isPastExamItem(item);
+    const badge = isPast ? '<span class="inline-past-tag">🔥 2026-09 기출 · NEW</span>' : '';
+    return `${badge}<textarea id="${item.id}" class="inline-code-input${isPast ? ' past-exam-input' : ''}" aria-label="${item.label}" rows="1" placeholder="### 공개 제한 ###" spellcheck="false">${escapeHtml(drafts[item.id] || '')}</textarea><button id="mark-${item.id}" class="review-mark" type="button" title="나중에 복습할 문제로 표시">☆ 복습 표시</button><div id="feedback-${item.id}" class="inline-feedback" aria-live="polite"></div>`;
+  };
   const cells = activeView === 'exam' ? window.RAG_SUBJECTIVE_CELLS.filter(cell => cell.type === 'code') : window.RAG_SUBJECTIVE_CELLS;
   $('#codeCells').innerHTML = cells.map(cell => {
     let source = escapeHtml(cell.source);
     if (cell.type === 'code') {
+      const cellBlanks = blanks.filter(item => cell.source.includes(`[[BLANK:${item.id}]]`));
+      const hasPast = cellBlanks.some(isPastExamItem);
       blanks.forEach(item => {
         source = source.replace(`[[BLANK:${item.id}]]`, blankMarkup(item));
       });
-      return `<section class="code-cell" data-cell-number="${cell.number}" data-code-number="${cell.code_number}"><div class="cell-title">코드 Cell ${cell.code_number} · 원본 Notebook Cell ${cell.number}</div><pre><code>${source}</code></pre></section>`;
+      const cellBadge = hasPast ? '<span class="cell-past-badge">🔥 2026-09 실제 기출 재구성 · NEW</span>' : '';
+      return `<section class="code-cell${hasPast ? ' has-past-exam' : ''}" data-cell-number="${cell.number}" data-code-number="${cell.code_number}"><div class="cell-title">코드 Cell ${cell.code_number} · 원본 Notebook Cell ${cell.number}${cellBadge}</div><pre><code>${source}</code></pre></section>`;
     }
     return `<section class="code-cell markdown-cell" data-cell-number="${cell.number}"><div class="cell-title">원본 Notebook Cell ${cell.number} · 설명</div><div class="markdown-source">${source || '(빈 마크다운 셀)'}</div></section>`;
   }).join('');
@@ -66,7 +75,8 @@ function renderCodeCells() {
 function statusText() {
   if (!blanks.length) return;
   const item = blanks[active], h = history[item.id] || {}, cell = document.getElementById(item.id)?.closest('.code-cell'), codeNumber = cell?.dataset.codeNumber, notebookNumber = cell?.dataset.cellNumber;
-  $('#status').innerHTML = `<strong>빈칸 ${active + 1} / ${blanks.length} · ${item.label}</strong> · ${h.correct ? '정답 확인됨' : `오답 ${h.wrongCount || 0}회`}`;
+  const pastPill = isPastExamItem(item) ? '<span class="status-past-pill">🔥 2026-09 기출 NEW</span> ' : '';
+  $('#status').innerHTML = `${pastPill}<strong>빈칸 ${active + 1} / ${blanks.length} · ${item.label}</strong> · ${h.correct ? '정답 확인됨' : `오답 ${h.wrongCount || 0}회`}`;
   $('#cellNumber').textContent = codeNumber ? `코드 ${codeNumber} · 원본 ${notebookNumber}` : `빈칸 ${active + 1}`;
   $('#progress').style.width = `${(active + 1) / blanks.length * 100}%`;
 }
@@ -74,7 +84,9 @@ function statusText() {
 function renderList() {
   $('#blankList').innerHTML = blanks.map((item, index) => {
     const h = history[item.id] || {}, state = h.correct ? 'correct' : h.wrongCount ? 'wrong' : h.starred ? 'starred' : '';
-    return `<button class="${index === active ? 'active' : ''} ${state}" data-index="${index}" type="button">${index + 1}. ${item.label}${h.starred ? ' ★' : ''}${h.wrongCount ? ` · 오답 ${h.wrongCount}` : ''}</button>`;
+    const isPast = isPastExamItem(item);
+    const pill = isPast ? '<span class="list-past-pill">🔥 NEW</span> ' : '';
+    return `<button class="${index === active ? 'active' : ''} ${state} ${isPast ? 'past-exam-item' : ''}" data-index="${index}" type="button">${pill}${index + 1}. ${item.label}${h.starred ? ' ★' : ''}${h.wrongCount ? ` · 오답 ${h.wrongCount}` : ''}</button>`;
   }).join('');
   document.querySelectorAll('[data-index]').forEach(b => b.addEventListener('click', () => focusBlank(Number(b.dataset.index))));
   const wrongTotal = blanks.reduce((sum, item) => sum + (history[item.id]?.wrongCount || 0), 0), starTotal = blanks.filter(item => history[item.id]?.starred).length;

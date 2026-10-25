@@ -34,3 +34,52 @@
 @media (max-width: 640px) {
   .inline-priority-badge { display: block; width: fit-content; margin: .35rem 0 0; }
 }
+
+/* === 2026-09 PAST EXAM INLINE PRIORITY === */
+.inline-code-cell.has-past-exam-question {
+  border: 2px solid #e11d48 !important;
+  box-shadow: inset 5px 0 0 #d92d20, 0 8px 20px rgba(217, 45, 32, .1) !important;
+}
+
+.inline-code-cell.has-past-exam-question > .cell-title {
+  background: linear-gradient(90deg, #fff0f2, #ffe4e8) !important;
+  color: #881337 !important;
+  border-bottom-color: #f5b5c0 !important;
+}
+
+.inline-past-exam-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: .5rem;
+  padding: .16rem .55rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #d92d20, #e11d48);
+  color: #fff;
+  font-size: .76rem;
+  font-weight: 900;
+  box-shadow: 0 2px 6px rgba(217, 45, 32, .24);
+}
+
+.inline-check-row.is-past-exam-row {
+  background: #fff5f6;
+  border-left: 4px solid #e11d48;
+  padding-left: 8px;
+  border-radius: 6px;
+}
+
+.inline-row-new-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #ffe4e8;
+  color: #be123c;
+  border: 1px solid #fda4af;
+  font-size: .72rem;
+  font-weight: 900;
+}
+
+@media (max-width: 640px) {
+  .inline-past-exam-badge { display: block; width: fit-content; margin: .35rem 0 0; }
+}

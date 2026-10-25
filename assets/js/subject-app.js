@@ -105,10 +105,11 @@
     $("#chapterNav").innerHTML = course.chapters.map((item, index) => {
       const c = counts(item.subjective.map((q) => q.id));
       const pastCount = item.subjective.filter((q) => q.isPastExam).length;
-      const meta = config.showPastExamCount
+      const meta = (config.showPastExamCount || pastCount > 0)
         ? `주관식 ${item.subjective.length} · 기출 ${pastCount} · 오답 ${c.wrong}`
         : `주관식 ${item.subjective.length} · 오답 ${c.wrong}`;
-      return `<button class="chapter-button ${index === chapterIndex ? "active" : ""}" data-index="${index}" type="button"><span class="chapter-number">${esc(item.number)}</span><span><strong>${esc(item.title)}</strong><small>${meta}</small></span></button>`;
+      const pastBadge = pastCount > 0 ? `<span class="chapter-past-pill">🔥 2026-09 기출 ${pastCount} · NEW</span>` : "";
+      return `<button class="chapter-button ${index === chapterIndex ? "active" : ""} ${pastCount > 0 ? "has-past-exam-ch" : ""}" data-index="${index}" type="button"><span class="chapter-number">${esc(item.number)}</span><span><strong>${esc(item.title)}</strong>${pastBadge}<small>${meta}</small></span></button>`;
     }).join("");
     $$(".chapter-button").forEach((button) => button.addEventListener("click", () => selectChapter(Number(button.dataset.index))));
   }
@@ -152,7 +153,10 @@
       <div class="exam-scope-heading"><span>OFFICIAL EXAM SCOPE · VISION</span><h2>시험범위 → 현재 챕터 → 핵심 코드</h2></div>
       <div class="exam-scope-list">${data.scope.map(([title, text]) => `<article class="exam-scope-card ${selected.matched.includes(title) ? "matched" : ""}"><h3>${esc(title)}</h3><p>${esc(text)}</p><strong>${selected.matched.includes(title) ? "이 챕터 핵심" : "다른 챕터 중심"}</strong></article>`).join("")}</div>
       <div class="chapter-highlight-head"><span>현재 챕터에서 우선 볼 코드</span><p>${selected.matched.map(esc).join(" · ")}</p></div>
-      <div class="chapter-highlight-list">${selected.highlights.map(([title, why, code], index) => `<article class="chapter-highlight"><h3>${index + 1}. ${esc(title)}</h3><p>${esc(why)}</p><pre class="code-box"><code>${esc(code)}</code></pre></article>`).join("")}</div>`;
+      <div class="chapter-highlight-list">${selected.highlights.map(([title, why, code], index) => {
+        const isPast = /2026-09|기출/.test(`${title} ${why}`);
+        return `<article class="chapter-highlight ${isPast ? "past-exam-highlight" : ""}"><h3>${index + 1}. ${esc(title)}${isPast ? ' <span class="key-past-badge">🔥 2026-09 기출 재구성 · NEW</span>' : ""}</h3><p>${esc(why)}</p><pre class="code-box"><code>${esc(code)}</code></pre></article>`;
+      }).join("")}</div>`;
   }
 
   function renderOverview() {
@@ -164,7 +168,10 @@
   }
 
   function renderStudy() {
-    $("#keyPoints").innerHTML = chapter().key_points.map((point, index) => `<article class="key-card"><h3>${index + 1}. ${esc(point.title)}</h3><div class="key-body"><p>${esc(point.purpose)}</p><pre class="code-box"><code>${esc(point.code)}</code></pre><div class="key-flow"><span class="mini-label">Tensor/흐름</span>${esc(point.flow)}</div><div class="key-watch"><span class="mini-label">시험 주의</span>${esc(point.watch)}</div></div></article>`).join("");
+    $("#keyPoints").innerHTML = chapter().key_points.map((point, index) => {
+      const isPast = /2026-09|기출/.test(`${point.title || ""} ${point.watch || ""} ${point.purpose || ""}`);
+      return `<article class="key-card ${isPast ? "past-exam-key-card" : ""}"><h3>${index + 1}. ${esc(point.title)}${isPast ? ' <span class="key-past-badge">🔥 2026-09 기출 · NEW</span>' : ""}</h3><div class="key-body"><p>${esc(point.purpose)}</p><pre class="code-box"><code>${esc(point.code)}</code></pre><div class="key-flow"><span class="mini-label">Tensor/흐름</span>${esc(point.flow)}</div><div class="key-watch"><span class="mini-label">시험 주의</span>${esc(point.watch)}</div></div></article>`;
+    }).join("");
   }
 
   function renderTheoryGuide() {
@@ -248,8 +255,11 @@
   function renderMcq() {
     const item = currentMcq();
     const source = sourceQuestion(item.source_question_id);
+    const isPast = Boolean(source?.isPastExam || /2026-09|기출/.test(item?.topic || ""));
+    $("#mcqPanel")?.classList.toggle("past-exam-panel-active", isPast);
     $("#mcqPosition").textContent = `5지선다 ${mcqIndex + 1} / ${chapter().mcq.length}`;
-    $("#mcqSource").textContent = "원본 노트북 빈칸 기반";
+    $("#mcqSource").textContent = isPast ? "🔥 2026-09 실제 기출 재구성 · NEW" : "원본 노트북 빈칸 기반";
+    $("#mcqSource").classList.toggle("past-exam-badge", isPast);
     $("#mcqTopic").textContent = item.topic;
     $("#mcqCode").textContent = source?.mcq_context || sourceContext(source);
     $("#mcqPrompt").textContent = item.prompt;
@@ -279,14 +289,17 @@
     $("#subAnswer").value = "";
     hintUsed = false;
     if (!item) {
+      $("#subjectivePanel")?.classList.remove("past-exam-panel-active");
       $("#subPosition").textContent = "재시험할 오답이 없습니다.";
       $("#subSource").textContent = ""; $("#subTopic").textContent = ""; $("#subContext").textContent = "";
       $("#subPrompt").textContent = "핵심 정리 또는 5지선다를 진행하세요.";
       feedback($("#subFeedback"), "현재 조건에 해당하는 문제가 없습니다."); return;
     }
+    const isPast = Boolean(item.isPastExam || /2026-09/.test(item.source_type || ""));
+    $("#subjectivePanel")?.classList.toggle("past-exam-panel-active", isPast);
     $("#subPosition").textContent = `주관식 ${subjectiveIndex + 1} / ${subjectivePool.length}`;
-    $("#subSource").textContent = item.isPastExam ? "실제 기출 · 전체 구현 복원" : item.scope_context ? "기출 유형 · 전체 구현 복원" : item.isSourceBlank ? "실제 강의 빈칸" : "원본 코드 기반";
-    $("#subSource").classList.toggle("past-exam-badge", Boolean(item.isPastExam));
+    $("#subSource").textContent = isPast ? "🔥 2026-09 실제 기출 재구성 · NEW" : item.scope_context ? "기출 유형 · 전체 구현 복원" : item.isSourceBlank ? "실제 강의 빈칸" : "원본 코드 기반";
+    $("#subSource").classList.toggle("past-exam-badge", isPast);
     $("#subTopic").textContent = item.topic;
     $("#subContext").textContent = sourceContext(item);
     $("#subPrompt").textContent = item.prompt;
@@ -358,8 +371,14 @@
       let source = esc(cell.source);
       const cellBlanks = exam.blanks.filter((blank) => cell.source.includes(`[[BLANK:${blank.id}]]`));
       cellBlanks.forEach((blank) => { source = source.replace(`[[BLANK:${blank.id}]]`, input(blank)); });
-      const checks = cellBlanks.map((blank) => `<div class="inline-check-row"><strong>${esc(blank.label)}</strong><button class="quiet-button" type="button" data-inline-check="${esc(blank.id)}">채점</button><button class="text-button inline-star" type="button" data-inline-star="${esc(blank.id)}">☆ 복습</button></div>`).join("");
-      return `<section class="inline-code-cell"><div class="cell-title">코드 Cell ${cell.code_number} · 원본 Notebook Cell ${cell.number}</div><pre class="code-box inline-full-code"><code>${source}</code></pre>${checks}</section>`;
+      const hasPast = cellBlanks.some((blank) => /2026-09|기출|^🔴/.test(blank.label || ""));
+      const hasPrio = !hasPast && cellBlanks.some((blank) => /^★/.test(blank.label || ""));
+      const checks = cellBlanks.map((blank) => {
+        const isPastBlank = /2026-09|기출|^🔴/.test(blank.label || "");
+        return `<div class="inline-check-row ${isPastBlank ? "is-past-exam-row" : ""}"><strong>${esc(blank.label)}</strong>${isPastBlank ? '<span class="inline-row-new-pill">🔥 2026-09 기출 · NEW</span>' : ""}<button class="quiet-button" type="button" data-inline-check="${esc(blank.id)}">채점</button><button class="text-button inline-star" type="button" data-inline-star="${esc(blank.id)}">☆ 복습</button></div>`;
+      }).join("");
+      const cellBadge = hasPast ? '<span class="inline-past-exam-badge">🔥 2026-09 기출 재구성 · NEW</span>' : hasPrio ? '<span class="inline-priority-badge">★ 유력 문제 포함</span>' : "";
+      return `<section class="inline-code-cell ${hasPast ? "has-past-exam-question" : hasPrio ? "has-priority-question" : ""}"><div class="cell-title">코드 Cell ${cell.code_number} · 원본 Notebook Cell ${cell.number}${cellBadge}</div><pre class="code-box inline-full-code"><code>${source}</code></pre>${checks}</section>`;
     }).join("");
     root.innerHTML = `<div class="inline-exam-head"><span>INLINE IMPLEMENTATION EXAM</span><h2>${esc(chapter().title)} · 인라인 시험</h2><p>${inlineView === "notebook" ? "원본 노트북의 설명 마크다운과 코드 셀을 순서대로 함께 봅니다." : "전체 코드 문맥 안에서 빈칸에 답안을 바로 작성하고, 해당 줄 아래에서 즉시 채점합니다."}</p></div><div class="inline-exam-controls"><button class="quiet-button ${inlineView === "exam" ? "active" : ""}" data-inline-view="exam" type="button">인라인 시험</button><button class="quiet-button ${inlineView === "notebook" ? "active" : ""}" data-inline-view="notebook" type="button">풀 노트북 보기</button><a class="quiet-button" href="${esc(inlineExamUrl())}">전체 화면으로 열기</a></div><div class="inline-code-cells">${cells}</div><div class="inline-fixed-bar"><div class="inline-fixed-inner"><span id="inlineExamStatus">문제 1/${exam.blanks.length}</span><div class="inline-fixed-actions"><button id="prevInline" class="quiet-button" type="button">이전 문제</button><button id="nextInline" class="quiet-button" type="button">다음 문제</button><button id="checkAllInline" class="primary-button" type="button">모든 빈칸 채점</button></div></div></div>`;
     root.querySelectorAll("[data-inline-answer]").forEach((element) => {

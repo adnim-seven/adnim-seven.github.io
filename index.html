@@ -16,7 +16,7 @@
     .course.featured ul{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:14px;padding-left:0;list-style:none}
     .course.featured li a{display:block;padding:12px 14px;border:1px solid #d5e3f8;border-radius:10px;background:#fff;color:#1e4ea8;font-weight:700;text-decoration:none;transition:all .15s ease}
     .course.featured li a:hover{background:#2563c8;color:#fff;border-color:#2563c8;box-shadow:0 4px 12px rgba(37,99,200,.2)}
-    .number{font-weight:900;color:var(--blue);font-size:.82rem}.course h2{margin:8px 0;font-size:1.45rem}.course p{margin:0;color:var(--muted);line-height:1.6;font-size:.92rem}.course ul{padding-left:18px;color:#475467;font-size:.84rem;line-height:1.7}.course a.start-link{display:inline-block;align-self:flex-start;margin-top:auto;padding:10px 15px;border-radius:9px;background:var(--blue);color:#fff;font-weight:800;text-decoration:none}.course a.start-link:hover{background:#174ea6}.note{margin-top:28px;padding:15px 18px;border-left:4px solid var(--blue);border-radius:0 10px 10px 0;background:#eaf2ff;color:#344054;font-size:.9rem;line-height:1.6}@media(max-width:720px){header{padding:48px 24px}.courses{grid-template-columns:1fr}.course.featured{grid-column:auto}.course.featured ul{grid-template-columns:1fr}}
+    .number{font-weight:900;color:var(--blue);font-size:.82rem;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.past-new-badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;background:linear-gradient(90deg,#d92d20,#e11d48);color:#fff;font-size:.72rem;font-weight:900;box-shadow:0 2px 6px rgba(217,45,32,.25)}.course.has-past-new{border:2px solid #f4a3b1;background:linear-gradient(180deg,#ffffff 0%,#fff9fa 100%)}.course h2{margin:8px 0;font-size:1.45rem}.course p{margin:0;color:var(--muted);line-height:1.6;font-size:.92rem}.course ul{padding-left:18px;color:#475467;font-size:.84rem;line-height:1.7}.course a.start-link{display:inline-block;align-self:flex-start;margin-top:auto;padding:10px 15px;border-radius:9px;background:var(--blue);color:#fff;font-weight:800;text-decoration:none}.course a.start-link:hover{background:#174ea6}.note{margin-top:28px;padding:15px 18px;border-left:4px solid var(--blue);border-radius:0 10px 10px 0;background:#eaf2ff;color:#344054;font-size:.9rem;line-height:1.6}@media(max-width:720px){header{padding:48px 24px}.courses{grid-template-columns:1fr}.course.featured{grid-column:auto}.course.featured ul{grid-template-columns:1fr}}
   </style>
   <link rel="stylesheet" href="assets/css/global-font.css">
 </head>
@@ -42,8 +42,8 @@
           <li><a href="mock-exam-5/">5회 · 평가·적응·압축</a></li>
         </ul>
       </article>
-      <article class="course">
-        <span class="number">01 · LLM</span>
+      <article class="course has-past-new">
+        <span class="number">01 · LLM <strong class="past-new-badge">🔥 2026-09 기출 재구성 · NEW</strong></span>
         <h2>LLM 코드 구현</h2>
         <p>Dataset & Embeddings부터 Attention, GPT, 사전학습, 파인튜닝, LoRA, 지시문 학습, DPO까지 다룹니다.</p>
         <ul><li>8개 노트북</li><li>문제·정답·좌우 비교</li><li>5지선다와 주관식 오답 관리</li></ul>
@@ -63,15 +63,15 @@
         <ul><li>Time Series·NGCF·NCF 3개 노트북</li><li>Tensor 차원과 학습 루프</li><li>회귀·Top-K 추천 평가</li></ul>
         <a class="start-link" href="data/">Data 학습 시작</a>
       </article>
-      <article class="course">
-        <span class="number">04 · VISION</span>
+      <article class="course has-past-new">
+        <span class="number">04 · VISION <strong class="past-new-badge">🔥 2026-09 기출 재구성 · NEW</strong></span>
         <h2>Vision 코드 구현</h2>
         <p>ResNet18, ViT, DETR, U-Net, DDPM과 Stable Diffusion까지 Vision 6개 노트북을 모두 학습할 수 있습니다.</p>
         <ul><li>Transform과 Tensor 흐름</li><li>분류·탐지·분할·생성 모델 구현</li><li>학습·평가 코드 빈칸</li></ul>
         <a class="start-link" href="vision/">Vision 학습 시작</a>
       </article>
-      <article class="course">
-        <span class="number">05 · ON-DEVICE AI</span>
+      <article class="course has-past-new">
+        <span class="number">05 · ON-DEVICE AI <strong class="past-new-badge">🔥 2026-09 기출 재구성 · NEW</strong></span>
         <h2>On-device AI 코드 구현</h2>
         <p>CNN 양자화·프루닝·지식증류와 LLM의 Pruning·Quantization 구현을 학습합니다.</p>
         <ul><li>On-device AI 5개 노트북 완료</li><li>문제·정답·좌우 비교</li><li>5지선다와 주관식 오답 관리</li></ul>
