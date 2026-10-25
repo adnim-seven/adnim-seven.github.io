@@ -72,7 +72,7 @@ response = self.llm.complete(
   const base = {subject:"RAG",chapterId:chapter.id,chapterNumber:chapter.number,chapterTitle:chapter.title,file:chapter.file,occurrence:0,isSourceBlank:false,source_type:"원본 YOUR CODE HERE 셀 기반"};
   const make = (data) => ({...base, accepted_answers:[data.answer], ...data});
   chapter.subjective = [
-    make({id:"exam-rag01-01",topic:"문서 로딩과 Index",difficulty:"2 · 핵심 연결",sourceId:"exam-rag1-load-index",prompt:"data 폴더를 Document 목록으로 읽고 VectorStoreIndex를 만드는 완성된 두 줄을 작성하세요.",answer:cells["exam-rag1-load-index"],accepted_answers:[cells["exam-rag1-load-index"], cells["exam-rag1-load-index"].replace('"data"', 'input_dir="data"'), cells["exam-rag1-load-index"].replace('documents)', 'documents=documents)'), cells["exam-rag1-load-index"].replace('"data"', 'input_dir="data"').replace('documents)', 'documents=documents)')],problem_context:`# TODO: 폴더의 파일을 읽어 documents를 만들고 vector index로 연결하세요.
+    make({id:"exam-rag01-01",topic:"2026-09 기출 1 · 문서 로딩과 VectorStoreIndex",difficulty:"1 · 🔴 2026-09 기출",isPastExam:true,source_type:"🔴 2026-09 실제 기출 복원",sourceId:"exam-rag1-load-index",prompt:"data 폴더를 Document 목록으로 읽고 VectorStoreIndex를 만드는 완성된 두 줄을 작성하세요.",answer:cells["exam-rag1-load-index"],accepted_answers:[cells["exam-rag1-load-index"], cells["exam-rag1-load-index"].replace('"data"', 'input_dir="data"'), cells["exam-rag1-load-index"].replace('documents)', 'documents=documents)'), cells["exam-rag1-load-index"].replace('"data"', 'input_dir="data"').replace('documents)', 'documents=documents)')],problem_context:`# TODO: 폴더의 파일을 읽어 documents를 만들고 vector index로 연결하세요.
 documents = ????("data").????()
 index = ????.????(documents)`,explanation:"SimpleDirectoryReader가 파일을 list[Document]로 바꾸고 from_documents가 node 분할·embedding·vector index 구성을 수행합니다.",tensor_flow:"files → list[Document] → nodes/embeddings → VectorStoreIndex",code_signal:"왼쪽 documents와 index, import된 SimpleDirectoryReader와 VectorStoreIndex가 단계별로 대응합니다.",retry:"Reader의 결과가 다음 줄 어느 인자로 들어가는지 화살표로 연결해 다시 쓰세요."}),
     make({id:"exam-rag01-02",topic:"Chunk Transformation",difficulty:"3 · 인자 구성",sourceId:"exam-rag1-chunk-index",prompt:"200 크기·50 중복의 splitter를 만들고 index 생성 시 적용하는 완성 코드를 작성하세요.",answer:cells["exam-rag1-chunk-index"],accepted_answers:[cells["exam-rag1-chunk-index"], cells["exam-rag1-chunk-index"].replace('documents=documents', 'documents'), cells["exam-rag1-chunk-index"].replace('chunk_size=200, chunk_overlap=50', '200, 50'), cells["exam-rag1-chunk-index"].replace('documents=documents', 'documents').replace('chunk_size=200, chunk_overlap=50', '200, 50')],problem_context:`# TODO: 검색 단위를 정하고 from_documents에 transformation으로 전달하세요.
@@ -81,7 +81,7 @@ index = VectorStoreIndex.from_documents(
     documents=documents,
     ????=[text_splitter]
 )`,explanation:"SentenceSplitter는 문서를 작은 node로 나눕니다. from_documents의 transformations 목록에 넣어 index 생성 과정에서 같은 규칙을 적용합니다.",tensor_flow:"Documents → SentenceSplitter → overlapping Nodes → Index",code_signal:"여러 전처리 변환을 받을 수 있어 인자명이 복수형 transformations이고 값도 list입니다.",retry:"크기·중복 숫자와 transformations=[객체]를 분리해 확인하세요."}),
-    make({id:"exam-rag01-03",topic:"Query Engine",difficulty:"2 · 실행 흐름",sourceId:"exam-rag1-query",prompt:"index를 query engine으로 변환하고 질문을 실행하는 두 줄을 작성하세요.",answer:cells["exam-rag1-query"],problem_context:`# TODO: 검색과 응답 합성이 결합된 query engine으로 질문하세요.
+    make({id:"exam-rag01-03",topic:"2026-09 기출 2 · Query Engine 변환 및 실행",difficulty:"1 · 🔴 2026-09 기출",isPastExam:true,source_type:"🔴 2026-09 실제 기출 복원",sourceId:"exam-rag1-query",prompt:"index를 query engine으로 변환하고 질문을 실행하는 두 줄을 작성하세요.",answer:cells["exam-rag1-query"],problem_context:`# TODO: 검색과 응답 합성이 결합된 query engine으로 질문하세요.
 query_engine = index.????()
 response = query_engine.????("What is the first programs the author tried writing?")`,explanation:"as_query_engine()은 index 검색과 LLM 응답 합성을 묶은 인터페이스를 만들고 query()가 자연어 질문을 실행합니다.",tensor_flow:"Index → QueryEngine; str query → Response",code_signal:"왼쪽 query_engine과 response가 각각 as_query_engine, query 동사를 요구합니다.",retry:"객체 생성 단계와 실제 질의 단계의 메서드를 구분해 다시 쓰세요."}),
     make({id:"exam-rag01-04",topic:"Retriever",difficulty:"2 · 검색 전용",sourceId:"exam-rag1-retrieve",prompt:"index에서 검색기를 만들고 저자 질문과 관련된 passage를 검색하는 두 줄을 작성하세요.",answer:cells["exam-rag1-retrieve"],problem_context:`# TODO: 생성 없이 관련 node만 반환하는 검색 흐름을 완성하세요.
@@ -503,12 +503,12 @@ return np.array(????)`,explanation:"embeddings.create는 입력마다 response.d
 )
 top_k_indices = (????cosine_scores).????()[:topk]
 top_k_chunks = np.array(all_chunks)[????]`,explanation:"[N,D]와 [D]의 dot은 [N] 분자를 만들고 각 chunk norm(axis=1)과 query norm으로 정규화합니다. argsort는 오름차순이므로 음수 점수를 정렬해 높은 원래 점수를 먼저 얻습니다.",tensor_flow:"[N,D]·[D] → scores [N] → indices [K] → chunks [K]",code_signal:"cosine 공식, axis=1, 높은 점수 선택을 위한 음수 부호가 핵심입니다.",retry:"분자, 분모, 정렬, indexing 네 단계를 따로 검산하세요."}),
-    make({id:"exam-rag04-05",topic:"LlamaIndex Top-k 검색",difficulty:"3 · 전체 검색 연결",sourceId:"exam-rag4-llama",prompt:"documents를 parser로 분할해 index를 만들고 top-k 검색 후 본문 문자열 목록을 반환하는 다섯 줄을 작성하세요.",answer:cells["exam-rag4-llama"],problem_context:`base_index = VectorStoreIndex.????(documents=documents, ????=[self.parser])
+    make({id:"exam-rag04-05",topic:"2026-09 기출 1 · LlamaIndex Top-k 검색 및 Index 생성",difficulty:"1 · 🔴 2026-09 기출",isPastExam:true,source_type:"🔴 2026-09 실제 기출 복원",sourceId:"exam-rag4-llama",prompt:"documents를 parser로 분할해 index를 만들고 top-k 검색 후 본문 문자열 목록을 반환하는 다섯 줄을 작성하세요.",answer:cells["exam-rag4-llama"],problem_context:`base_index = VectorStoreIndex.????(documents=documents, ????=[self.parser])
 base_retriever = base_index.????(similarity_top_k=topk)
 retrieved_nodes = base_retriever.????(query)
 retrieved_results = [retrieved_node.node.????().strip() for retrieved_node in retrieved_nodes]
 return ????`,explanation:"from_documents가 parser transformation으로 node와 index를 만들고 as_retriever에서 top-k를 설정합니다. retrieve 결과의 node 본문을 get_content로 꺼냅니다.",tensor_flow:"Documents → VectorStoreIndex → NodeWithScore[K] → list[str]",code_signal:"각 왼쪽 변수명 base_index/base_retriever/retrieved_nodes/retrieved_results가 다음 객체 변환을 알려줍니다.",retry:"문서→index→retriever→nodes→text의 타입 변화를 적으세요."}),
-    make({id:"exam-rag04-06",topic:"LLM Input 구성",difficulty:"2 · 역할 메시지",sourceId:"exam-rag4-prompt",prompt:"검색 근거 길이를 제한하고 system 규칙과 user 질문을 올바른 role로 구성해 반환하는 코드를 작성하세요.",answer:cells["exam-rag4-prompt"],problem_context:`references = references[:????]
+    make({id:"exam-rag04-06",topic:"2026-09 기출 3 · LLM Input messages 딕셔너리 구성",difficulty:"1 · 🔴 2026-09 기출",isPastExam:true,source_type:"🔴 2026-09 실제 기출 복원",sourceId:"exam-rag4-prompt",prompt:"검색 근거 길이를 제한하고 system 규칙과 user 질문을 올바른 role로 구성해 반환하는 코드를 작성하세요.",answer:cells["exam-rag4-prompt"],problem_context:`references = references[:????]
 llm_input = [
     {"role": ????, "content": ????},
     {"role": ????, "content": ????},
@@ -732,7 +732,7 @@ documents = reader.????(city_names, auto_suggest=????)`,explanation:"WikipediaRe
     context_str = self.????(query)
     completion = self.????(query, context_str)
     return ????`,explanation:"query는 파이프라인 조정자입니다. retrieve 결과를 context_str에 받고 같은 query와 함께 generate_response로 넘긴 뒤 completion을 반환합니다.",tensor_flow:"query str → retrieved context → generated completion",code_signal:"클래스 안에 이미 정의된 retrieve와 generate_response 메서드, 왼쪽 변수명이 단서입니다.",retry:"앞줄의 출력 변수를 다음 줄 입력으로 그대로 연결해 쓰세요."}),
-    make({id:"exam-rag02-03",topic:"짧은 Chunk Index",difficulty:"3 · 구성 구현",sourceId:"exam-rag2-chunk",prompt:"200/50 splitter를 만들고 documents에 적용해 short index를 구성하는 전체 코드를 작성하세요.",answer:cells["exam-rag2-chunk"],accepted_answers:[cells["exam-rag2-chunk"], cells["exam-rag2-chunk"].replace('documents=documents', 'documents')],problem_context:`# TODO: 짧은 검색 단위를 index 생성 과정에 적용하세요.
+    make({id:"exam-rag02-03",topic:"2026-09 기출 1 · 짧은 Chunk VectorStoreIndex 생성",difficulty:"1 · 🔴 2026-09 기출",isPastExam:true,source_type:"🔴 2026-09 실제 기출 복원",sourceId:"exam-rag2-chunk",prompt:"200/50 splitter를 만들고 documents에 적용해 short index를 구성하는 전체 코드를 작성하세요.",answer:cells["exam-rag2-chunk"],accepted_answers:[cells["exam-rag2-chunk"], cells["exam-rag2-chunk"].replace('documents=documents', 'documents')],problem_context:`# TODO: 짧은 검색 단위를 index 생성 과정에 적용하세요.
 text_splitter_short = SentenceSplitter(chunk_size=????, chunk_overlap=????)
 index_short = VectorStoreIndex.from_documents(
     documents=documents,

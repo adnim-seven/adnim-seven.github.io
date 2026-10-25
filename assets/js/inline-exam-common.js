@@ -5,7 +5,7 @@
   const $ = (s) => document.querySelector(s), esc = (v) => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const canonical = (v) => String(v || "").trim().replace(/\s+/g, "").replace(/'/g, '"');
   const isCorrectInline = (val, ans) => {
-    const u = canonical(val).replace(/,+$/, ""), a = canonical(ans).replace(/,+$/, "");
+    const u = canonical(val).replace(/,+$/, "").replace(/,\}/g, "}").replace(/from_documents\(documents=documents/g, "from_documents(documents"), a = canonical(ans).replace(/,+$/, "").replace(/,\}/g, "}").replace(/from_documents\(documents=documents/g, "from_documents(documents");
     if (u === a) return true;
     // TimeSeries enc_dec & RNNRNN variants
     const normTs = (s) => s.replace(/\\/g, "").replace(/^(features|labels|predictions)\.append\((.*)\)$/, "$2").replace(/^(h|input|outputs|out,h|[a-zA-Z0-9_.]+)=/, "");
