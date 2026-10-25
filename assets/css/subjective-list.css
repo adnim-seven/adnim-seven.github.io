@@ -83,18 +83,23 @@ p {
 }
 
 /* === 2026-09 PAST EXAM LIST CARD BADGES === */
-.card:has(.past-exam-card-badge) {
+.card.past-exam-card,
+.card:has(.past-exam-card-badge),
+.card:has(.card-past-badge) {
   border: 2px solid #e11d48;
   background: linear-gradient(180deg, #fffafa 0%, #fff4f6 100%);
   box-shadow: 0 8px 22px rgba(225, 29, 72, .12);
 }
 
-.card:has(.past-exam-card-badge):hover {
+.card.past-exam-card:hover,
+.card:has(.past-exam-card-badge):hover,
+.card:has(.card-past-badge):hover {
   border-color: #be123c;
   box-shadow: 0 12px 26px rgba(225, 29, 72, .2);
 }
 
-.past-exam-card-badge {
+.past-exam-card-badge,
+.card-past-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
