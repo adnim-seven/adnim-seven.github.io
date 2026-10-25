@@ -7,6 +7,9 @@
   const isCorrectInline = (val, ans) => {
     const u = canonical(val).replace(/,+$/, ""), a = canonical(ans).replace(/,+$/, "");
     if (u === a) return true;
+    // TimeSeries enc_dec & RNNRNN variants
+    const normTs = (s) => s.replace(/\\/g, "").replace(/^(features|labels|predictions)\.append\((.*)\)$/, "$2").replace(/^(h|input|outputs|out,h|[a-zA-Z0-9_.]+)=/, "");
+    if (normTs(u) === normTs(a)) return true;
     if (a === "x=attn(x)+x" && (u === "x=x+attn(x)" || u === "attn(x)+x" || u === "x+attn(x)")) return true;
     if (a === "x=ff(x)+x" && (u === "x=x+ff(x)" || u === "ff(x)+x" || u === "x+ff(x)")) return true;
     if (a === "round(num_channels*sparsity)" && (u === "num_pruned_channels=round(num_channels*sparsity)" || u === "int(round(num_channels*sparsity))" || u === "round(weight.shape[1]*sparsity)")) return true;
