@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>10월 실제 기출 복원 시험 · AI Coding Recall</title>
+  <link rel="stylesheet" href="../assets/css/october-recall.css">
+</head>
+<body>
+  <header>
+    <a href="../">← AI Coding Recall 홈</a>
+    <h1>10월 실제 기출 복원 시험</h1>
+    <p>사용자가 실제 출제 부분만 추려 전달한 복기 기반 · 5과목 · 10개 학습 묶음 · 61개 빈칸 · import 제공</p>
+    <p class="notice">공식 시험지의 문항 수·배점·빈칸 크기를 재현한 것이 아닙니다. 실제 출제 라인을 원본 함수·클래스 문맥에 배치한 복원 연습입니다. 원본 주석은 보존하며, 실제 시험에서 제공된 힌트 범위와 같다고 보장하지 않습니다. API·Python 코드를 실행하지 않습니다.</p>
+    <p>오른쪽 식 또는 표시된 한 줄을 직접 작성하세요. 각 빈칸 위에 구현 목적이 있습니다. 채점 전 정답은 숨기고, 비어 있는 답안은 채점하지 않습니다.</p>
+    <nav id="subjectNav" aria-label="과목 이동"></nav>
+  </header>
+  <main>
+    <section class="options" aria-label="시험 도구">
+      <button id="showAll">전체 문제</button>
+      <button id="reviewWrong">틀린 이력이 있는 문제</button>
+      <button id="export">답안·오답 이력 내보내기</button>
+      <button id="reset">새로 풀기</button>
+      <span id="saved" role="status"></span>
+    </section>
+    <div id="questions"></div>
+    <noscript>이 시험은 JavaScript를 활성화해야 사용할 수 있습니다.</noscript>
+  </main>
+  <footer id="bottomBar">
+    <div class="bar-actions">
+      <button id="previous">이전 문제</button>
+      <button id="next">다음 문제</button>
+      <button id="gradeCurrent">현재 문제 채점</button>
+      <button id="gradeAll">작성한 모든 빈칸 채점</button>
+    </div>
+    <div id="summary" aria-live="polite"></div>
+    <div id="lastResult" role="status">Ctrl + Enter: 현재 문제 채점 · Tab: 공백 4칸</div>
+  </footer>
+  <script src="questions.js"></script>
+  <script src="../assets/js/exam-answer.js"></script>
+  <script src="../assets/js/october-recall-app.js"></script>
+</body>
+</html>
