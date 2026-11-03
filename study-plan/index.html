@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>11/17 시험 대비 학습 일정 · AI Coding Recall</title>
+  <meta name="description" content="매일 2~3시간, 11월 4~13일 전체 구현 핵심 공부와 14~16일 기출 풀이 일정">
+  <link rel="stylesheet" href="../assets/css/study-plan.css">
+</head>
+<body>
+  <header class="plan-header">
+    <a href="../">← AI Coding Recall 홈</a>
+    <p class="eyebrow">AI SPECIALIST · 2026.11.17</p>
+    <h1>오늘 어디까지 공부할까?</h1>
+    <p>매일 2~3시간. 11월 13일까지 전체 구현 핵심을 공부하고,<br>14~16일은 기출 풀이와 오답 재시험에 집중합니다.</p>
+    <div class="phase-roadmap"><span>11/4~13 · 전체 핵심 1회독</span><span>11/14~16 · 기출·오답</span><span>11/17 · 시험</span></div>
+  </header>
+  <main>
+    <section class="overview" aria-label="학습 현황">
+      <div class="focus-panel"><span id="countdown" class="eyebrow"></span><h2 id="focusTitle"></h2><p id="focusDescription"></p><button id="goToday" type="button">오늘·다음 일정으로 이동</button></div>
+      <div class="progress-panel"><span class="eyebrow">자기 점검 진행률</span><h2 id="progressText" aria-live="polite">0 / 14일 완료</h2><progress id="progressBar" max="14" value="0" aria-label="완료 일수"></progress><p id="phaseProgress"></p><p class="muted">1회독 28시간 + 기출 9시간<br>시험 전 확인 20~30분은 별도</p></div>
+    </section>
+    <details class="guide"><summary>하루 공부 방법과 완료 기준</summary><div>
+      <p><strong>기본 150분:</strong> 전날 문제 복습 20분 → 원본 코드 70분 → 인라인 풀이 45분 → 오답·TODO 바깥 복원 15분.</p>
+      <p><strong>180분인 날:</strong> 코드 확인 20분과 독립 풀이 10분을 추가합니다. 시간은 순공부 기준입니다.</p>
+      <p>각 함수의 목적, 입력·출력 shape/dtype, 인자를 가져오는 위치를 확인하세요. 실행 순서로 한 번, 최종 결과에서 필요한 부품을 거꾸로 찾으며 한 번 정리합니다.</p>
+      <p><strong>완료 체크:</strong> 그날 핵심 5곳 중 4곳을 답 없이 작성하고 인자 출처를 설명했을 때 표시합니다. 학습용 기준이며 공식 합격 기준은 아닙니다.</p>
+      <p>전체 노트북을 깊게 완독하거나 모든 모델을 학습시키는 일정은 아닙니다. 중복본을 제외한 기본 실습 31개(Cross Entropy 보조 포함)의 구현 핵심을 확인합니다. import는 제공 코드로 다룹니다.</p>
+      <p>2시간만 가능한 날은 복습 15 + 핵심 코드 60 + 풀이 35 + 오답 10분으로 줄이고 남은 범위를 따로 기록하세요. 11/13에 미완료를 확정하되, 한 과목 전체를 버리지는 않습니다.</p>
+    </div></details>
+    <section class="plan-tools" aria-label="일정 필터">
+      <div class="filters"><button type="button" data-filter="all" aria-pressed="true">전체 14일</button><button type="button" data-filter="learn" aria-pressed="false">내용 공부</button><button type="button" data-filter="practice" aria-pressed="false">기출 풀이</button><button type="button" data-filter="exam" aria-pressed="false">시험 당일</button></div>
+      <button id="resetProgress" type="button">완료 체크 초기화</button>
+    </section>
+    <p id="storageStatus" class="storage-status" role="status">체크는 이 브라우저에만 저장됩니다. 기기 간 자동 동기화되지 않습니다.</p>
+    <section id="days" class="day-grid" aria-label="날짜별 학습 범위"></section>
+    <nav class="quick-links" aria-label="학습 페이지 바로가기"><a href="../llm/">LLM</a><a href="../rag/">RAG</a><a href="../data/">Data</a><a href="../vision/">Vision</a><a href="../on-device/">On-device</a><a href="../exam-recall-october/">10월 실제 기출 61칸</a></nav>
+    <p class="muted footnote">모든 날짜는 2026년·한국 시간 기준입니다. 체크는 학습자가 직접 표시하는 진도이며 시험 채점 기록과 별개입니다. 10월 실제 복원과 예상·변형 모의고사는 구분해 활용하세요.</p>
+    <noscript>일정과 완료 체크를 보려면 JavaScript를 활성화해 주세요.</noscript>
+  </main>
+  <script src="plan-data.js"></script>
+  <script src="../assets/js/study-plan-core.js"></script>
+  <script src="../assets/js/study-plan-app.js"></script>
+</body>
+</html>
